@@ -1,0 +1,42 @@
+GNU AFFERO GENERAL PUBLIC LICENSE Version 3 with Commons Clause
+
+Copyright (c) 2025
+
+COMMONS CLAUSE
+
+The Software is provided to you by the Licensor under the License "AS-IS" that
+follows this notice, on an "AS-IS" basis, and subject to the Commons Clause set forth below.
+
+The Commons Clause restricts commercial use of the Software. A commercial use is one
+intended for or directed towards commercial advantage or monetary compensation. Examples
+include: selling the software, offering it as a service, or using it to provide a
+commercial offering to others.
+
+RESTRICTIONS: You may not offer or sell the Software or offer or sell access to the
+Software, even in combination with other software or hardware.
+
+The above copyright notice and this Commons Clause must be included in all copies or
+substantial portions of the Software.
+
+---
+
+AFFERO GENERAL PUBLIC LICENSE Version 3
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.
+
+Key provisions:
+
+- You must provide users access to the source code
+- Any modified versions must also be licensed under AGPL v3
+- If you use this software as a service (over a network), users must have access to
+  the source code, even if they don't directly use your modified version
+- You must disclose modifications
+
+For the full AGPL v3 license text, see: https://www.gnu.org/licenses/agpl-3.0.html
+For Commons Clause details, see: https://commonsclause.com/
