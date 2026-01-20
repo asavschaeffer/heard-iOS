@@ -1,303 +1,126 @@
 # Heard, Chef
 
-A voice-first iOS cooking assistant that helps you manage your kitchen inventory and recipes using natural conversation. Built with SwiftUI, SwiftData, and Google's Gemini 2.0 Flash Live API.
+> **"Heard, chef!"** - this AI definitely will not say "you're absolutely right!"
 
-> **"Heard, chef!"** - The classic kitchen acknowledgment, now powering your personal sous chef.
+<div align="center">
+  <img src="assets/app-icon-template.png" alt="Heard, Chef" width="35%">
+</div>
 
-## Features
+## Overview
 
-### Voice Assistant
+"Heard, Chef" is a native iOS cooking assistant designed to leverage existing AI with long-term personalized memory. It combines an iMessage-style chat interface with a powerful, interruptible voice mode, allowing you to manage inventory, plan meals, and get real-time cooking feedback without washing your hands.
 
-- **Natural conversation** - Talk to your kitchen assistant like you would a real sous chef
-- **Real-time voice streaming** - Bidirectional audio with Gemini 2.0 Flash Live API
-- **Function calling** - Voice commands execute real actions (add ingredients, create recipes, etc.)
-- **Visual feedback** - Animated waveform shows listening/speaking states
+Under the hood, it is engineered for **model independence**, using a custom "Brain Protocol" that decouples the user experience from the underlying AI, ensuring the app remains fast, private, and adaptable.
 
-### Inventory Management
+## The Experience
 
-- **Track ingredients** - Name, quantity, unit, category, and storage location
-- **Expiry tracking** - Visual indicators for expired and expiring-soon items
-- **Smart organization** - Group by location (fridge, freezer, pantry, counter) or category
-- **Quick add** - Common ingredients with pre-filled categories
-- **Photo scanning** - Capture receipts or groceries to bulk-add items (via Gemini Vision)
+### 💬 Conversational Core
 
-### Recipe Management
+The app is built around a familiar, **iMessage-esque chat interface**.
 
-- **Full recipe storage** - Ingredients, steps, prep/cook time, servings, tags
-- **"What can I make?"** - Filter recipes by what you have in inventory
-- **Ingredient matching** - See which recipes you can make and what's missing
-- **Cooking mode** - Distraction-free step-by-step view for while you cook
-- **AI-drafted recipes** - Ask the voice assistant to create recipes for you
+- **Natural Texting:** Text your chef just like a friend. "Do I have enough eggs for a quiche?" or "Remind me to buy basil."
+- **Media Rich:** Snap photos directly in the chat flow to ask questions or log items.
+- **Live Tool Chips:** Watch the AI "think" and work. When you ask to check the pantry, you'll see a background chip pop up: `Checking Inventory...` followed by `Found: 6 Eggs`.
 
-## Requirements
+### 🎙️ Live Voice Mode
+
+Tap the microphone for a hands-free experience designed for active cooking. "How can I make sure this sauce won't break?", "What else could I add to this stir fry?"
+
+- **The 40% Modal:** Voice mode slides up a non-intrusive sheet covering the bottom 40% of the screen.
+- **Chef Avatar:** A dedicated, animated avatar provides visual feedback, reacting to your voice and the AI's processing state.
+- **Background Context:** The chat window and tool chips remain visible behind the modal, so you can visually confirm that the AI successfully added "Paprika" to your list even while it keeps talking.
+
+### 📷 Visual Intelligence
+
+Use the camera to bridge the physical and digital kitchen.
+
+- **Receipt Scanning:** Snap a photo of a grocery receipt. The AI parses the items, normalizes quantities (e.g., "2 lbs" instead of "bag"), and adds them to your inventory.
+- **Cooking Feedback:** Unsure if your onions are caramelized enough? Snap a photo and ask, "Is this ready?" for instant visual analysis.
+
+### Data Memory Layer
+
+What sets this apart from Grok or ChatGPT voice mode is you don't have to orchestrate custom files storing your information
+
+- **allergy information prompt injection** The LLM will always adjust recipes for your personal situation
+- **find, save, edit, and share recipes** The recipebook can be referenced while shopping or cooking or sent between users
+- **easy shopping list** never forget what you had already at home while youre at the store.
+
+## Technical Architecture
+
+This project is architected for longevity and flexibility, avoiding vendor lock-in through strict abstraction layers.
+
+### 1. The "Brain" Protocol
+
+The app does not communicate directly with any specific AI provider. Instead, it interacts with a strictly typed `ChefIntelligence` protocol.
+
+- **Swappable Backend:** Allows the app to switch between **Gemini 2.0 Flash** (Cloud) for complex reasoning and potential future **Local Models** (e.g., Llama/Mistral via MLX) for offline privacy.
+- **Audio Specs:** The pipeline handles **PCM 16-bit, 16kHz** audio for low-latency streaming.
+
+### 2. Precision Context Management (Tool-First)
+
+To minimize latency and costs, "Heard, Chef" uses **Active Tool Calling**. Instead of dumping your entire inventory into the prompt, the AI calls specific tools to retrieve data on demand.
+
+**Available Tools:**
+
+| Domain        | Function           | Description                             |
+| ------------- | ------------------ | --------------------------------------- |
+| **Inventory** | `inventory_check`  | Check if specific ingredients exist     |
+|               | `inventory_add`    | Add items with quantity normalization   |
+|               | `inventory_remove` | Decrement stock or remove items         |
+|               | `parse_receipt`    | Bulk-add items from Vision analysis     |
+| **Cooking**   | `recipe_suggest`   | Find recipes matching current inventory |
+|               | `recipe_create`    | Draft a new recipe from conversation    |
+|               | `recipe_step`      | Read a specific step (context-aware)    |
+
+### 3. The "Fuzzy-to-Strict" Bridge
+
+LLMs speak in approximations; databases need precision.
+
+- **Ingestion:** User says "I bought a bunch of cilantro."
+- **Normalization:** The engine maps "bunch" to a standard unit (e.g., `count: 1`) and categorizes it under `.produce`.
+- **Persistence:** Only validated, strictly-typed data is saved to **SwiftData** (SQLite), ensuring sorting and filtering always work.
+
+## Setup & Requirements
 
 - **Xcode 15.0+**
 - **iOS 17.0+**
-- **Google Gemini API key** (for voice features)
+- **API Key:** Google Gemini API Key (multimodal live access).
 
-## Setup
-
-### 1. Clone the repository
+### 1. Clone & Project Creation
 
 ```bash
 git clone https://github.com/yourusername/heard-chef.git
 cd heard-chef
-```
-
-### 2. Create the Xcode project
-
-Since this repository contains Swift source files only (no `.xcodeproj`), you'll need to create the Xcode project:
-
-1. Open Xcode → File → New → Project
-2. Select **iOS → App**
-3. Configure:
-   - Product Name: `HeardChef`
-   - Organization Identifier: `com.yourname`
-   - Interface: **SwiftUI**
-   - Language: **Swift**
-   - Storage: **SwiftData**
-4. Save the project in this repository folder
-5. Delete the auto-generated `ContentView.swift` and `HeardChefApp.swift`
-6. Add all files from `HeardChef/` folder to the project:
-   - Right-click project → Add Files to "HeardChef"
-   - Select all `.swift` files, ensure "Copy items if needed" is unchecked
-   - Ensure "Create groups" is selected
-
-### 3. Configure the Gemini API key
-
-Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-
-**Option A: Info.plist (Recommended for development)**
-
-Add to your `Info.plist`:
-
-```xml
-<key>GEMINI_API_KEY</key>
-<string>your-api-key-here</string>
-```
-
-**Option B: Environment variable**
-
-In Xcode: Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables
-
-- Name: `GEMINI_API_KEY`
-- Value: `your-api-key-here`
-
-**Option C: Xcode build configuration**
-
-For better security, use `.xcconfig` files:
-
-1. Create `Secrets.xcconfig`:
-   ```
-   GEMINI_API_KEY = your-api-key-here
-   ```
-2. Add to `.gitignore`:
-   ```
-   Secrets.xcconfig
-   ```
-3. Reference in Info.plist:
-   ```xml
-   <key>GEMINI_API_KEY</key>
-   <string>$(GEMINI_API_KEY)</string>
-   ```
-
-### 4. Configure permissions
-
-Add to `Info.plist`:
-
-```xml
-<key>NSMicrophoneUsageDescription</key>
-<string>Heard, Chef needs microphone access to listen to your voice commands.</string>
-
-<key>NSCameraUsageDescription</key>
-<string>Heard, Chef uses the camera to scan receipts and identify groceries.</string>
-```
-
-### 5. Build and run
-
-Select your target device/simulator and press ⌘R.
-
-## Project Structure
 
 ```
-HeardChef/
-├── HeardChefApp.swift              # App entry point, SwiftData container setup
-│
-├── Models/
-│   ├── Ingredient.swift            # SwiftData model for inventory items
-│   ├── Recipe.swift                # SwiftData model for recipes
-│   └── GeminiTools.swift           # Function declarations for Gemini API
-│
-├── Views/
-│   ├── MainTabView.swift           # Root tab navigation
-│   │
-│   ├── Voice/
-│   │   ├── VoiceView.swift         # Main voice interface UI
-│   │   └── VoiceViewModel.swift    # Audio capture, Gemini connection logic
-│   │
-│   ├── Inventory/
-│   │   ├── InventoryView.swift     # Inventory list with grouping/search
-│   │   └── AddInventoryView.swift  # Manual ingredient entry form
-│   │
-│   └── Recipes/
-│       ├── RecipesView.swift       # Recipe list with availability filtering
-│       ├── RecipeDetailView.swift  # Full recipe view + cooking mode
-│       └── RecipeEditView.swift    # Create/edit recipe form
-│
-├── Services/
-│   ├── GeminiService.swift         # Gemini Live API WebSocket client
-│   └── CameraService.swift         # AVFoundation camera capture
-│
-└── Resources/
-    └── Assets.xcassets             # (Add via Xcode)
+
+_Note: If the `.xcodeproj` file is not tracked, create a new iOS App in Xcode, select "SwiftData" for storage, and drag the `HeardChef/` folder into the project navigator._
+
+### 2. API Key Configuration
+
+This project uses `.xcconfig` files to secure secrets.
+
+1. Create `Secrets.xcconfig` in the root directory.
+2. Add your key:
+
+```properties
+GEMINI_API_KEY = your_actual_key_here
+
 ```
 
-## Architecture
+_(For Gemini Live, ensure you are using a key with access to the `gemini-2.0-flash-exp` model)_
 
-### Data Layer
+### 3. Configuration & Customization
 
-**SwiftData** handles all local persistence:
+- **Voice Persona:** You can change the voice in `GeminiService.swift`. Supported voices include: `Aoede`, `Charon`, `Fenrir`, `Kore`, and `Puck`.
+- **System Prompt:** Customize the chef's personality (e.g., "Gordon Ramsay mode" vs "Grandma mode") in `ChefIntelligence.swift`.
 
-- `Ingredient` - Kitchen inventory items with quantity, unit, category, location, expiry
-- `Recipe` - Recipes with ingredients (stored as JSON), steps, timing, tags
+## Roadmap
 
-Data is stored locally in SQLite (via SwiftData). No cloud sync in current version.
-
-### Voice Layer
-
-**Gemini 2.0 Flash Live API** provides:
-
-- Bidirectional WebSocket streaming for real-time voice conversation
-- Audio input: PCM 16-bit, 16kHz from device microphone
-- Audio output: PCM audio streamed back for text-to-speech
-- Function calling: Gemini can invoke local CRUD operations mid-conversation
-
-### Function Calling
-
-The voice assistant can execute these functions:
-
-| Function           | Description                               |
-| ------------------ | ----------------------------------------- |
-| `inventory_add`    | Add ingredient to inventory               |
-| `inventory_remove` | Remove or reduce ingredient quantity      |
-| `inventory_update` | Update ingredient properties              |
-| `inventory_list`   | List ingredients (optional filter)        |
-| `inventory_search` | Search ingredients by name                |
-| `inventory_check`  | Check if specific ingredient exists       |
-| `recipe_create`    | Create a new recipe                       |
-| `recipe_update`    | Update existing recipe                    |
-| `recipe_delete`    | Delete a recipe                           |
-| `recipe_list`      | List recipes (optional tag filter)        |
-| `recipe_search`    | Search recipes by name/ingredient         |
-| `recipe_suggest`   | Get recipe suggestions based on inventory |
-| `parse_receipt`    | Extract items from receipt photo          |
-| `parse_groceries`  | Identify items in grocery photo           |
-
-### UI Layer
-
-**SwiftUI** with iOS 17+ features:
-
-- `@Observable` / `@StateObject` for view models
-- `@Query` for reactive SwiftData fetches
-- `@Bindable` for two-way model binding
-- Native components: `NavigationStack`, `TabView`, `Form`, `List`
-
-## Usage
-
-### Voice Commands
-
-Tap the microphone button and speak naturally:
-
-> "Add two pounds of chicken to the fridge"
-
-> "Do I have any eggs?"
-
-> "What can I make for dinner?"
-
-> "Create a recipe for pasta carbonara"
-
-> "Remove the milk, it's expired"
-
-> "What's in my pantry?"
-
-The assistant will acknowledge with "Heard, chef!" and execute the action.
-
-### Manual Entry
-
-1. Go to **Inventory** tab
-2. Tap **+** to add ingredients manually
-3. Use **Quick Add** buttons for common items
-4. Tap any ingredient to edit details
-
-### Recipe Management
-
-1. Go to **Recipes** tab
-2. Tap **+** to create a recipe
-3. Add ingredients and steps
-4. Use tags for organization
-5. Toggle **"Can Make"** to filter by available ingredients
-
-### Cooking Mode
-
-1. Open any recipe
-2. Tap the **play button** in the toolbar
-3. Navigate steps with left/right arrows
-4. Progress dots show your position
-
-## Gemini API Notes
-
-### Live API
-
-This app uses the **Gemini 2.0 Flash Live API** (experimental) for real-time voice conversation. This is different from the standard REST API:
-
-- WebSocket connection at `wss://generativelanguage.googleapis.com/ws/...`
-- Bidirectional streaming (audio in, audio + function calls out)
-- Session-based with setup message containing system prompt and tools
-
-### Audio Format
-
-- **Input**: PCM 16-bit signed integer, 16kHz, mono
-- **Output**: PCM audio (same format) for playback
-
-### Rate Limits
-
-Check [Google AI Studio](https://aistudio.google.com/) for current rate limits. The Live API may have different limits than the standard API.
-
-## Customization
-
-### Voice
-
-Change the assistant's voice in `GeminiService.swift`:
-
-```swift
-"voice_name": "Aoede"  // Options: Aoede, Charon, Fenrir, Kore, Puck
-```
-
-### Categories & Locations
-
-Modify enums in `Ingredient.swift`:
-
-```swift
-enum IngredientCategory: String, Codable, CaseIterable {
-    case produce, dairy, meat, seafood, pantry, frozen, condiments, beverages, other
-}
-
-enum StorageLocation: String, Codable, CaseIterable {
-    case fridge, freezer, pantry, counter
-}
-```
-
-### System Prompt
-
-Customize the assistant's personality in `GeminiService.swift`:
-
-```swift
-private var systemPrompt: String {
-    """
-    You are a helpful cooking assistant...
-    """
-}
-```
+- [x] **Phase 1: Foundation** - UX Prototypes, SwiftData Schema, "Brain Protocol" Definition.
+- [ ] **Phase 2: Core Intelligence** - Implement Gemini Live streaming and Tool Definitions.
+- [ ] **Phase 3: Visual Polish** - Implement the Avatar animations and Modal transitions.
+- [ ] **Phase 4: Local Fallback** - Integrate on-device model for offline inventory checks.
 
 ## Known Limitations
 
@@ -318,37 +141,16 @@ private var systemPrompt: String {
 - [ ] Siri Shortcuts integration
 - [ ] Widget for expiring ingredients
 
-## Troubleshooting
-
-### "Gemini API key not configured"
-
-Ensure your API key is set in Info.plist or environment variables. See [Setup](#3-configure-the-gemini-api-key).
-
-### Voice not working
-
-1. Check microphone permissions in Settings → HeardChef
-2. Ensure internet connection
-3. Verify API key is valid at [Google AI Studio](https://aistudio.google.com/)
-
-### Camera not showing
-
-Check camera permissions in Settings → HeardChef → Camera.
-
-### SwiftData errors
-
-Try deleting the app and reinstalling to reset the database.
-
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3 (AGPL-3.0) with Commons Clause**.
+**GNU Affero General Public License v3.0 with Commons Clause**
 
-- **Commercial use is prohibited** - See Commons Clause restriction
-- **Derivative works must be open-source** - Any modifications must be shared under AGPL-3.0
-- **Network provision** - If used as a service, source code must be made available to users
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
-See [LICENSE](LICENSE) for full details.
+**Commons Clause**
+The Software is provided to you by the Licensor under the License, as amended by the "Commons Clause". You may not sell the Software. "Selling" means practicing any or all of the rights granted to you under the License to provide to third parties, for a fee or other consideration (including without limitation fees for hosting or consulting/ support services related to the Software), a product or service whose value derives, entirely or substantially, from the functionality of the Software.
 
 ## Acknowledgments
 
-- [Google Gemini API](https://ai.google.dev/) for the AI capabilities
-- The phrase "Heard, chef!" from professional kitchen culture
+- [Google Gemini API](https://ai.google.dev/) for the underlying intelligence.
+- Chef Rah Shabazz - a maverick.
