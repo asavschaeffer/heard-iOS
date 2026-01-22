@@ -235,8 +235,9 @@ extension VoiceViewModel: GeminiServiceDelegate {
         playAudio(data: data)
     }
 
-    func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: String) {
+    func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult) {
         // Optionally show function call results in transcript
         // For now, we'll let the AI's response summarize what happened
+        // The result.response["message"] contains a human-readable summary
     }
 }

@@ -11,7 +11,7 @@ protocol GeminiServiceDelegate: AnyObject {
     func geminiService(_ service: GeminiService, didReceiveTranscript transcript: String, isFinal: Bool)
     func geminiService(_ service: GeminiService, didReceiveResponse text: String)
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data)
-    func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: String)
+    func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult)
 }
 
 // MARK: - Gemini Service
@@ -64,10 +64,7 @@ class GeminiService: NSObject {
         webSocketTask = urlSession?.webSocketTask(with: url)
         webSocketTask?.resume()
 
-        // Send setup message
         sendSetupMessage()
-
-        // Start receiving messages
         receiveMessage()
     }
 
@@ -114,17 +111,17 @@ class GeminiService: NSObject {
 
         You help users manage their kitchen inventory and recipes through voice commands.
 
-        You can:
-        - Add, remove, and update ingredients in the user's inventory
-        - Create, edit, and search recipes
-        - Suggest recipes based on available ingredients
-        - Parse receipts and grocery photos to add items to inventory
+        IMPORTANT GUIDELINES:
+        - Be conversational, friendly, and concise like a helpful sous chef
+        - When adding items, confirm what you added
+        - When listing items, be brief - don't read every detail unless asked
+        - When suggesting recipes, mention how many ingredients are available
+        - If a function call fails, explain the error simply
+        - If you're unsure what the user wants, ask for clarification
 
-        Be conversational, friendly, and concise like a helpful sous chef. When users ask you to do something with their inventory or recipes, use the appropriate function calls.
+        \(Ingredient.schemaDescription)
 
-        When listing items, be brief. Don't read out every detail unless asked.
-        When adding items, confirm what you added with enthusiasm.
-        When suggesting recipes, consider what ingredients the user has available.
+        \(Recipe.schemaDescription)
         """
     }
 
@@ -159,7 +156,7 @@ class GeminiService: NSObject {
                 switch result {
                 case .success(let message):
                     self.handleMessage(message)
-                    self.receiveMessage() // Continue receiving
+                    self.receiveMessage()
 
                 case .failure(let error):
                     self.delegate?.geminiService(self, didReceiveError: error)
@@ -188,7 +185,7 @@ class GeminiService: NSObject {
         }
 
         // Handle setup complete
-        if let setupComplete = json["setupComplete"] as? [String: Any] {
+        if json["setupComplete"] != nil {
             isConnected = true
             delegate?.geminiServiceDidConnect(self)
             return
@@ -208,434 +205,726 @@ class GeminiService: NSObject {
     }
 
     private func handleServerContent(_ content: [String: Any]) {
-        // Handle model turn
-        if let modelTurn = content["modelTurn"] as? [String: Any],
-           let parts = modelTurn["parts"] as? [[String: Any]] {
+        guard let modelTurn = content["modelTurn"] as? [String: Any],
+              let parts = modelTurn["parts"] as? [[String: Any]] else {
+            return
+        }
 
-            for part in parts {
-                // Text response
-                if let text = part["text"] as? String {
-                    delegate?.geminiService(self, didReceiveResponse: text)
-                }
+        for part in parts {
+            // Text response
+            if let text = part["text"] as? String {
+                delegate?.geminiService(self, didReceiveResponse: text)
+            }
 
-                // Audio response
-                if let inlineData = part["inlineData"] as? [String: Any],
-                   let base64Data = inlineData["data"] as? String,
-                   let audioData = Data(base64Encoded: base64Data) {
-                    delegate?.geminiService(self, didReceiveAudio: audioData)
-                }
+            // Audio response
+            if let inlineData = part["inlineData"] as? [String: Any],
+               let base64Data = inlineData["data"] as? String,
+               let audioData = Data(base64Encoded: base64Data) {
+                delegate?.geminiService(self, didReceiveAudio: audioData)
+            }
 
-                // Transcript
-                if let transcript = part["transcript"] as? String {
-                    let isFinal = content["turnComplete"] as? Bool ?? false
-                    delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: isFinal)
-                }
+            // Transcript
+            if let transcript = part["transcript"] as? String {
+                let isFinal = content["turnComplete"] as? Bool ?? false
+                delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: isFinal)
             }
         }
     }
 
-    // MARK: - Tool/Function Calling
+    // MARK: - Function Calling
 
     private func handleToolCall(_ toolCall: [String: Any]) {
         guard let functionCalls = toolCall["functionCalls"] as? [[String: Any]] else { return }
 
-        for call in functionCalls {
-            guard let id = call["id"] as? String,
-                  let name = call["name"] as? String,
-                  let args = call["args"] as? [String: Any] else {
+        for rawCall in functionCalls {
+            guard let id = rawCall["id"] as? String,
+                  let name = rawCall["name"] as? String,
+                  let args = rawCall["args"] as? [String: Any] else {
                 continue
             }
 
-            // Execute the function and get result
-            let result = executeFunction(name: name, args: args)
+            let call = FunctionCall(id: id, name: name, arguments: args)
 
-            // Send function response back
-            let response: [String: Any] = [
-                "toolResponse": [
-                    "functionResponses": [
-                        [
-                            "id": id,
-                            "name": name,
-                            "response": result
-                        ]
-                    ]
-                ]
-            ]
+            // Validate the call
+            if let validationError = GeminiTools.validate(call: call) {
+                let result = FunctionResult.error(id: id, name: name, message: validationError)
+                sendFunctionResponse(result)
+                delegate?.geminiService(self, didExecuteFunctionCall: name, result: result)
+                continue
+            }
 
-            sendJSON(response)
-            delegate?.geminiService(self, didExecuteFunctionCall: name, result: String(describing: result))
+            // Execute the function
+            let result = executeFunction(call)
+            sendFunctionResponse(result)
+            delegate?.geminiService(self, didExecuteFunctionCall: name, result: result)
         }
     }
 
-    private func executeFunction(name: String, args: [String: Any]) -> [String: Any] {
-        switch name {
+    private func sendFunctionResponse(_ result: FunctionResult) {
+        let response: [String: Any] = [
+            "toolResponse": [
+                "functionResponses": [result.toAPIFormat()]
+            ]
+        ]
+        sendJSON(response)
+    }
+
+    private func executeFunction(_ call: FunctionCall) -> FunctionResult {
+        switch call.name {
         // Inventory functions
-        case "inventory_add":
-            return inventoryAdd(args: args)
-        case "inventory_remove":
-            return inventoryRemove(args: args)
-        case "inventory_update":
-            return inventoryUpdate(args: args)
-        case "inventory_list":
-            return inventoryList(args: args)
-        case "inventory_search":
-            return inventorySearch(args: args)
-        case "inventory_check":
-            return inventoryCheck(args: args)
-
+        case "add_ingredient":
+            return inventoryAdd(call)
+        case "remove_ingredient":
+            return inventoryRemove(call)
+        case "update_ingredient":
+            return inventoryUpdate(call)
+        case "list_ingredients":
+            return inventoryList(call)
+        case "search_ingredients":
+            return inventorySearch(call)
+        case "get_ingredient":
+            return inventoryCheck(call)
         // Recipe functions
-        case "recipe_create":
-            return recipeCreate(args: args)
-        case "recipe_update":
-            return recipeUpdate(args: args)
-        case "recipe_delete":
-            return recipeDelete(args: args)
-        case "recipe_list":
-            return recipeList(args: args)
-        case "recipe_search":
-            return recipeSearch(args: args)
-        case "recipe_suggest":
-            return recipeSuggest(args: args)
-
+        case "create_recipe":
+            return recipeCreate(call)
+        case "update_recipe":
+            return recipeUpdate(call) // Added
+        case "delete_recipe":
+            return recipeDelete(call)
+        case "get_recipe":
+            return recipeGet(call)
+        case "list_recipes":
+            return recipeList(call)
+        case "search_recipes":
+            return recipeSearch(call)
+        case "suggest_recipes":
+            return recipeSuggest(call)
+        case "check_recipe_availability":
+            return recipeCheckAvailability(call)
         default:
-            return ["error": "Unknown function: \(name)"]
+            return .error(id: call.id, name: call.name, message: "Unknown function: \(call.name)")
         }
     }
 
     // MARK: - Inventory Functions
 
-    private func inventoryAdd(args: [String: Any]) -> [String: Any] {
-        guard let name = args["name"] as? String,
-              let quantity = args["quantity"] as? Double,
-              let unit = args["unit"] as? String else {
-            return ["error": "Missing required parameters"]
+    private func inventoryAdd(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing ingredient name")
+        }
+        guard let quantity = call.double("quantity"), quantity > 0 else {
+            return .error(id: call.id, name: call.name, message: "Quantity must be greater than 0")
+        }
+        guard let unitStr = call.string("unit"),
+              let unit = Unit.parse(unitStr) else {
+            return .error(id: call.id, name: call.name, message: "Invalid unit. Valid units: \(Unit.allValidStrings.joined(separator: ", "))")
         }
 
-        let category = (args["category"] as? String).flatMap { IngredientCategory(rawValue: $0) } ?? .other
-        let location = (args["location"] as? String).flatMap { StorageLocation(rawValue: $0) } ?? .pantry
-        let expiryDate: Date? = (args["expiry"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
+        let category = call.string("category").flatMap { IngredientCategory.parse($0) } ?? .other
+        let location = call.string("location").flatMap { StorageLocation.parse($0) } ?? .pantry
+        let expiryDate = call.date("expiryDate")
+        let notes = call.string("notes")
 
-        let ingredient = Ingredient(
+        let (ingredient, wasCreated) = Ingredient.findOrCreate(
             name: name,
             quantity: quantity,
             unit: unit,
             category: category,
             location: location,
-            expiryDate: expiryDate
+            expiryDate: expiryDate,
+            notes: notes,
+            mergeQuantity: true,
+            in: modelContext
         )
 
-        modelContext.insert(ingredient)
+        let message = wasCreated
+            ? "Added \(ingredient.displayQuantity) of \(ingredient.name) to the \(ingredient.location.displayName)"
+            : "Updated \(ingredient.name) - now have \(ingredient.displayQuantity) in the \(ingredient.location.displayName)"
 
-        return ["success": true, "message": "Added \(quantity) \(unit) of \(name) to \(location.rawValue)"]
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: message,
+            data: [
+                "wasCreated": wasCreated,
+                "ingredient": [
+                    "name": ingredient.name,
+                    "quantity": ingredient.quantity,
+                    "unit": ingredient.unitRaw,
+                    "location": ingredient.locationRaw
+                ]
+            ]
+        )
     }
 
-    private func inventoryRemove(args: [String: Any]) -> [String: Any] {
-        guard let name = args["name"] as? String else {
-            return ["error": "Missing ingredient name"]
+    private func inventoryRemove(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing ingredient name")
         }
 
-        let descriptor = FetchDescriptor<Ingredient>(predicate: #Predicate { $0.name.localizedStandardContains(name) })
-
-        guard let ingredients = try? modelContext.fetch(descriptor),
-              let ingredient = ingredients.first else {
-            return ["error": "Ingredient '\(name)' not found"]
+        guard let ingredient = Ingredient.find(named: name, in: modelContext) else {
+            return .error(id: call.id, name: call.name, message: "'\(name)' not found in inventory")
         }
 
-        if let quantityToRemove = args["quantity"] as? Double {
-            ingredient.quantity -= quantityToRemove
+        if let quantity = call.double("quantity") {
+            let removed = ingredient.removeQuantity(quantity)
+
             if ingredient.quantity <= 0 {
                 modelContext.delete(ingredient)
-                return ["success": true, "message": "Removed all \(name) from inventory"]
+                return .success(
+                    id: call.id,
+                    name: call.name,
+                    message: "Removed all \(ingredient.name) from inventory"
+                )
             }
-            ingredient.updatedAt = Date()
-            return ["success": true, "message": "Reduced \(name) by \(quantityToRemove). Remaining: \(ingredient.quantity) \(ingredient.unit)"]
-        } else {
-            modelContext.delete(ingredient)
-            return ["success": true, "message": "Removed \(name) from inventory"]
+
+            return .success(
+                id: call.id,
+                name: call.name,
+                message: "Removed \(removed) \(ingredient.unitRaw) of \(ingredient.name). \(ingredient.displayQuantity) remaining.",
+                data: ["remaining": ingredient.quantity]
+            )
         }
+
+        let ingredientName = ingredient.name
+        modelContext.delete(ingredient)
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Removed \(ingredientName) from inventory"
+        )
     }
 
-    private func inventoryUpdate(args: [String: Any]) -> [String: Any] {
-        guard let name = args["name"] as? String else {
-            return ["error": "Missing ingredient name"]
+    private func inventoryUpdate(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing ingredient name")
         }
 
-        let descriptor = FetchDescriptor<Ingredient>(predicate: #Predicate { $0.name.localizedStandardContains(name) })
-
-        guard let ingredients = try? modelContext.fetch(descriptor),
-              let ingredient = ingredients.first else {
-            return ["error": "Ingredient '\(name)' not found"]
+        guard let patch = call.arguments["patch"] as? [String: Any] else {
+            return .error(id: call.id, name: call.name, message: "Missing update patch")
         }
 
-        if let newName = args["newName"] as? String {
-            ingredient.name = newName
-        }
-        if let quantity = args["quantity"] as? Double {
-            ingredient.quantity = quantity
-        }
-        if let unit = args["unit"] as? String {
-            ingredient.unit = unit
-        }
-        if let categoryStr = args["category"] as? String,
-           let category = IngredientCategory(rawValue: categoryStr) {
-            ingredient.category = category
-        }
-        if let locationStr = args["location"] as? String,
-           let location = StorageLocation(rawValue: locationStr) {
-            ingredient.location = location
-        }
-        if let expiryStr = args["expiry"] as? String {
-            ingredient.expiryDate = ISO8601DateFormatter().date(from: expiryStr)
+        guard let ingredient = Ingredient.find(named: name, in: modelContext) else {
+            return .error(id: call.id, name: call.name, message: "'\(name)' not found in inventory")
         }
 
-        ingredient.updatedAt = Date()
+        var params = IngredientUpdateParams()
+        if let newName = patch["name"] as? String { params.name = newName }
+        if let quantity = parseDouble(patch["quantity"]) { params.quantity = quantity }
+        if let unitStr = patch["unit"] as? String { params.unit = unitStr }
+        if let categoryStr = patch["category"] as? String { params.category = categoryStr }
+        if let locationStr = patch["location"] as? String { params.location = locationStr }
+        if let expiryDate = parseDate(patch["expiryDate"]) { params.expiryDate = expiryDate }
+        if let notes = patch["notes"] as? String { params.notes = notes }
 
-        return ["success": true, "message": "Updated \(ingredient.name)"]
+        let hasChanges = params.name != nil
+            || params.quantity != nil
+            || params.unit != nil
+            || params.category != nil
+            || params.location != nil
+            || params.expiryDate != nil
+            || params.notes != nil
+
+        if !hasChanges {
+            return .error(id: call.id, name: call.name, message: "No changes specified")
+        }
+
+        ingredient.update(with: params)
+
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Updated \(ingredient.name)",
+            data: [
+                "ingredient": [
+                    "name": ingredient.name,
+                    "quantity": ingredient.quantity,
+                    "unit": ingredient.unitRaw,
+                    "location": ingredient.locationRaw
+                ]
+            ]
+        )
     }
 
-    private func inventoryList(args: [String: Any]) -> [String: Any] {
-        var descriptor = FetchDescriptor<Ingredient>(sortBy: [SortDescriptor(\Ingredient.name)])
+    private func parseDouble(_ value: Any?) -> Double? {
+        if let double = value as? Double { return double }
+        if let int = value as? Int { return Double(int) }
+        if let string = value as? String { return Double(string) }
+        return nil
+    }
 
-        if let categoryStr = args["category"] as? String {
-            descriptor.predicate = #Predicate { $0.categoryRaw == categoryStr }
-        } else if let locationStr = args["location"] as? String {
-            descriptor.predicate = #Predicate { $0.locationRaw == locationStr }
-        }
+    private func parseDate(_ value: Any?) -> Date? {
+        guard let string = value as? String else { return nil }
+        let isoFormatter = ISO8601DateFormatter()
+        if let date = isoFormatter.date(from: string) { return date }
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone.current
+        return dateFormatter.date(from: string)
+    }
 
-        guard let ingredients = try? modelContext.fetch(descriptor) else {
-            return ["error": "Failed to fetch inventory"]
+    private func inventoryList(_ call: FunctionCall) -> FunctionResult {
+        let category = call.string("category").flatMap { IngredientCategory.parse($0) }
+        let location = call.string("location").flatMap { StorageLocation.parse($0) }
+
+        let ingredients = Ingredient.list(category: category, location: location, in: modelContext)
+
+        if ingredients.isEmpty {
+            var message = "No ingredients"
+            if let cat = category { message += " in \(cat.displayName)" }
+            if let loc = location { message += " in the \(loc.displayName)" }
+            return .success(id: call.id, name: call.name, message: message, data: ["count": 0, "items": []])
         }
 
         let items = ingredients.map { "\($0.name): \($0.displayQuantity)" }
+        var message = "\(ingredients.count) item\(ingredients.count == 1 ? "" : "s")"
+        if let loc = location { message += " in the \(loc.displayName)" }
+        if let cat = category { message += " (\(cat.displayName))" }
 
-        return ["count": ingredients.count, "items": items]
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: message,
+            data: ["count": ingredients.count, "items": items]
+        )
     }
 
-    private func inventorySearch(args: [String: Any]) -> [String: Any] {
-        guard let query = args["query"] as? String else {
-            return ["error": "Missing search query"]
+    private func inventorySearch(_ call: FunctionCall) -> FunctionResult {
+        guard let query = call.string("query") else {
+            return .error(id: call.id, name: call.name, message: "Missing search query")
         }
 
-        let descriptor = FetchDescriptor<Ingredient>(predicate: #Predicate { $0.name.localizedStandardContains(query) })
-
-        guard let ingredients = try? modelContext.fetch(descriptor) else {
-            return ["error": "Search failed"]
+        let results = Ingredient.search(query: query, in: modelContext)
+        if results.isEmpty {
+            return .success(
+                id: call.id,
+                name: call.name,
+                message: "No ingredients matching '\(query)'",
+                data: ["count": 0, "results": []]
+            )
         }
 
-        let items = ingredients.map { ["name": $0.name, "quantity": $0.displayQuantity, "location": $0.location.rawValue] }
+        let items = results.map { [
+            "name": $0.name,
+            "quantity": $0.displayQuantity,
+            "location": $0.location.displayName
+        ] }
 
-        return ["count": ingredients.count, "results": items]
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Found \(results.count) matching ingredient\(results.count == 1 ? "" : "s")",
+            data: ["count": results.count, "results": items]
+        )
     }
 
-    private func inventoryCheck(args: [String: Any]) -> [String: Any] {
-        guard let name = args["name"] as? String else {
-            return ["error": "Missing ingredient name"]
+    private func inventoryCheck(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing ingredient name")
         }
 
-        let descriptor = FetchDescriptor<Ingredient>(predicate: #Predicate { $0.name.localizedStandardContains(name) })
-
-        guard let ingredients = try? modelContext.fetch(descriptor) else {
-            return ["found": false]
+        guard let ingredient = Ingredient.find(named: name, in: modelContext) else {
+            return .success(
+                id: call.id,
+                name: call.name,
+                message: "No '\(name)' in inventory",
+                data: ["found": false]
+            )
         }
 
-        if let ingredient = ingredients.first {
-            return [
-                "found": true,
-                "name": ingredient.name,
-                "quantity": ingredient.quantity,
-                "unit": ingredient.unit,
-                "location": ingredient.location.rawValue
-            ]
+        var data: [String: Any] = [
+            "found": true,
+            "name": ingredient.name,
+            "quantity": ingredient.quantity,
+            "unit": ingredient.unitRaw,
+            "displayQuantity": ingredient.displayQuantity,
+            "location": ingredient.location.displayName,
+            "category": ingredient.category.displayName
+        ]
+
+        if let days = ingredient.daysUntilExpiry {
+            data["daysUntilExpiry"] = days
+            data["isExpired"] = ingredient.isExpired
+            data["isExpiringSoon"] = ingredient.isExpiringSoon
         }
 
-        return ["found": false]
+        let expiryInfo: String
+        if ingredient.isExpired {
+            expiryInfo = " (EXPIRED)"
+        } else if ingredient.isExpiringSoon {
+            expiryInfo = " (expiring soon)"
+        } else {
+            expiryInfo = ""
+        }
+
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "You have \(ingredient.displayQuantity) of \(ingredient.name) in the \(ingredient.location.displayName)\(expiryInfo)",
+            data: data
+        )
     }
 
     // MARK: - Recipe Functions
 
-    private func recipeCreate(args: [String: Any]) -> [String: Any] {
-        guard let name = args["name"] as? String,
-              let ingredientsJSON = args["ingredients"] as? String,
-              let stepsJSON = args["steps"] as? String else {
-            return ["error": "Missing required parameters"]
+    private func recipeCreate(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing recipe name")
         }
 
-        guard let ingredientsData = ingredientsJSON.data(using: .utf8),
+        // Parse ingredients from JSON string
+        guard let ingredientsJSON = call.string("ingredients"),
+              let ingredientsData = ingredientsJSON.data(using: .utf8),
+              let ingredientsArray = try? JSONSerialization.jsonObject(with: ingredientsData) as? [[String: Any]] else {
+            return .error(id: call.id, name: call.name, message: "Invalid ingredients format - expected JSON array")
+        }
+
+        let recipeIngredients = ingredientsArray.compactMap { RecipeIngredient.fromArguments($0) }
+        if recipeIngredients.isEmpty {
+            return .error(id: call.id, name: call.name, message: "No valid ingredients provided")
+        }
+
+        // Parse steps from JSON string
+        guard let stepsJSON = call.string("steps"),
               let stepsData = stepsJSON.data(using: .utf8),
-              let ingredients = try? JSONDecoder().decode([RecipeIngredient].self, from: ingredientsData),
-              let steps = try? JSONDecoder().decode([String].self, from: stepsData) else {
-            return ["error": "Invalid ingredients or steps format"]
+              let stepsArray = try? JSONSerialization.jsonObject(with: stepsData) as? [Any] else {
+            return .error(id: call.id, name: call.name, message: "Invalid steps format - expected JSON array")
         }
 
+        var recipeSteps: [RecipeStep] = []
+        for (index, stepItem) in stepsArray.enumerated() {
+            if let stepStr = stepItem as? String {
+                recipeSteps.append(RecipeStep(instruction: stepStr, orderIndex: index))
+            } else if let stepDict = stepItem as? [String: Any],
+                      let step = RecipeStep.fromArguments(stepDict, index: index) {
+                recipeSteps.append(step)
+            }
+        }
+
+        if recipeSteps.isEmpty {
+            return .error(id: call.id, name: call.name, message: "No valid steps provided")
+        }
+
+        // Parse optional parameters
+        let description = call.string("description")
+        let prepTime = call.int("prepTime")
+        let cookTime = call.int("cookTime")
+        let servings = call.int("servings")
+        let difficulty = call.string("difficulty").flatMap { RecipeDifficulty.parse($0) } ?? .medium
+
+        var tags: [String] = []
+        if let tagsJSON = call.string("tags"),
+           let tagsData = tagsJSON.data(using: .utf8),
+           let tagsArray = try? JSONSerialization.jsonObject(with: tagsData) as? [String] {
+            tags = tagsArray
+        }
+
+        // Check if recipe already exists
+        if Recipe.find(named: name, in: modelContext) != nil {
+            return .error(id: call.id, name: call.name, message: "A recipe named '\(name)' already exists")
+        }
+
+        // Create the recipe
         let recipe = Recipe(
             name: name,
-            description: args["description"] as? String,
-            ingredients: ingredients,
-            steps: steps,
-            prepTime: args["prepTime"] as? Int,
-            cookTime: args["cookTime"] as? Int,
-            servings: args["servings"] as? Int,
-            tags: parseJSONArray(args["tags"] as? String) ?? [],
+            description: description,
+            ingredients: recipeIngredients,
+            steps: recipeSteps,
+            prepTime: prepTime,
+            cookTime: cookTime,
+            servings: servings,
+            tags: tags,
+            difficulty: difficulty,
             source: .aiDrafted
         )
 
         modelContext.insert(recipe)
 
-        return ["success": true, "message": "Created recipe '\(name)'", "id": recipe.id.uuidString]
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Created recipe '\(recipe.name)' with \(recipeIngredients.count) ingredients and \(recipeSteps.count) steps",
+            data: [
+                "name": recipe.name,
+                "ingredientCount": recipeIngredients.count,
+                "stepCount": recipeSteps.count
+            ]
+        )
     }
 
-    private func recipeUpdate(args: [String: Any]) -> [String: Any] {
-        guard let idString = args["id"] as? String,
-              let id = UUID(uuidString: idString) else {
-            return ["error": "Invalid recipe ID"]
+    private func recipeUpdate(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing recipe name")
         }
 
-        let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.id == id })
-
-        guard let recipes = try? modelContext.fetch(descriptor),
-              let recipe = recipes.first else {
-            return ["error": "Recipe not found"]
+        guard let recipe = Recipe.find(named: name, in: modelContext) else {
+            return .error(id: call.id, name: call.name, message: "Recipe '\(name)' not found")
         }
 
-        if let name = args["name"] as? String {
-            recipe.name = name
+        var changes: [String: Any] = [:]
+
+        // Update simple fields
+        if let newName = call.string("newName") { changes["name"] = newName }
+        if let description = call.string("description") { changes["description"] = description }
+        if let prepTime = call.int("prepTime") { changes["prepTime"] = prepTime }
+        if let cookTime = call.int("cookTime") { changes["cookTime"] = cookTime }
+        if let servings = call.int("servings") { changes["servings"] = servings }
+        if let difficulty = call.string("difficulty") { changes["difficulty"] = difficulty }
+
+        // Update tags
+        if let tagsJSON = call.string("tags"),
+           let tagsData = tagsJSON.data(using: .utf8),
+           let tagsArray = try? JSONSerialization.jsonObject(with: tagsData) as? [String] {
+            changes["tags"] = tagsArray
         }
-        if let description = args["description"] as? String {
-            recipe.descriptionText = description
-        }
-        if let ingredientsJSON = args["ingredients"] as? String,
+
+        // Update ingredients (Full Replace)
+        if let ingredientsJSON = call.string("ingredients"),
            let ingredientsData = ingredientsJSON.data(using: .utf8),
-           let ingredients = try? JSONDecoder().decode([RecipeIngredient].self, from: ingredientsData) {
-            recipe.ingredients = ingredients
+           let ingredientsArray = try? JSONSerialization.jsonObject(with: ingredientsData) as? [[String: Any]] {
+            let newIngredients = ingredientsArray.compactMap { RecipeIngredient.fromArguments($0) }
+            recipe.ingredients = newIngredients // SwiftData relationship update
+            changes["ingredients"] = "\(newIngredients.count) items"
         }
-        if let stepsJSON = args["steps"] as? String,
+
+        // Update steps (Full Replace)
+        if let stepsJSON = call.string("steps"),
            let stepsData = stepsJSON.data(using: .utf8),
-           let steps = try? JSONDecoder().decode([String].self, from: stepsData) {
-            recipe.steps = steps
-        }
-        if let prepTime = args["prepTime"] as? Int {
-            recipe.prepTime = prepTime
-        }
-        if let cookTime = args["cookTime"] as? Int {
-            recipe.cookTime = cookTime
-        }
-        if let servings = args["servings"] as? Int {
-            recipe.servings = servings
-        }
-        if let tagsJSON = args["tags"] as? String,
-           let tags = parseJSONArray(tagsJSON) {
-            recipe.tags = tags
-        }
-
-        recipe.updatedAt = Date()
-
-        return ["success": true, "message": "Updated recipe '\(recipe.name)'"]
-    }
-
-    private func recipeDelete(args: [String: Any]) -> [String: Any] {
-        guard let idString = args["id"] as? String,
-              let id = UUID(uuidString: idString) else {
-            return ["error": "Invalid recipe ID"]
-        }
-
-        let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.id == id })
-
-        guard let recipes = try? modelContext.fetch(descriptor),
-              let recipe = recipes.first else {
-            return ["error": "Recipe not found"]
-        }
-
-        let name = recipe.name
-        modelContext.delete(recipe)
-
-        return ["success": true, "message": "Deleted recipe '\(name)'"]
-    }
-
-    private func recipeList(args: [String: Any]) -> [String: Any] {
-        let descriptor = FetchDescriptor<Recipe>(sortBy: [SortDescriptor(\Recipe.name)])
-
-        guard let recipes = try? modelContext.fetch(descriptor) else {
-            return ["error": "Failed to fetch recipes"]
-        }
-
-        var filteredRecipes = recipes
-
-        if let tagsJSON = args["tags"] as? String,
-           let tags = parseJSONArray(tagsJSON) {
-            filteredRecipes = recipes.filter { recipe in
-                tags.allSatisfy { tag in recipe.tags.contains(tag) }
+           let stepsArray = try? JSONSerialization.jsonObject(with: stepsData) as? [Any] {
+            var newSteps: [RecipeStep] = []
+            for (index, stepItem) in stepsArray.enumerated() {
+                if let stepStr = stepItem as? String {
+                    newSteps.append(RecipeStep(instruction: stepStr, orderIndex: index))
+                } else if let stepDict = stepItem as? [String: Any],
+                          let step = RecipeStep.fromArguments(stepDict, index: index) {
+                    newSteps.append(step)
+                }
             }
+            recipe.steps = newSteps // SwiftData relationship update
+            changes["steps"] = "\(newSteps.count) steps"
         }
 
-        let items = filteredRecipes.map { [
-            "id": $0.id.uuidString,
-            "name": $0.name,
-            "totalTime": $0.formattedTotalTime ?? "N/A"
-        ] }
+        recipe.update(from: changes)
 
-        return ["count": filteredRecipes.count, "recipes": items]
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Updated recipe '\(recipe.name)'",
+            data: ["updatedFields": Array(changes.keys)]
+        )
     }
 
-    private func recipeSearch(args: [String: Any]) -> [String: Any] {
-        guard let query = args["query"] as? String else {
-            return ["error": "Missing search query"]
+    private func recipeList(_ call: FunctionCall) -> FunctionResult {
+        let tag = call.string("tag")
+        let recipes = Recipe.list(tag: tag, in: modelContext)
+
+        if recipes.isEmpty {
+            let message = tag != nil ? "No recipes with tag '\(tag!)'" : "No recipes saved yet"
+            return .success(id: call.id, name: call.name, message: message, data: ["count": 0, "recipes": []])
         }
 
-        let descriptor = FetchDescriptor<Recipe>()
-
-        guard let recipes = try? modelContext.fetch(descriptor) else {
-            return ["error": "Search failed"]
-        }
-
-        let filtered = recipes.filter { recipe in
-            recipe.name.localizedCaseInsensitiveContains(query) ||
-            recipe.ingredients.contains { $0.name.localizedCaseInsensitiveContains(query) }
-        }
-
-        let items = filtered.map { ["id": $0.id.uuidString, "name": $0.name] }
-
-        return ["count": filtered.count, "results": items]
-    }
-
-    private func recipeSuggest(args: [String: Any]) -> [String: Any] {
-        let useInventory = args["useInventory"] as? Bool ?? true
-
-        let recipeDescriptor = FetchDescriptor<Recipe>()
-        let inventoryDescriptor = FetchDescriptor<Ingredient>()
-
-        guard let recipes = try? modelContext.fetch(recipeDescriptor),
-              let inventory = try? modelContext.fetch(inventoryDescriptor) else {
-            return ["error": "Failed to fetch data"]
-        }
-
-        var suggestions: [[String: Any]] = []
-
-        for recipe in recipes {
+        let inventory = Ingredient.list(in: modelContext)
+        let recipeList = recipes.map { recipe -> [String: Any] in
             let canMake = recipe.canMake(with: inventory)
-            let missing = recipe.missingIngredients(from: inventory)
+            let missing = recipe.missingIngredients(from: inventory).count
+            return [
+                "name": recipe.name,
+                "description": recipe.descriptionText ?? "",
+                "canMake": canMake,
+                "missingCount": missing,
+                "totalTime": recipe.formattedTotalTime ?? "Unknown",
+                "difficulty": recipe.difficulty.displayName
+            ]
+        }
 
-            if useInventory && !canMake {
-                continue
-            }
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "\(recipes.count) recipe\(recipes.count == 1 ? "" : "s") found",
+            data: ["count": recipes.count, "recipes": recipeList]
+        )
+    }
 
-            suggestions.append([
-                "id": recipe.id.uuidString,
+    private func recipeSearch(_ call: FunctionCall) -> FunctionResult {
+        guard let query = call.string("query") else {
+            return .error(id: call.id, name: call.name, message: "Missing search query")
+        }
+
+        let results = Recipe.search(query: query, in: modelContext)
+
+        if results.isEmpty {
+            return .success(
+                id: call.id,
+                name: call.name,
+                message: "No recipes matching '\(query)'",
+                data: ["count": 0, "results": []]
+            )
+        }
+
+        let inventory = Ingredient.list(in: modelContext)
+        let recipeList = results.map { recipe -> [String: Any] in
+            [
+                "name": recipe.name,
+                "canMake": recipe.canMake(with: inventory),
+                "missingCount": recipe.missingIngredients(from: inventory).count
+            ]
+        }
+
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Found \(results.count) recipe\(results.count == 1 ? "" : "s") matching '\(query)'",
+            data: ["count": results.count, "results": recipeList]
+        )
+    }
+
+    private func recipeSuggest(_ call: FunctionCall) -> FunctionResult {
+        let inventory = Ingredient.list(in: modelContext)
+
+        if inventory.isEmpty {
+            return .success(
+                id: call.id,
+                name: call.name,
+                message: "No ingredients in inventory. Add some ingredients first!",
+                data: ["count": 0, "suggestions": []]
+            )
+        }
+
+        let maxMissing = call.int("maxMissingIngredients") ?? 3
+        let onlyFullyMakeable = call.bool("onlyFullyMakeable") ?? false
+
+        var suggestions = Recipe.suggestFromInventory(
+            inventory: inventory,
+            maxMissingIngredients: maxMissing,
+            in: modelContext
+        )
+
+        if onlyFullyMakeable {
+            suggestions = suggestions.filter { $0.missing.isEmpty }
+        }
+
+        if suggestions.isEmpty {
+            let message = onlyFullyMakeable
+                ? "No recipes can be made with current inventory"
+                : "No recipes found with \(maxMissing) or fewer missing ingredients"
+            return .success(id: call.id, name: call.name, message: message, data: ["count": 0, "suggestions": []])
+        }
+
+        let suggestionList = suggestions.map { suggestion -> [String: Any] in
+            [
+                "name": suggestion.recipe.name,
+                "matchPercentage": Int(suggestion.matchPercentage * 100),
+                "missingIngredients": suggestion.missing.map { $0.name },
+                "totalTime": suggestion.recipe.formattedTotalTime ?? "Unknown"
+            ]
+        }
+
+        let fullyMakeableCount = suggestions.filter { $0.missing.isEmpty }.count
+
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "\(suggestions.count) recipe\(suggestions.count == 1 ? "" : "s") available. \(fullyMakeableCount) can be made right now.",
+            data: ["count": suggestions.count, "fullyMakeable": fullyMakeableCount, "suggestions": suggestionList]
+        )
+    }
+
+    private func recipeGet(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing recipe name")
+        }
+
+        guard let recipe = Recipe.find(named: name, in: modelContext) else {
+            return .error(id: call.id, name: call.name, message: "Recipe '\(name)' not found")
+        }
+
+        let inventory = Ingredient.list(in: modelContext)
+        let missing = recipe.missingIngredients(from: inventory)
+
+        let ingredientList = recipe.ingredients.map { ing -> [String: Any] in
+            var dict: [String: Any] = ["name": ing.name, "displayText": ing.displayText]
+            if let qty = ing.quantity { dict["quantity"] = qty }
+            if let unit = ing.unit { dict["unit"] = unit.displayName }
+            if let prep = ing.preparation { dict["preparation"] = prep }
+            dict["available"] = !missing.contains { $0.normalizedName == ing.normalizedName }
+            return dict
+        }
+
+        let stepList = recipe.orderedSteps.map { step -> [String: Any] in
+            var dict: [String: Any] = ["instruction": step.instruction, "index": step.orderIndex]
+            if let duration = step.durationMinutes { dict["durationMinutes"] = duration }
+            return dict
+        }
+
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Found recipe '\(recipe.name)'",
+            data: [
+                "name": recipe.name,
+                "description": recipe.descriptionText ?? "",
+                "ingredients": ingredientList,
+                "steps": stepList,
+                "missingCount": missing.count,
+                "canMake": missing.isEmpty,
+                "totalTime": recipe.formattedTotalTime ?? "Unknown",
+                "difficulty": recipe.difficulty.displayName,
+                "tags": recipe.tags
+            ]
+        )
+    }
+
+    private func recipeCheckAvailability(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing recipe name")
+        }
+
+        guard let recipe = Recipe.find(named: name, in: modelContext) else {
+            return .error(id: call.id, name: call.name, message: "Recipe '\(name)' not found")
+        }
+
+        let inventory = Ingredient.list(in: modelContext)
+        let missing = recipe.missingIngredients(from: inventory)
+
+        let missingList = missing.map { ingredient -> [String: Any] in
+            ["name": ingredient.name, "displayText": ingredient.displayText]
+        }
+
+        let canMake = missing.isEmpty
+        let message = canMake
+            ? "You can make '\(recipe.name)' with current inventory"
+            : "Missing \(missing.count) item\(missing.count == 1 ? "" : "s") for '\(recipe.name)'"
+
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: message,
+            data: [
                 "name": recipe.name,
                 "canMake": canMake,
                 "missingCount": missing.count,
-                "totalTime": recipe.formattedTotalTime ?? "N/A"
-            ])
+                "missing": missingList
+            ]
+        )
+    }
+
+    private func recipeDelete(_ call: FunctionCall) -> FunctionResult {
+        guard let name = call.string("name") else {
+            return .error(id: call.id, name: call.name, message: "Missing recipe name")
         }
 
-        // Sort by canMake first, then by missing count
-        suggestions.sort { a, b in
-            let aCanMake = a["canMake"] as? Bool ?? false
-            let bCanMake = b["canMake"] as? Bool ?? false
-            if aCanMake != bCanMake { return aCanMake }
-            return (a["missingCount"] as? Int ?? 0) < (b["missingCount"] as? Int ?? 0)
+        guard let recipe = Recipe.find(named: name, in: modelContext) else {
+            return .error(id: call.id, name: call.name, message: "Recipe '\(name)' not found")
         }
 
-        return ["count": suggestions.count, "suggestions": Array(suggestions.prefix(5))]
+        let recipeName = recipe.name
+        modelContext.delete(recipe)
+
+        return .success(
+            id: call.id,
+            name: call.name,
+            message: "Deleted recipe '\(recipeName)'"
+        )
     }
 
     // MARK: - Helpers
@@ -652,25 +941,25 @@ class GeminiService: NSObject {
             }
         }
     }
-
-    private func parseJSONArray(_ json: String?) -> [String]? {
-        guard let json = json,
-              let data = json.data(using: .utf8),
-              let array = try? JSONDecoder().decode([String].self, from: data) else {
-            return nil
-        }
-        return array
-    }
 }
 
 // MARK: - URLSessionWebSocketDelegate
 
 extension GeminiService: URLSessionWebSocketDelegate {
-    nonisolated func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        // Connection opened, setup message will be sent
+    nonisolated func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
+        // Connection opened
     }
 
-    nonisolated func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+    nonisolated func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
         Task { @MainActor in
             self.isConnected = false
             self.delegate?.geminiServiceDidDisconnect(self)
@@ -688,7 +977,7 @@ enum GeminiError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "Gemini API key not configured"
+            return "Gemini API key not configured. Add GEMINI_API_KEY to Info.plist or environment."
         case .invalidURL:
             return "Invalid API URL"
         case .connectionFailed:

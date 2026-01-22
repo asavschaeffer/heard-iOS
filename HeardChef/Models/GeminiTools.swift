@@ -1,358 +1,410 @@
 import Foundation
 
-// MARK: - Gemini Function Declarations
+// MARK: - Gemini Function Schema Types
 
-/// Represents a function that can be called by Gemini during a conversation
-struct GeminiFunctionDeclaration: Codable {
+/// Represents a function that Gemini can call during a conversation.
+struct FunctionDeclaration {
     let name: String
     let description: String
-    let parameters: GeminiFunctionParameters
+    let parameters: ParameterSchema
 }
 
-struct GeminiFunctionParameters: Codable {
+struct ParameterSchema {
     let type: String
-    let properties: [String: GeminiPropertySchema]
+    let properties: [String: PropertySchema]
     let required: [String]
+
+    init(properties: [String: PropertySchema], required: [String] = []) {
+        self.type = "object"
+        self.properties = properties
+        self.required = required
+    }
 }
 
-struct GeminiPropertySchema: Codable {
+struct PropertySchema {
     let type: String
     let description: String
     let enumValues: [String]?
+    let properties: [String: PropertySchema]?
+    let required: [String]?
 
-    enum CodingKeys: String, CodingKey {
-        case type
-        case description
-        case enumValues = "enum"
-    }
-}
-
-// MARK: - Function Call Request/Response
-
-struct GeminiFunctionCall: Codable {
-    let name: String
-    let args: [String: AnyCodable]
-}
-
-struct GeminiFunctionResponse: Codable {
-    let name: String
-    let response: [String: AnyCodable]
-}
-
-// MARK: - AnyCodable Helper for dynamic JSON values
-
-struct AnyCodable: Codable {
-    let value: Any
-
-    init(_ value: Any) {
-        self.value = value
+    static func string(_ description: String) -> PropertySchema {
+        PropertySchema(type: "string", description: description, enumValues: nil, properties: nil, required: nil)
     }
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if container.decodeNil() {
-            value = NSNull()
-        } else if let bool = try? container.decode(Bool.self) {
-            value = bool
-        } else if let int = try? container.decode(Int.self) {
-            value = int
-        } else if let double = try? container.decode(Double.self) {
-            value = double
-        } else if let string = try? container.decode(String.self) {
-            value = string
-        } else if let array = try? container.decode([AnyCodable].self) {
-            value = array.map { $0.value }
-        } else if let dict = try? container.decode([String: AnyCodable].self) {
-            value = dict.mapValues { $0.value }
-        } else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode value")
-        }
+    static func number(_ description: String) -> PropertySchema {
+        PropertySchema(type: "number", description: description, enumValues: nil, properties: nil, required: nil)
     }
 
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-
-        switch value {
-        case is NSNull:
-            try container.encodeNil()
-        case let bool as Bool:
-            try container.encode(bool)
-        case let int as Int:
-            try container.encode(int)
-        case let double as Double:
-            try container.encode(double)
-        case let string as String:
-            try container.encode(string)
-        case let array as [Any]:
-            try container.encode(array.map { AnyCodable($0) })
-        case let dict as [String: Any]:
-            try container.encode(dict.mapValues { AnyCodable($0) })
-        default:
-            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: encoder.codingPath, debugDescription: "Cannot encode value"))
-        }
+    static func boolean(_ description: String) -> PropertySchema {
+        PropertySchema(type: "boolean", description: description, enumValues: nil, properties: nil, required: nil)
     }
 
-    var stringValue: String? { value as? String }
-    var intValue: Int? { value as? Int }
-    var doubleValue: Double? { value as? Double }
-    var boolValue: Bool? { value as? Bool }
-    var arrayValue: [Any]? { value as? [Any] }
-    var dictValue: [String: Any]? { value as? [String: Any] }
-}
+    static func stringEnum(_ description: String, values: [String]) -> PropertySchema {
+        PropertySchema(type: "string", description: description, enumValues: values, properties: nil, required: nil)
+    }
 
-// MARK: - Tool Definitions
-
-struct GeminiTools {
-
-    // MARK: - Inventory Management Tools
-
-    static let inventoryAdd = GeminiFunctionDeclaration(
-        name: "inventory_add",
-        description: "Add a new ingredient to the user's inventory",
-        parameters: GeminiFunctionParameters(
+    static func object(_ description: String, properties: [String: PropertySchema], required: [String] = []) -> PropertySchema {
+        PropertySchema(
             type: "object",
+            description: description,
+            enumValues: nil,
+            properties: properties,
+            required: required.isEmpty ? nil : required
+        )
+    }
+}
+
+// MARK: - Inventory Tool Declarations
+
+enum InventoryTools {
+
+    static let add = FunctionDeclaration(
+        name: "add_ingredient",
+        description: "Add an ingredient. Merges quantities if exists.",
+        parameters: ParameterSchema(
             properties: [
-                "name": GeminiPropertySchema(type: "string", description: "Name of the ingredient", enumValues: nil),
-                "quantity": GeminiPropertySchema(type: "number", description: "Amount of the ingredient", enumValues: nil),
-                "unit": GeminiPropertySchema(type: "string", description: "Unit of measurement (e.g., cups, lbs, count)", enumValues: nil),
-                "category": GeminiPropertySchema(type: "string", description: "Category of the ingredient", enumValues: IngredientCategory.allCases.map { $0.rawValue }),
-                "location": GeminiPropertySchema(type: "string", description: "Storage location", enumValues: StorageLocation.allCases.map { $0.rawValue }),
-                "expiry": GeminiPropertySchema(type: "string", description: "Expiry date in ISO 8601 format (optional)", enumValues: nil)
+                "name": .string("Ingredient name"),
+                "quantity": .number("Amount (> 0)"),
+                "unit": .stringEnum("Unit", values: Unit.allValidStrings),
+                "category": .stringEnum("Category", values: IngredientCategory.allValidStrings),
+                "location": .stringEnum("Location", values: StorageLocation.allValidStrings),
+                "expiryDate": .string("YYYY-MM-DD (Optional)"),
+                "notes": .string("Notes (Optional)")
             ],
             required: ["name", "quantity", "unit"]
         )
     )
 
-    static let inventoryRemove = GeminiFunctionDeclaration(
-        name: "inventory_remove",
-        description: "Remove an ingredient from inventory or reduce its quantity",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let remove = FunctionDeclaration(
+        name: "remove_ingredient",
+        description: "Remove ingredient or reduce quantity.",
+        parameters: ParameterSchema(
             properties: [
-                "name": GeminiPropertySchema(type: "string", description: "Name of the ingredient to remove", enumValues: nil),
-                "quantity": GeminiPropertySchema(type: "number", description: "Amount to remove (if not specified, removes entirely)", enumValues: nil)
+                "name": .string("Name to remove"),
+                "quantity": .number("Amount to remove. Omit to remove all.")
             ],
             required: ["name"]
         )
     )
 
-    static let inventoryUpdate = GeminiFunctionDeclaration(
-        name: "inventory_update",
-        description: "Update properties of an existing ingredient",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let update = FunctionDeclaration(
+        name: "update_ingredient",
+        description: "Update existing ingredient properties. Only include fields to change.",
+        parameters: ParameterSchema(
             properties: [
-                "name": GeminiPropertySchema(type: "string", description: "Name of the ingredient to update", enumValues: nil),
-                "newName": GeminiPropertySchema(type: "string", description: "New name for the ingredient", enumValues: nil),
-                "quantity": GeminiPropertySchema(type: "number", description: "New quantity", enumValues: nil),
-                "unit": GeminiPropertySchema(type: "string", description: "New unit", enumValues: nil),
-                "category": GeminiPropertySchema(type: "string", description: "New category", enumValues: IngredientCategory.allCases.map { $0.rawValue }),
-                "location": GeminiPropertySchema(type: "string", description: "New storage location", enumValues: StorageLocation.allCases.map { $0.rawValue }),
-                "expiry": GeminiPropertySchema(type: "string", description: "New expiry date in ISO 8601 format", enumValues: nil)
+                "name": .string("Current name"),
+                "patch": .object(
+                    "Fields to update",
+                    properties: [
+                        "name": .string("New name"),
+                        "quantity": .number("New quantity"),
+                        "unit": .stringEnum("New unit", values: Unit.allValidStrings),
+                        "category": .stringEnum("New category", values: IngredientCategory.allValidStrings),
+                        "location": .stringEnum("New location", values: StorageLocation.allValidStrings),
+                        "expiryDate": .string("New expiry (YYYY-MM-DD)"),
+                        "notes": .string("New notes")
+                    ]
+                )
             ],
-            required: ["name"]
+            required: ["name", "patch"]
         )
     )
 
-    static let inventoryList = GeminiFunctionDeclaration(
-        name: "inventory_list",
-        description: "List ingredients in the inventory, optionally filtered by category or location",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let list = FunctionDeclaration(
+        name: "list_ingredients",
+        description: "List ingredients, optionally filtered.",
+        parameters: ParameterSchema(
             properties: [
-                "category": GeminiPropertySchema(type: "string", description: "Filter by category", enumValues: IngredientCategory.allCases.map { $0.rawValue }),
-                "location": GeminiPropertySchema(type: "string", description: "Filter by storage location", enumValues: StorageLocation.allCases.map { $0.rawValue })
+                "category": .stringEnum("Filter category", values: IngredientCategory.allValidStrings),
+                "location": .stringEnum("Filter location", values: StorageLocation.allValidStrings)
             ],
             required: []
         )
     )
 
-    static let inventorySearch = GeminiFunctionDeclaration(
-        name: "inventory_search",
-        description: "Search for ingredients by name",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let search = FunctionDeclaration(
+        name: "search_ingredients",
+        description: "Search ingredients by name (partial match).",
+        parameters: ParameterSchema(
             properties: [
-                "query": GeminiPropertySchema(type: "string", description: "Search query", enumValues: nil)
+                "query": .string("Search term")
             ],
             required: ["query"]
         )
     )
 
-    static let inventoryCheck = GeminiFunctionDeclaration(
-        name: "inventory_check",
-        description: "Check if a specific ingredient exists in inventory and get its details",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let check = FunctionDeclaration(
+        name: "get_ingredient",
+        description: "Check specifics of one ingredient.",
+        parameters: ParameterSchema(
             properties: [
-                "name": GeminiPropertySchema(type: "string", description: "Name of the ingredient to check", enumValues: nil)
+                "name": .string("Name to check")
             ],
             required: ["name"]
         )
     )
 
-    // MARK: - Recipe Management Tools
+    static var all: [FunctionDeclaration] {
+        [add, remove, update, list, search, check]
+    }
+}
 
-    static let recipeCreate = GeminiFunctionDeclaration(
-        name: "recipe_create",
-        description: "Create a new recipe",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+// MARK: - Recipe Tool Declarations
+
+enum RecipeTools {
+
+    static let create = FunctionDeclaration(
+        name: "create_recipe",
+        description: "Create a new recipe.",
+        parameters: ParameterSchema(
             properties: [
-                "name": GeminiPropertySchema(type: "string", description: "Name of the recipe", enumValues: nil),
-                "description": GeminiPropertySchema(type: "string", description: "Brief description of the recipe", enumValues: nil),
-                "ingredients": GeminiPropertySchema(type: "string", description: "JSON array of ingredients with name, quantity, unit, and notes", enumValues: nil),
-                "steps": GeminiPropertySchema(type: "string", description: "JSON array of step strings", enumValues: nil),
-                "prepTime": GeminiPropertySchema(type: "number", description: "Preparation time in minutes", enumValues: nil),
-                "cookTime": GeminiPropertySchema(type: "number", description: "Cooking time in minutes", enumValues: nil),
-                "servings": GeminiPropertySchema(type: "number", description: "Number of servings", enumValues: nil),
-                "tags": GeminiPropertySchema(type: "string", description: "JSON array of tag strings", enumValues: nil)
+                "name": .string("Recipe name"),
+                "description": .string("Description"),
+                "ingredients": .string("JSON array: [{name, quantity?, unit?, preparation?}]"),
+                "steps": .string("JSON array: [string] or [{instruction, durationMinutes?}]"),
+                "prepTime": .number("Minutes"),
+                "cookTime": .number("Minutes"),
+                "servings": .number("Servings"),
+                "difficulty": .stringEnum("Difficulty", values: RecipeDifficulty.allValidStrings),
+                "tags": .string("JSON array of tags")
             ],
             required: ["name", "ingredients", "steps"]
         )
     )
-
-    static let recipeUpdate = GeminiFunctionDeclaration(
-        name: "recipe_update",
-        description: "Update an existing recipe",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    
+    // MARK: - Update (Missing Piece)
+    
+    static let update = FunctionDeclaration(
+        name: "update_recipe",
+        description: "Update an existing recipe. Only provide fields to change.",
+        parameters: ParameterSchema(
             properties: [
-                "id": GeminiPropertySchema(type: "string", description: "UUID of the recipe to update", enumValues: nil),
-                "name": GeminiPropertySchema(type: "string", description: "New name", enumValues: nil),
-                "description": GeminiPropertySchema(type: "string", description: "New description", enumValues: nil),
-                "ingredients": GeminiPropertySchema(type: "string", description: "New ingredients JSON array", enumValues: nil),
-                "steps": GeminiPropertySchema(type: "string", description: "New steps JSON array", enumValues: nil),
-                "prepTime": GeminiPropertySchema(type: "number", description: "New prep time in minutes", enumValues: nil),
-                "cookTime": GeminiPropertySchema(type: "number", description: "New cook time in minutes", enumValues: nil),
-                "servings": GeminiPropertySchema(type: "number", description: "New servings count", enumValues: nil),
-                "tags": GeminiPropertySchema(type: "string", description: "New tags JSON array", enumValues: nil)
+                "name": .string("Name of recipe to update"),
+                "newName": .string("New name"),
+                "description": .string("New description"),
+                "ingredients": .string("New JSON array (replaces old list)"),
+                "steps": .string("New JSON array (replaces old list)"),
+                "prepTime": .number("New prep time"),
+                "cookTime": .number("New cook time"),
+                "servings": .number("New servings"),
+                "difficulty": .stringEnum("New difficulty", values: RecipeDifficulty.allValidStrings),
+                "tags": .string("New tags JSON")
             ],
-            required: ["id"]
+            required: ["name"]
         )
     )
 
-    static let recipeDelete = GeminiFunctionDeclaration(
-        name: "recipe_delete",
-        description: "Delete a recipe",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let list = FunctionDeclaration(
+        name: "list_recipes",
+        description: "List recipes summary.",
+        parameters: ParameterSchema(
             properties: [
-                "id": GeminiPropertySchema(type: "string", description: "UUID of the recipe to delete", enumValues: nil)
-            ],
-            required: ["id"]
-        )
-    )
-
-    static let recipeList = GeminiFunctionDeclaration(
-        name: "recipe_list",
-        description: "List all recipes, optionally filtered by tags",
-        parameters: GeminiFunctionParameters(
-            type: "object",
-            properties: [
-                "tags": GeminiPropertySchema(type: "string", description: "JSON array of tags to filter by", enumValues: nil)
+                "tag": .string("Filter by tag")
             ],
             required: []
         )
     )
 
-    static let recipeSearch = GeminiFunctionDeclaration(
-        name: "recipe_search",
-        description: "Search for recipes by name or ingredients",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let search = FunctionDeclaration(
+        name: "search_recipes",
+        description: "Search recipes by name/tag.",
+        parameters: ParameterSchema(
             properties: [
-                "query": GeminiPropertySchema(type: "string", description: "Search query", enumValues: nil)
+                "query": .string("Search term")
             ],
             required: ["query"]
         )
     )
 
-    static let recipeSuggest = GeminiFunctionDeclaration(
-        name: "recipe_suggest",
-        description: "Get recipe suggestions based on available inventory and constraints",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let suggest = FunctionDeclaration(
+        name: "suggest_recipes",
+        description: "Suggest recipes from inventory.",
+        parameters: ParameterSchema(
             properties: [
-                "constraints": GeminiPropertySchema(type: "string", description: "Optional constraints like 'quick', 'vegetarian', 'uses chicken'", enumValues: nil),
-                "useInventory": GeminiPropertySchema(type: "boolean", description: "Whether to only suggest recipes that can be made with current inventory", enumValues: nil)
+                "maxMissingIngredients": .number("Max missing (default 3)"),
+                "onlyFullyMakeable": .boolean("Only complete matches")
             ],
             required: []
         )
     )
-
-    // MARK: - Photo Processing Tools
-
-    static let parseReceipt = GeminiFunctionDeclaration(
-        name: "parse_receipt",
-        description: "Parse a receipt image to extract purchased grocery items",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let get = FunctionDeclaration(
+        name: "get_recipe",
+        description: "Get the full recipe including ingredients and steps.",
+        parameters: ParameterSchema(
             properties: [
-                "imageBase64": GeminiPropertySchema(type: "string", description: "Base64 encoded image data", enumValues: nil)
+                "name": .string("Exact recipe name")
             ],
-            required: ["imageBase64"]
+            required: ["name"]
         )
     )
 
-    static let parseGroceries = GeminiFunctionDeclaration(
-        name: "parse_groceries",
-        description: "Identify grocery items visible in a photo",
-        parameters: GeminiFunctionParameters(
-            type: "object",
+    static let checkAvailability = FunctionDeclaration(
+        name: "check_recipe_availability",
+        description: "Check if a recipe can be made with current inventory, and list missing items.",
+        parameters: ParameterSchema(
             properties: [
-                "imageBase64": GeminiPropertySchema(type: "string", description: "Base64 encoded image data", enumValues: nil)
+                "name": .string("Exact recipe name")
             ],
-            required: ["imageBase64"]
+            required: ["name"]
         )
     )
 
-    // MARK: - All Tools
+    static let delete = FunctionDeclaration(
+        name: "delete_recipe",
+        description: "Delete a recipe.",
+        parameters: ParameterSchema(
+            properties: [
+                "name": .string("Name to delete")
+            ],
+            required: ["name"]
+        )
+    )
 
-    static var allTools: [GeminiFunctionDeclaration] {
-        [
-            // Inventory
-            inventoryAdd,
-            inventoryRemove,
-            inventoryUpdate,
-            inventoryList,
-            inventorySearch,
-            inventoryCheck,
-            // Recipes
-            recipeCreate,
-            recipeUpdate,
-            recipeDelete,
-            recipeList,
-            recipeSearch,
-            recipeSuggest,
-            // Photo
-            parseReceipt,
-            parseGroceries
-        ]
+    static var all: [FunctionDeclaration] {
+        [create, update, delete, get, list, search, suggest, checkAvailability]
+    }
+}
+
+// MARK: - All Tools
+
+struct GeminiTools {
+
+    static var allDeclarations: [FunctionDeclaration] {
+        InventoryTools.all + RecipeTools.all
     }
 
-    /// Convert tools to Gemini API format
     static func toAPIFormat() -> [[String: Any]] {
-        allTools.map { tool in
+        allDeclarations.map { decl in
             [
-                "name": tool.name,
-                "description": tool.description,
+                "name": decl.name,
+                "description": decl.description,
                 "parameters": [
-                    "type": tool.parameters.type,
-                    "properties": tool.parameters.properties.mapValues { prop in
+                    "type": decl.parameters.type,
+                    "properties": decl.parameters.properties.reduce(into: [String: Any]()) { result, pair in
                         var propDict: [String: Any] = [
-                            "type": prop.type,
-                            "description": prop.description
+                            "type": pair.value.type,
+                            "description": pair.value.description
                         ]
-                        if let enumValues = prop.enumValues {
-                            propDict["enum"] = enumValues
+                        if let enumVals = pair.value.enumValues {
+                            propDict["enum"] = enumVals
                         }
-                        return propDict
+                        if let nestedProperties = pair.value.properties {
+                            propDict["properties"] = nestedProperties.reduce(into: [String: Any]()) { nestedResult, nestedPair in
+                                var nestedDict: [String: Any] = [
+                                    "type": nestedPair.value.type,
+                                    "description": nestedPair.value.description
+                                ]
+                                if let nestedEnum = nestedPair.value.enumValues {
+                                    nestedDict["enum"] = nestedEnum
+                                }
+                                nestedResult[nestedPair.key] = nestedDict
+                            }
+                        }
+                        if let nestedRequired = pair.value.required {
+                            propDict["required"] = nestedRequired
+                        }
+                        result[pair.key] = propDict
                     },
-                    "required": tool.parameters.required
-                ]
+                    "required": decl.parameters.required
+                ] as [String: Any]
             ]
         }
+    }
+
+    static func tool(named name: String) -> FunctionDeclaration? {
+        allDeclarations.first { $0.name == name }
+    }
+
+    static var allNames: Set<String> {
+        Set(allDeclarations.map { $0.name })
+    }
+    
+    static func validate(call: FunctionCall) -> String? {
+        guard let tool = tool(named: call.name) else {
+            return "Unknown function: \(call.name)"
+        }
+
+        for required in tool.parameters.required {
+            if call.arguments[required] == nil {
+                return "Missing required parameter: \(required)"
+            }
+        }
+
+        return nil
+    }
+}
+
+// MARK: - Function Call Types
+
+struct FunctionCall {
+    let id: String
+    let name: String
+    let arguments: [String: Any]
+
+    func string(_ key: String) -> String? {
+        arguments[key] as? String
+    }
+
+    func double(_ key: String) -> Double? {
+        if let d = arguments[key] as? Double { return d }
+        if let i = arguments[key] as? Int { return Double(i) }
+        if let s = arguments[key] as? String { return Double(s) }
+        return nil
+    }
+
+    func int(_ key: String) -> Int? {
+        if let i = arguments[key] as? Int { return i }
+        if let d = arguments[key] as? Double { return Int(d) }
+        if let s = arguments[key] as? String { return Int(s) }
+        return nil
+    }
+
+    func bool(_ key: String) -> Bool? {
+        arguments[key] as? Bool
+    }
+
+    func date(_ key: String) -> Date? {
+        guard let str = string(key) else { return nil }
+        let isoFormatter = ISO8601DateFormatter()
+        if let date = isoFormatter.date(from: str) { return date }
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone.current
+        return dateFormatter.date(from: str)
+    }
+}
+
+struct FunctionResult {
+    let id: String
+    let name: String
+    let response: [String: Any]
+
+    static func success(
+        id: String,
+        name: String,
+        message: String,
+        data: [String: Any] = [:]
+    ) -> FunctionResult {
+        var response = data
+        response["success"] = true
+        response["message"] = message
+        return FunctionResult(id: id, name: name, response: response)
+    }
+
+    static func error(id: String, name: String, message: String) -> FunctionResult {
+        FunctionResult(
+            id: id,
+            name: name,
+            response: ["success": false, "error": message]
+        )
+    }
+
+    func toAPIFormat() -> [String: Any] {
+        [
+            "id": id,
+            "name": name,
+            "response": response
+        ]
     }
 }

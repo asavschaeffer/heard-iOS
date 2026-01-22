@@ -1,5 +1,9 @@
 # Heard, Chef
 
+![Status](https://img.shields.io/badge/status-in%20development-yellow)
+![Swift](https://img.shields.io/badge/swift-5.9-orange)
+![Xcode](https://img.shields.io/badge/xcode-15%2B-blue)
+
 > **"Heard, chef!"** - this AI definitely will not say "you're absolutely right!"
 
 <div align="center">
@@ -62,15 +66,22 @@ To minimize latency and costs, "Heard, Chef" uses **Active Tool Calling**. Inste
 
 **Available Tools:**
 
-| Domain        | Function           | Description                             |
-| ------------- | ------------------ | --------------------------------------- |
-| **Inventory** | `inventory_check`  | Check if specific ingredients exist     |
-|               | `inventory_add`    | Add items with quantity normalization   |
-|               | `inventory_remove` | Decrement stock or remove items         |
-|               | `parse_receipt`    | Bulk-add items from Vision analysis     |
-| **Cooking**   | `recipe_suggest`   | Find recipes matching current inventory |
-|               | `recipe_create`    | Draft a new recipe from conversation    |
-|               | `recipe_step`      | Read a specific step (context-aware)    |
+| Domain         | Function                      | Description                                 |
+| -------------- | ----------------------------- | ------------------------------------------- |
+| **Inventory**  | `add_ingredient`              | Add items with quantity normalization       |
+|                | `remove_ingredient`           | Decrement stock or remove items             |
+|                | `update_ingredient`           | Patch ingredient fields                     |
+|                | `get_ingredient`              | Check details for one ingredient            |
+|                | `list_ingredients`            | List items with optional filters            |
+|                | `search_ingredients`          | Fuzzy name search                           |
+| **Recipes**    | `create_recipe`               | Create a new recipe                         |
+|                | `update_recipe`               | Update recipe fields                        |
+|                | `delete_recipe`               | Remove a recipe                             |
+|                | `get_recipe`                  | Full recipe with ingredients and steps      |
+|                | `list_recipes`                | Browse recipes by tag                       |
+|                | `search_recipes`              | Search by name or tag                       |
+| **Cross-Tool** | `suggest_recipes`             | Recipes matching current inventory          |
+|                | `check_recipe_availability`   | Missing list for a specific recipe          |
 
 ### 3. The "Fuzzy-to-Strict" Bridge
 
@@ -121,6 +132,21 @@ _(For Gemini Live, ensure you are using a key with access to the `gemini-2.0-fla
 - [ ] **Phase 2: Core Intelligence** - Implement Gemini Live streaming and Tool Definitions.
 - [ ] **Phase 3: Visual Polish** - Implement the Avatar animations and Modal transitions.
 - [ ] **Phase 4: Local Fallback** - Integrate on-device model for offline inventory checks.
+
+## Short-Term Todo
+
+~~1. Data Models - Ingredient, Recipe (SwiftData schema, relationships, validation)~~
+~~2. [Gemini Tools](docs/gemini-tools.md) - Function declarations (schema accuracy, error handling)~~
+3. Gemini Service - WebSocket connection, audio streaming, function execution
+4. Voice UI - Waveform, transcript, states, accessibility
+5. Inventory UI - List, grouping, search, edit flow, expiry handling
+6. Recipe UI - Cards, detail view, cooking mode, edit form
+7. Camera - Capture flow, Gemini Vision integration, confirmation UI
+
+## Specs
+
+- `docs/gemini-tools.md` - Drill-down toolset and Gemini tool architecture
+
 
 ## Known Limitations
 
