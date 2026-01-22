@@ -99,7 +99,7 @@ struct InventoryView: View {
                                 }
                         }
                     } header: {
-                        Label(location.rawValue, systemImage: location.icon)
+                        Label(location.displayName, systemImage: location.icon)
                     }
                 }
             }
@@ -123,7 +123,7 @@ struct InventoryView: View {
                                 }
                         }
                     } header: {
-                        Label(category.rawValue, systemImage: category.icon)
+                        Label(category.displayName, systemImage: category.icon)
                     }
                 }
             }
@@ -234,7 +234,7 @@ struct InventoryDetailView: View {
 
     @State private var name: String = ""
     @State private var quantity: Double = 1.0
-    @State private var unit: String = "count"
+    @State private var unit: Unit = .piece
     @State private var category: IngredientCategory = .other
     @State private var location: StorageLocation = .pantry
     @State private var expiryDate: Date = Date()
@@ -257,8 +257,8 @@ struct InventoryDetailView: View {
                     }
 
                     Picker("Unit", selection: $unit) {
-                        ForEach(Ingredient.commonUnits, id: \.self) { unit in
-                            Text(unit).tag(unit)
+                        ForEach(Unit.allCases, id: \.self) { u in
+                            Text(u.displayName).tag(u)
                         }
                     }
                 }
@@ -266,13 +266,13 @@ struct InventoryDetailView: View {
                 Section("Organization") {
                     Picker("Category", selection: $category) {
                         ForEach(IngredientCategory.allCases, id: \.self) { cat in
-                            Label(cat.rawValue, systemImage: cat.icon).tag(cat)
+                            Label(cat.displayName, systemImage: cat.icon).tag(cat)
                         }
                     }
 
                     Picker("Location", selection: $location) {
                         ForEach(StorageLocation.allCases, id: \.self) { loc in
-                            Label(loc.rawValue, systemImage: loc.icon).tag(loc)
+                            Label(loc.displayName, systemImage: loc.icon).tag(loc)
                         }
                     }
                 }
@@ -312,6 +312,7 @@ struct InventoryDetailView: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
+                    .disabled(!canSave)
                 }
             }
             .onAppear {
@@ -332,14 +333,27 @@ struct InventoryDetailView: View {
     }
 
     private func saveChanges() {
-        ingredient.name = name
-        ingredient.quantity = quantity
-        ingredient.unit = unit
-        ingredient.category = category
-        ingredient.location = location
-        ingredient.expiryDate = hasExpiry ? expiryDate : nil
-        ingredient.notes = notes.isEmpty ? nil : notes
-        ingredient.updatedAt = Date()
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
+
+        let params = IngredientUpdateParams(
+            name: trimmedName,
+            quantity: max(0, quantity),
+            unit: unit.rawValue,
+            category: category.rawValue,
+            location: location.rawValue,
+            expiryDate: hasExpiry ? expiryDate : nil,
+            notes: notes
+        )
+
+        ingredient.update(with: params)
+        if !hasExpiry {
+            ingredient.expiryDate = nil
+        }
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && quantity > 0
     }
 }
 

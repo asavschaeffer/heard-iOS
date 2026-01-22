@@ -66,6 +66,7 @@ struct RecipeDetailView: View {
                     } label: {
                         Image(systemName: "play.fill")
                     }
+                    .disabled(recipe.orderedSteps.isEmpty)
                 }
             }
             .sheet(isPresented: $showingEditSheet) {
@@ -82,12 +83,22 @@ struct RecipeDetailView: View {
     @ViewBuilder
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: recipe.source.icon)
-                    .foregroundStyle(.secondary)
-                Text(recipe.source.rawValue)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                HStack {
+                    Image(systemName: recipe.source.icon)
+                        .foregroundStyle(.secondary)
+                    Text(recipe.source.displayName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Image(systemName: recipe.difficulty.icon)
+                        .foregroundStyle(.orange)
+                    Text(recipe.difficulty.displayName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if let description = recipe.descriptionText, !description.isEmpty {
@@ -170,7 +181,7 @@ struct RecipeDetailView: View {
     }
 
     private func isIngredientAvailable(_ ingredient: RecipeIngredient) -> Bool {
-        inventory.contains { $0.name.lowercased() == ingredient.name.lowercased() }
+        inventory.contains { $0.normalizedName == ingredient.normalizedName }
     }
 
     // MARK: - Steps Section
@@ -182,7 +193,8 @@ struct RecipeDetailView: View {
                 .font(.title3)
                 .fontWeight(.semibold)
 
-            ForEach(Array(recipe.steps.enumerated()), id: \.offset) { index, step in
+            let steps = recipe.orderedSteps
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 HStack(alignment: .top, spacing: 12) {
                     Text("\(index + 1)")
                         .font(.caption)
@@ -192,8 +204,16 @@ struct RecipeDetailView: View {
                         .background(Color.orange)
                         .clipShape(Circle())
 
-                    Text(step)
-                        .font(.body)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(step.instruction)
+                            .font(.body)
+
+                        if let duration = step.durationMinutes {
+                            Label("\(duration) min", systemImage: "timer")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    }
                 }
             }
         }
@@ -259,6 +279,7 @@ struct CookingModeView: View {
     @State private var currentStepIndex = 0
 
     var body: some View {
+        let steps = recipe.orderedSteps
         ZStack {
             Color.black.ignoresSafeArea()
 
@@ -278,61 +299,83 @@ struct CookingModeView: View {
 
                 Spacer()
 
-                // Step number
-                Text("Step \(currentStepIndex + 1) of \(recipe.steps.count)")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
+                if steps.isEmpty {
+                    Text("No steps available.")
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.7))
 
-                // Step content
-                Text(recipe.steps[currentStepIndex])
-                    .font(.title2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    Button("Close") {
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                } else {
+                    let safeIndex = min(currentStepIndex, steps.count - 1)
 
-                Spacer()
+                    // Step number
+                    Text("Step \(safeIndex + 1) of \(steps.count)")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.7))
 
-                // Navigation buttons
-                HStack(spacing: 40) {
-                    Button {
-                        withAnimation {
-                            if currentStepIndex > 0 {
-                                currentStepIndex -= 1
-                            }
+                    // Step content
+                    VStack(spacing: 16) {
+                        Text(steps[safeIndex].instruction)
+                            .font(.title2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+
+                        if let duration = steps[safeIndex].durationMinutes {
+                            Label("\(duration) min", systemImage: "timer")
+                                .font(.headline)
+                                .foregroundStyle(.orange)
                         }
-                    } label: {
-                        Image(systemName: "chevron.left.circle.fill")
-                            .font(.system(size: 50))
-                            .foregroundStyle(currentStepIndex > 0 ? .white : .white.opacity(0.3))
                     }
-                    .disabled(currentStepIndex == 0)
 
-                    Button {
-                        withAnimation {
-                            if currentStepIndex < recipe.steps.count - 1 {
-                                currentStepIndex += 1
-                            } else {
-                                dismiss()
+                    Spacer()
+
+                    // Navigation buttons
+                    HStack(spacing: 40) {
+                        Button {
+                            withAnimation {
+                                if currentStepIndex > 0 {
+                                    currentStepIndex -= 1
+                                }
                             }
+                        } label: {
+                            Image(systemName: "chevron.left.circle.fill")
+                                .font(.system(size: 50))
+                                .foregroundStyle(currentStepIndex > 0 ? .white : .white.opacity(0.3))
                         }
-                    } label: {
-                        Image(systemName: currentStepIndex < recipe.steps.count - 1 ? "chevron.right.circle.fill" : "checkmark.circle.fill")
-                            .font(.system(size: 50))
-                            .foregroundStyle(.orange)
-                    }
-                }
-                .padding(.bottom, 50)
+                        .disabled(currentStepIndex == 0)
 
-                // Progress dots
-                HStack(spacing: 8) {
-                    ForEach(0..<recipe.steps.count, id: \.self) { index in
-                        Circle()
-                            .fill(index <= currentStepIndex ? Color.orange : Color.white.opacity(0.3))
-                            .frame(width: 8, height: 8)
+                        Button {
+                            withAnimation {
+                                if currentStepIndex < steps.count - 1 {
+                                    currentStepIndex += 1
+                                } else {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            Image(systemName: currentStepIndex < steps.count - 1 ? "chevron.right.circle.fill" : "checkmark.circle.fill")
+                                .font(.system(size: 50))
+                                .foregroundStyle(.orange)
+                        }
                     }
+                    .padding(.bottom, 50)
+
+                    // Progress dots
+                    HStack(spacing: 8) {
+                        ForEach(0..<steps.count, id: \.self) { index in
+                            Circle()
+                                .fill(index <= currentStepIndex ? Color.orange : Color.white.opacity(0.3))
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                    .padding(.bottom, 30)
                 }
-                .padding(.bottom, 30)
             }
         }
     }
@@ -344,20 +387,21 @@ struct CookingModeView: View {
             name: "Pasta Carbonara",
             description: "Classic Italian pasta dish",
             ingredients: [
-                RecipeIngredient(name: "Spaghetti", quantity: 400, unit: "g"),
-                RecipeIngredient(name: "Eggs", quantity: 4, unit: "large"),
-                RecipeIngredient(name: "Pancetta", quantity: 200, unit: "g")
+                RecipeIngredient(name: "Spaghetti", quantity: 400, unit: .grams),
+                RecipeIngredient(name: "Eggs", quantity: 4, unit: .piece),
+                RecipeIngredient(name: "Pancetta", quantity: 200, unit: .grams)
             ],
             steps: [
-                "Bring a large pot of salted water to boil",
-                "Cook pasta according to package directions",
-                "Meanwhile, cook pancetta until crispy"
+                RecipeStep(instruction: "Bring a large pot of salted water to boil", orderIndex: 0),
+                RecipeStep(instruction: "Cook pasta according to package directions", durationMinutes: 10, orderIndex: 1),
+                RecipeStep(instruction: "Meanwhile, cook pancetta until crispy", durationMinutes: 5, orderIndex: 2)
             ],
             prepTime: 10,
             cookTime: 20,
             servings: 4,
-            tags: ["Italian", "Pasta", "Quick"]
+            tags: ["italian", "pasta", "quick"],
+            difficulty: .easy
         )
     )
-    .modelContainer(for: [Recipe.self, Ingredient.self], inMemory: true)
+    .modelContainer(for: [Recipe.self, Ingredient.self, RecipeIngredient.self, RecipeStep.self], inMemory: true)
 }

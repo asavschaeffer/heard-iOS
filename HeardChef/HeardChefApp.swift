@@ -7,6 +7,8 @@ struct HeardChefApp: App {
         let schema = Schema([
             Ingredient.self,
             Recipe.self,
+            RecipeIngredient.self,
+            RecipeStep.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

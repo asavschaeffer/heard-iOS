@@ -10,17 +10,22 @@ struct RecipeEditView: View {
     @State private var name = ""
     @State private var description = ""
     @State private var ingredients: [RecipeIngredient] = []
-    @State private var steps: [String] = []
+    @State private var steps: [RecipeStep] = []
     @State private var prepTime: Int?
     @State private var cookTime: Int?
     @State private var servings: Int?
     @State private var tags: [String] = []
     @State private var tagInput = ""
+    @State private var difficulty: RecipeDifficulty = .medium
 
     @State private var showingAddIngredient = false
     @State private var showingDeleteConfirmation = false
 
     private var isEditing: Bool { recipe != nil }
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
+    private var validSteps: [RecipeStep] {
+        steps.filter { !$0.instruction.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
 
     var body: some View {
         NavigationStack {
@@ -63,7 +68,7 @@ struct RecipeEditView: View {
                         saveRecipe()
                     }
                     .fontWeight(.semibold)
-                    .disabled(name.isEmpty || ingredients.isEmpty || steps.isEmpty)
+                    .disabled(trimmedName.isEmpty || ingredients.isEmpty || validSteps.isEmpty)
                 }
             }
             .sheet(isPresented: $showingAddIngredient) {
@@ -104,7 +109,7 @@ struct RecipeEditView: View {
 
     @ViewBuilder
     private var timingSection: some View {
-        Section("Timing") {
+        Section("Timing & Difficulty") {
             HStack {
                 Text("Prep Time")
                 Spacer()
@@ -134,6 +139,12 @@ struct RecipeEditView: View {
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.trailing)
                     .frame(width: 60)
+            }
+
+            Picker("Difficulty", selection: $difficulty) {
+                ForEach(RecipeDifficulty.allCases, id: \.self) { level in
+                    Label(level.displayName, systemImage: level.icon).tag(level)
+                }
             }
         }
     }
@@ -174,27 +185,49 @@ struct RecipeEditView: View {
     private var stepsSection: some View {
         Section {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, _ in
-                HStack(alignment: .top) {
-                    Text("\(index + 1).")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        Text("\(index + 1).")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
 
-                    TextField("Step \(index + 1)", text: Binding(
-                        get: { steps[index] },
-                        set: { steps[index] = $0 }
-                    ), axis: .vertical)
-                    .lineLimit(1...5)
+                        TextField("Step \(index + 1)", text: Binding(
+                            get: { steps[index].instruction },
+                            set: { steps[index].instruction = $0 }
+                        ), axis: .vertical)
+                        .lineLimit(1...5)
+                    }
+
+                    HStack {
+                        Text("Timer (optional)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        TextField("min", value: Binding(
+                            get: { steps[index].durationMinutes },
+                            set: { steps[index].durationMinutes = $0 }
+                        ), format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 50)
+                        Text("min")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.leading, 24)
                 }
             }
             .onDelete { indexSet in
                 steps.remove(atOffsets: indexSet)
+                reindexSteps()
             }
             .onMove { from, to in
                 steps.move(fromOffsets: from, toOffset: to)
+                reindexSteps()
             }
 
             Button {
-                steps.append("")
+                steps.append(RecipeStep(instruction: "", orderIndex: steps.count))
             } label: {
                 Label("Add Step", systemImage: "plus.circle")
             }
@@ -205,6 +238,12 @@ struct RecipeEditView: View {
                 EditButton()
                     .font(.caption)
             }
+        }
+    }
+
+    private func reindexSteps() {
+        for i in 0..<steps.count {
+            steps[i].orderIndex = i
         }
     }
 
@@ -278,36 +317,45 @@ struct RecipeEditView: View {
         cookTime = recipe.cookTime
         servings = recipe.servings
         tags = recipe.tags
+        difficulty = recipe.difficulty
     }
 
     // MARK: - Save
 
     private func saveRecipe() {
-        // Filter out empty steps
-        let validSteps = steps.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        // Filter out empty steps and reindex
+        var filteredSteps = validSteps
+        for i in 0..<filteredSteps.count {
+            filteredSteps[i].orderIndex = i
+        }
+
+        guard !trimmedName.isEmpty, !ingredients.isEmpty, !filteredSteps.isEmpty else { return }
 
         if let recipe = recipe {
             // Update existing
-            recipe.name = name
+            recipe.name = trimmedName
+            recipe.normalizedName = Recipe.normalize(trimmedName)
             recipe.descriptionText = description.isEmpty ? nil : description
             recipe.ingredients = ingredients
-            recipe.steps = validSteps
+            recipe.steps = filteredSteps
             recipe.prepTime = prepTime
             recipe.cookTime = cookTime
             recipe.servings = servings
-            recipe.tags = tags
+            recipe.tags = tags.map { $0.lowercased() }
+            recipe.difficulty = difficulty
             recipe.updatedAt = Date()
         } else {
             // Create new
             let newRecipe = Recipe(
-                name: name,
+                name: trimmedName,
                 description: description.isEmpty ? nil : description,
                 ingredients: ingredients,
-                steps: validSteps,
+                steps: filteredSteps,
                 prepTime: prepTime,
                 cookTime: cookTime,
                 servings: servings,
                 tags: tags,
+                difficulty: difficulty,
                 source: .userCreated
             )
             modelContext.insert(newRecipe)
@@ -399,8 +447,8 @@ struct AddRecipeIngredientView: View {
 
     @State private var name = ""
     @State private var quantity: Double?
-    @State private var unit = ""
-    @State private var notes = ""
+    @State private var unit: Unit? = nil
+    @State private var preparation = ""
 
     @FocusState private var isNameFocused: Bool
 
@@ -419,16 +467,16 @@ struct AddRecipeIngredientView: View {
                             .frame(width: 80)
 
                         Picker("Unit", selection: $unit) {
-                            Text("None").tag("")
-                            ForEach(Ingredient.commonUnits, id: \.self) { u in
-                                Text(u).tag(u)
+                            Text("None").tag(Unit?.none)
+                            ForEach(Unit.allCases, id: \.self) { u in
+                                Text(u.displayName).tag(Unit?.some(u))
                             }
                         }
                     }
                 }
 
-                Section("Notes (Optional)") {
-                    TextField("e.g., diced, room temperature", text: $notes)
+                Section("Preparation (Optional)") {
+                    TextField("e.g., diced, room temperature", text: $preparation)
                 }
             }
             .navigationTitle("Add Ingredient")
@@ -445,8 +493,8 @@ struct AddRecipeIngredientView: View {
                         let ingredient = RecipeIngredient(
                             name: name,
                             quantity: quantity,
-                            unit: unit.isEmpty ? nil : unit,
-                            notes: notes.isEmpty ? nil : notes
+                            unit: unit,
+                            preparation: preparation.isEmpty ? nil : preparation
                         )
                         onAdd(ingredient)
                         dismiss()

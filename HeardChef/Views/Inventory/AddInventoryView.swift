@@ -7,7 +7,7 @@ struct AddInventoryView: View {
 
     @State private var name = ""
     @State private var quantity: Double = 1.0
-    @State private var unit = "count"
+    @State private var unit: Unit = .piece
     @State private var category: IngredientCategory = .other
     @State private var location: StorageLocation = .pantry
     @State private var hasExpiry = false
@@ -33,8 +33,8 @@ struct AddInventoryView: View {
                     }
 
                     Picker("Unit", selection: $unit) {
-                        ForEach(Ingredient.commonUnits, id: \.self) { unit in
-                            Text(unit).tag(unit)
+                        ForEach(Unit.allCases, id: \.self) { u in
+                            Text(u.displayName).tag(u)
                         }
                     }
                 }
@@ -42,13 +42,13 @@ struct AddInventoryView: View {
                 Section("Organization") {
                     Picker("Category", selection: $category) {
                         ForEach(IngredientCategory.allCases, id: \.self) { cat in
-                            Label(cat.rawValue, systemImage: cat.icon).tag(cat)
+                            Label(cat.displayName, systemImage: cat.icon).tag(cat)
                         }
                     }
 
                     Picker("Location", selection: $location) {
                         ForEach(StorageLocation.allCases, id: \.self) { loc in
-                            Label(loc.rawValue, systemImage: loc.icon).tag(loc)
+                            Label(loc.displayName, systemImage: loc.icon).tag(loc)
                         }
                     }
                 }
@@ -84,7 +84,7 @@ struct AddInventoryView: View {
                         addIngredient()
                     }
                     .fontWeight(.semibold)
-                    .disabled(name.isEmpty)
+                    .disabled(name.isEmpty || quantity <= 0)
                 }
             }
             .onAppear {
@@ -122,23 +122,24 @@ struct AddInventoryView: View {
         }
     }
 
-    private var quickAddItems: [(name: String, category: IngredientCategory, location: StorageLocation)] {
+    private var quickAddItems: [(name: String, unit: Unit, category: IngredientCategory, location: StorageLocation)] {
         [
-            ("Eggs", .dairy, .fridge),
-            ("Milk", .dairy, .fridge),
-            ("Butter", .dairy, .fridge),
-            ("Chicken", .meat, .fridge),
-            ("Rice", .pantry, .pantry),
-            ("Pasta", .pantry, .pantry),
-            ("Olive Oil", .condiments, .pantry),
-            ("Onions", .produce, .counter),
-            ("Garlic", .produce, .counter),
-            ("Salt", .condiments, .pantry)
+            ("Eggs", .dozen, .protein, .fridge),
+            ("Milk", .cartons, .dairy, .fridge),
+            ("Butter", .piece, .dairy, .fridge),
+            ("Chicken", .pounds, .protein, .fridge),
+            ("Rice", .pounds, .grains, .pantry),
+            ("Pasta", .boxes, .grains, .pantry),
+            ("Olive Oil", .bottles, .condiments, .pantry),
+            ("Onions", .piece, .produce, .counter),
+            ("Garlic", .head, .produce, .counter),
+            ("Salt", .piece, .spices, .pantry)
         ]
     }
 
-    private func applyQuickAdd(_ item: (name: String, category: IngredientCategory, location: StorageLocation)) {
+    private func applyQuickAdd(_ item: (name: String, unit: Unit, category: IngredientCategory, location: StorageLocation)) {
         name = item.name
+        unit = item.unit
         category = item.category
         location = item.location
     }
@@ -146,17 +147,19 @@ struct AddInventoryView: View {
     // MARK: - Actions
 
     private func addIngredient() {
-        let ingredient = Ingredient(
+        // Use findOrCreate to handle duplicates automatically
+        Ingredient.findOrCreate(
             name: name,
             quantity: quantity,
             unit: unit,
             category: category,
             location: location,
             expiryDate: hasExpiry ? expiryDate : nil,
-            notes: notes.isEmpty ? nil : notes
+            notes: notes.isEmpty ? nil : notes,
+            mergeQuantity: true,
+            in: modelContext
         )
 
-        modelContext.insert(ingredient)
         dismiss()
     }
 }
@@ -173,7 +176,7 @@ struct BulkAddView: View {
         let id = UUID()
         var name: String
         var quantity: Double
-        var unit: String
+        var unit: Unit
         var category: IngredientCategory
         var location: StorageLocation
         var isSelected: Bool
@@ -188,7 +191,7 @@ struct BulkAddView: View {
                             VStack(alignment: .leading) {
                                 Text(item.name)
                                     .fontWeight(.medium)
-                                Text("\(item.quantity, specifier: "%.1f") \(item.unit)")
+                                Text("\(item.quantity, specifier: "%.1f") \(item.unit.displayName)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -219,14 +222,15 @@ struct BulkAddView: View {
 
     private func addSelectedItems() {
         for item in items where item.isSelected {
-            let ingredient = Ingredient(
+            Ingredient.findOrCreate(
                 name: item.name,
                 quantity: item.quantity,
                 unit: item.unit,
                 category: item.category,
-                location: item.location
+                location: item.location,
+                mergeQuantity: true,
+                in: modelContext
             )
-            modelContext.insert(ingredient)
         }
         dismiss()
     }
