@@ -50,5 +50,9 @@ Secrets.xcconfig
 *.swo
 *~
 
+# AI
+.claude/
+.cursor/
+
 # App-specific
 *.hprof

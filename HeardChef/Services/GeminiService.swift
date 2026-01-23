@@ -146,6 +146,87 @@ class GeminiService: NSObject {
         sendJSON(message)
     }
 
+    // MARK: - Text & Image Sending (Multimodal)
+
+    /// Send a text message to the active session.
+    func sendText(_ text: String) {
+        guard isConnected else { return }
+
+        let message: [String: Any] = [
+            "client_content": [
+                "turns": [
+                    [
+                        "role": "user",
+                        "parts": [
+                            ["text": text]
+                        ]
+                    ]
+                ],
+                "turn_complete": true
+            ]
+        ]
+
+        sendJSON(message)
+    }
+
+    /// Send an image to the active session (e.g. for vision tasks).
+    /// Use client_content so the image is tied to a user turn.
+    func sendPhoto(_ imageData: Data) {
+        guard isConnected else { return }
+
+        let base64Image = imageData.base64EncodedString()
+
+        let message: [String: Any] = [
+            "client_content": [
+                "turns": [
+                    [
+                        "role": "user",
+                        "parts": [
+                            [
+                                "inline_data": [
+                                    "mime_type": "image/jpeg",
+                                    "data": base64Image
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                "turn_complete": true
+            ]
+        ]
+
+        sendJSON(message)
+    }
+
+    /// Send text + image together as one multimodal user turn.
+    func sendTextWithPhoto(_ text: String, imageData: Data) {
+        guard isConnected else { return }
+
+        let base64Image = imageData.base64EncodedString()
+
+        let message: [String: Any] = [
+            "client_content": [
+                "turns": [
+                    [
+                        "role": "user",
+                        "parts": [
+                            ["text": text],
+                            [
+                                "inline_data": [
+                                    "mime_type": "image/jpeg",
+                                    "data": base64Image
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                "turn_complete": true
+            ]
+        ]
+
+        sendJSON(message)
+    }
+
     // MARK: - Message Handling
 
     private func receiveMessage() {

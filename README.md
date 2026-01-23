@@ -129,7 +129,7 @@ _(For Gemini Live, ensure you are using a key with access to the `gemini-2.0-fla
 ## Roadmap
 
 - [x] **Phase 1: Foundation** - UX Prototypes, SwiftData Schema, "Brain Protocol" Definition.
-- [ ] **Phase 2: Core Intelligence** - Implement Gemini Live streaming and Tool Definitions.
+- [ ] **Phase 2: Core Intelligence (in progress)** - Implement Gemini Live streaming and Tool Definitions.
 - [ ] **Phase 3: Visual Polish** - Implement the Avatar animations and Modal transitions.
 - [ ] **Phase 4: Local Fallback** - Integrate on-device model for offline inventory checks.
 
@@ -137,7 +137,7 @@ _(For Gemini Live, ensure you are using a key with access to the `gemini-2.0-fla
 
 ~~1. Data Models - Ingredient, Recipe (SwiftData schema, relationships, validation)~~
 ~~2. [Gemini Tools](docs/gemini-tools.md) - Function declarations (schema accuracy, error handling)~~
-3. Gemini Service - WebSocket connection, audio streaming, function execution
+~~3. Gemini Service - WebSocket connection, audio streaming, function execution~~
 4. Voice UI - Waveform, transcript, states, accessibility
 5. Inventory UI - List, grouping, search, edit flow, expiry handling
 6. Recipe UI - Cards, detail view, cooking mode, edit form
