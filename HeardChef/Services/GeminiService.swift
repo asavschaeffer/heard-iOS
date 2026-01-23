@@ -30,6 +30,7 @@ class GeminiService: NSObject {
     private var urlSession: URLSession?
     private var isConnected = false
     private var isStreamingResponse = false
+    private let supportsFileAttachments = false
 
     // API Configuration
     private let apiKey: String
@@ -239,6 +240,22 @@ class GeminiService: NSObject {
         // TODO: Convert to the correct mime type and send as realtime input video chunk.
         // TODO: Decide cadence / throttling and whether to bundle with audio.
         _ = imageData
+    }
+
+    // MARK: - File Attachments (Stub)
+
+    func sendVideoAttachment(url: URL, utType: String?) {
+        guard isConnected else { return }
+        guard supportsFileAttachments else { return }
+        // TODO: Upload video attachment when Gemini supports it.
+        _ = (url, utType)
+    }
+
+    func sendDocumentAttachment(url: URL, utType: String?) {
+        guard isConnected else { return }
+        guard supportsFileAttachments else { return }
+        // TODO: Upload document attachment when Gemini supports it.
+        _ = (url, utType)
     }
 
     // MARK: - Message Handling

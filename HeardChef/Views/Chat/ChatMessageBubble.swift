@@ -1,10 +1,12 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct ChatMessageBubble: View {
     let message: ChatMessage
     let isGroupEnd: Bool
     let statusText: String?
+    @State private var quickLookItem: QuickLookItem?
     
     var body: some View {
         HStack {
@@ -29,6 +31,9 @@ struct ChatMessageBubble: View {
             }
             
             if !message.role.isUser { Spacer() }
+        }
+        .sheet(item: $quickLookItem) { item in
+            QuickLookPreview(url: item.url)
         }
     }
     
@@ -57,9 +62,23 @@ struct ChatMessageBubble: View {
             }
         } else if message.mediaType == .video {
             VideoAttachmentView(thumbnailData: message.imageData)
+                .onTapGesture {
+                    openQuickLook()
+                }
         } else if message.mediaType == .document {
-            DocumentAttachmentView(filename: message.mediaFilename)
+            DocumentAttachmentView(filename: message.mediaFilename, utType: message.mediaUTType)
+                .onTapGesture {
+                    openQuickLook()
+                }
         }
+    }
+
+    private func openQuickLook() {
+        guard let urlString = message.mediaURL,
+              let url = URL(string: urlString) else {
+            return
+        }
+        quickLookItem = QuickLookItem(url: url)
     }
 }
 
@@ -88,6 +107,7 @@ private struct VideoAttachmentView: View {
 
 private struct DocumentAttachmentView: View {
     let filename: String?
+    let utType: String?
     
     var body: some View {
         HStack(spacing: 10) {
@@ -95,10 +115,10 @@ private struct DocumentAttachmentView: View {
                 .font(.title3)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(filename ?? "PDF Document")
+                Text(filename ?? "Document")
                     .font(.footnote)
                     .foregroundStyle(.primary)
-                Text("PDF")
+                Text(typeLabel)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -106,6 +126,14 @@ private struct DocumentAttachmentView: View {
         .padding(10)
         .background(Color(.systemGray6))
         .cornerRadius(10)
+    }
+
+    private var typeLabel: String {
+        if let utType, let type = UTType(utType), type.conforms(to: .pdf) {
+            return "PDF"
+        }
+        let ext = filename?.split(separator: ".").last.map { String($0).uppercased() }
+        return ext ?? "DOC"
     }
 }
 

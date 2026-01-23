@@ -8,6 +8,7 @@ enum ChatAttachmentKind {
     case image
     case video
     case pdf
+    case document
 }
 
 struct ChatAttachment {
@@ -56,12 +57,14 @@ final class ChatAttachmentService {
 
     static func loadFromDocument(url: URL) throws -> ChatAttachment {
         let copiedURL = try copyToDocuments(url: url)
+        let utType = UTType(filenameExtension: copiedURL.pathExtension) ?? .data
+        let kind: ChatAttachmentKind = utType.conforms(to: .pdf) ? .pdf : .document
         return ChatAttachment(
-            kind: .pdf,
+            kind: kind,
             imageData: nil,
             fileURL: copiedURL,
             filename: copiedURL.lastPathComponent,
-            utType: UTType.pdf.identifier
+            utType: utType.identifier
         )
     }
 

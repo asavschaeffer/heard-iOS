@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import SwiftData
 import AVFoundation
+import UniformTypeIdentifiers
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -368,6 +369,14 @@ class ChatViewModel: ObservableObject {
         } else if let imageData = imageData, message.mediaType == .image {
             geminiService?.sendPhoto(imageData)
         }
+
+        if let urlString = message.mediaURL, let url = URL(string: urlString) {
+            if message.mediaType == .video {
+                geminiService?.sendVideoAttachment(url: url, utType: message.mediaUTType)
+            } else if message.mediaType == .document {
+                geminiService?.sendDocumentAttachment(url: url, utType: message.mediaUTType)
+            }
+        }
         message.markStatus(.sent)
         activeThread?.touch()
     }
@@ -393,7 +402,7 @@ class ChatViewModel: ObservableObject {
                 mediaUTType: attachment?.utType,
                 status: .sending
             )
-        case .pdf:
+        case .pdf, .document:
             return ChatMessage(
                 role: .user,
                 text: text,
@@ -423,7 +432,10 @@ class ChatViewModel: ObservableObject {
         case .video:
             return "Attached a video: \(filename)"
         case .document:
-            return "Attached a PDF: \(filename)"
+            if let utType = message.mediaUTType, UTType(utType)?.conforms(to: .pdf) == true {
+                return "Attached a PDF: \(filename)"
+            }
+            return "Attached a document: \(filename)"
         case .image, .audio:
             return nil
         }

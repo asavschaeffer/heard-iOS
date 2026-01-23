@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
@@ -123,11 +124,11 @@ struct ChatView: View {
                 Button("Camera Photo") { showCameraPhotoPicker = true }
                 Button("Camera Video") { showCameraVideoPicker = true }
                 Button("Photos") { showPhotosPicker = true }
-                Button("Files (PDF)") { showDocumentPicker = true }
+                Button("Files") { showDocumentPicker = true }
             }
             .photosPicker(isPresented: $showPhotosPicker, selection: $selectedItem, matching: .any(of: [.images, .videos]))
             .sheet(isPresented: $showDocumentPicker) {
-                DocumentPicker(allowedTypes: [.pdf]) { url in
+                DocumentPicker(allowedTypes: [.item]) { url in
                     handleDocumentSelection(url)
                 }
             }
@@ -252,7 +253,7 @@ private struct AttachmentPreview: View {
                     Image(systemName: "play.fill")
                         .foregroundStyle(.white)
                 }
-            case .pdf:
+            case .pdf, .document:
                 ZStack {
                     Color(.systemGray5)
                     Image(systemName: "doc.richtext")
@@ -270,6 +271,8 @@ private struct AttachmentPreview: View {
             return "Video attached"
         case .pdf:
             return attachment.filename ?? "PDF attached"
+        case .document:
+            return attachment.filename ?? "Document attached"
         }
     }
 }
