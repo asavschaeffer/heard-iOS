@@ -24,6 +24,8 @@ class CameraService: NSObject, ObservableObject {
 
     private var photoContinuation: CheckedContinuation<UIImage?, Error>?
     private var onVideoFrame: ((Data) -> Void)?
+    private var frameInterval: TimeInterval = 0.2
+    private var lastFrameTimestamp: TimeInterval = 0
 
     // MARK: - Initialization
 
@@ -146,7 +148,8 @@ class CameraService: NSObject, ObservableObject {
 
     // MARK: - Video Frame Streaming (Stub)
 
-    func setVideoFrameHandler(_ handler: @escaping (Data) -> Void) {
+    func setVideoFrameHandler(frameInterval: TimeInterval = 0.2, _ handler: @escaping (Data) -> Void) {
+        self.frameInterval = frameInterval
         onVideoFrame = handler
     }
 
@@ -226,14 +229,15 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard onVideoFrame != nil else { return }
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        // TODO: Throttle frames and use a lower-res encode.
+        let timestamp = CACurrentMediaTime()
+        if timestamp - lastFrameTimestamp < frameInterval { return }
+        lastFrameTimestamp = timestamp
+
         let ciImage = CIImage(cvPixelBuffer: imageBuffer)
         let context = CIContext(options: nil)
         guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return }
         let uiImage = UIImage(cgImage: cgImage)
-
-        // TODO: Consider HEVC or JPEG with compression and resizing.
-        guard let jpegData = uiImage.jpegData(compressionQuality: 0.6) else { return }
+        guard let jpegData = processImageForGemini(uiImage, maxSize: CGSize(width: 1024, height: 1024)) else { return }
         onVideoFrame?(jpegData)
     }
 }

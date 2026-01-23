@@ -18,6 +18,7 @@ class ChatViewModel: ObservableObject {
         var isSpeaking = false
         var audioLevel: Float = 0.0
         var isVideoStreaming = false
+        var videoFrameInterval: TimeInterval = 0.2
     }
 
     // MARK: - Connection State
@@ -649,7 +650,7 @@ class ChatViewModel: ObservableObject {
         guard !callState.isVideoStreaming else { return }
         callState.isVideoStreaming = true
 
-        cameraService.setVideoFrameHandler { [weak self] data in
+        cameraService.setVideoFrameHandler(frameInterval: callState.videoFrameInterval) { [weak self] data in
             Task { @MainActor in
                 self?.geminiService?.sendVideoFrame(data)
             }

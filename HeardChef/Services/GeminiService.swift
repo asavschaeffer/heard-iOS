@@ -232,14 +232,26 @@ class GeminiService: NSObject {
         sendJSON(message)
     }
 
-    // MARK: - Video Streaming (Stub)
+    // MARK: - Video Streaming
 
-    /// Stub for live video streaming. Wire to Gemini realtime input when supported.
+    /// Send a JPEG video frame over the Live API realtime input.
+    /// Uses image/jpeg per Google Live API examples.
     func sendVideoFrame(_ imageData: Data) {
         guard isConnected else { return }
-        // TODO: Convert to the correct mime type and send as realtime input video chunk.
-        // TODO: Decide cadence / throttling and whether to bundle with audio.
-        _ = imageData
+
+        let base64Image = imageData.base64EncodedString()
+        let message: [String: Any] = [
+            "realtime_input": [
+                "media_chunks": [
+                    [
+                        "mime_type": "image/jpeg",
+                        "data": base64Image
+                    ]
+                ]
+            ]
+        ]
+
+        sendJSON(message)
     }
 
     // MARK: - File Attachments (Stub)
