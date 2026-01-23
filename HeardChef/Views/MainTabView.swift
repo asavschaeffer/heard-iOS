@@ -22,6 +22,12 @@ struct MainTabView: View {
                     Label("Recipes", systemImage: "book.fill")
                 }
                 .tag(2)
+            
+            SettingsView(settings: ChatSettings())
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
+                .tag(3)
         }
         .tint(.orange)
     }

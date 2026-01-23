@@ -499,7 +499,9 @@ class ChatViewModel: ObservableObject {
                 geminiService?.sendDocumentAttachment(url: url, utType: message.mediaUTType)
             }
         }
-        message.markStatus(.sent)
+        if message.status != .failed {
+            message.markStatus(.delivered)
+        }
         activeThread?.touch()
     }
 
@@ -568,6 +570,13 @@ class ChatViewModel: ObservableObject {
             pending.message.markStatus(.failed)
         }
         pendingMessages.removeAll()
+    }
+
+    private func markLatestUserMessageRead() {
+        guard let latest = messages.last(where: { $0.role.isUser }) else { return }
+        if latest.status != .read {
+            latest.markStatus(.read)
+        }
     }
 
     // MARK: - Transcript Handling
@@ -716,11 +725,13 @@ extension ChatViewModel: GeminiServiceDelegate {
         let response = ChatMessage(role: .assistant, text: text, status: .sent)
         insertMessage(response)
         messages.append(response)
+        markLatestUserMessageRead()
     }
 
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data) {
         finalizeDraftIfNeeded()
         playAudio(data: data)
+        markLatestUserMessageRead()
     }
 
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult) {
@@ -734,5 +745,6 @@ extension ChatViewModel: GeminiServiceDelegate {
 
     func geminiServiceDidEndResponse(_ service: GeminiService) {
         isTyping = false
+        markLatestUserMessageRead()
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct ChatThreadView: View {
     let messages: [ChatMessage]
     let isTyping: Bool
+    let showReadReceipts: Bool
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -65,10 +66,14 @@ struct ChatThreadView: View {
         switch message.status {
         case .sending:
             return "Sending..."
-        case .failed:
-            return "Failed"
         case .sent:
             return nil
+        case .delivered:
+            return showReadReceipts ? "Delivered" : nil
+        case .read:
+            return showReadReceipts ? "Read" : nil
+        case .failed:
+            return "Failed"
         }
     }
 

@@ -8,6 +8,7 @@ struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var dictationController = DictationController()
+    @StateObject private var settings = ChatSettings()
     
     struct CallButtonPreference {
         let iconStyle: CallPresentationStyle
@@ -37,7 +38,11 @@ struct ChatView: View {
         NavigationStack {
             ZStack {
                 VStack(spacing: 0) {
-                    ChatThreadView(messages: viewModel.messages, isTyping: viewModel.isTyping)
+                    ChatThreadView(
+                        messages: viewModel.messages,
+                        isTyping: viewModel.isTyping,
+                        showReadReceipts: settings.showReadReceipts
+                    )
                     
                     Divider()
 

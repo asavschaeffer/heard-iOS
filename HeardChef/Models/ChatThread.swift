@@ -14,6 +14,8 @@ enum ChatMessageRole: String, Codable {
 enum ChatMessageStatus: String, Codable {
     case sending
     case sent
+    case delivered
+    case read
     case failed
 }
 
@@ -67,6 +69,7 @@ final class ChatMessage {
     var mediaFilename: String?
     var mediaUTType: String?
     var statusRaw: String
+    var reactions: [String]
     var isDraft: Bool
     var createdAt: Date
     var updatedAt: Date
@@ -103,6 +106,7 @@ final class ChatMessage {
         mediaFilename: String? = nil,
         mediaUTType: String? = nil,
         status: ChatMessageStatus = .sent,
+        reactions: [String] = [],
         isDraft: Bool = false,
         createdAt: Date = .now,
         updatedAt: Date = .now,
@@ -117,6 +121,7 @@ final class ChatMessage {
         self.mediaFilename = mediaFilename
         self.mediaUTType = mediaUTType
         self.statusRaw = status.rawValue
+        self.reactions = reactions
         self.isDraft = isDraft
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -131,6 +136,15 @@ final class ChatMessage {
     
     func markStatus(_ status: ChatMessageStatus) {
         statusRaw = status.rawValue
+        updatedAt = .now
+    }
+
+    func toggleReaction(_ emoji: String) {
+        if let index = reactions.firstIndex(of: emoji) {
+            reactions.remove(at: index)
+        } else {
+            reactions.append(emoji)
+        }
         updatedAt = .now
     }
 }

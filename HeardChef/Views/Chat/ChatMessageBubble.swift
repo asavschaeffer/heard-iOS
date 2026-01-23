@@ -8,6 +8,7 @@ struct ChatMessageBubble: View {
     let statusText: String?
     @State private var quickLookItem: QuickLookItem?
     
+    
     var body: some View {
         HStack {
             if message.role.isUser { Spacer() }
@@ -23,6 +24,19 @@ struct ChatMessageBubble: View {
                 
                 attachmentView
 
+                if !message.reactions.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(message.reactions, id: \.self) { emoji in
+                            Text(emoji)
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(.systemGray6))
+                    .clipShape(Capsule())
+                }
+
                 if let statusText {
                     Text(statusText)
                         .font(.caption2)
@@ -34,6 +48,14 @@ struct ChatMessageBubble: View {
         }
         .sheet(item: $quickLookItem) { item in
             QuickLookPreview(url: item.url)
+        }
+        .contextMenu {
+            Button("👍") { message.toggleReaction("👍") }
+            Button("❤️") { message.toggleReaction("❤️") }
+            Button("😂") { message.toggleReaction("😂") }
+            Button("😮") { message.toggleReaction("😮") }
+            Button("😢") { message.toggleReaction("😢") }
+            Button("😡") { message.toggleReaction("😡") }
         }
     }
     
