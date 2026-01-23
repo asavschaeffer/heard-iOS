@@ -9,6 +9,7 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var dictationController = DictationController()
     @StateObject private var settings = ChatSettings()
+    @StateObject private var linkStore = LinkMetadataStore()
     
     struct CallButtonPreference {
         let iconStyle: CallPresentationStyle
@@ -41,7 +42,8 @@ struct ChatView: View {
                     ChatThreadView(
                         messages: viewModel.messages,
                         isTyping: viewModel.isTyping,
-                        showReadReceipts: settings.showReadReceipts
+                        showReadReceipts: settings.showReadReceipts,
+                        linkStore: linkStore
                     )
                     
                     Divider()

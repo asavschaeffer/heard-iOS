@@ -4,6 +4,7 @@ struct ChatThreadView: View {
     let messages: [ChatMessage]
     let isTyping: Bool
     let showReadReceipts: Bool
+    @ObservedObject var linkStore: LinkMetadataStore
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -30,7 +31,8 @@ struct ChatThreadView: View {
                         ChatMessageBubble(
                             message: message,
                             isGroupEnd: isGroupEnd,
-                            statusText: statusText
+                            statusText: statusText,
+                            linkStore: linkStore
                         )
                         .id(message.id)
                         .padding(.bottom, isGroupEnd ? 8 : 2)

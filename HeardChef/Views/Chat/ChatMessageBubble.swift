@@ -1,12 +1,14 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import LinkPresentation
 
 struct ChatMessageBubble: View {
     let message: ChatMessage
     let isGroupEnd: Bool
     let statusText: String?
     @State private var quickLookItem: QuickLookItem?
+    @ObservedObject var linkStore: LinkMetadataStore
     
     
     var body: some View {
@@ -20,6 +22,12 @@ struct ChatMessageBubble: View {
                         .background(bubbleBackground)
                         .foregroundStyle(message.role.isUser ? .white : .primary)
                         .opacity(message.isDraft ? 0.6 : 1.0)
+                }
+                
+                if let linkMetadata = linkMetadata {
+                    LinkPreviewView(metadata: linkMetadata)
+                        .frame(maxWidth: 260)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 
                 attachmentView
@@ -101,6 +109,34 @@ struct ChatMessageBubble: View {
             return
         }
         quickLookItem = QuickLookItem(url: url)
+    }
+
+    private var linkMetadata: LPLinkMetadata? {
+        if let url = firstURL(in: message.text ?? "") {
+            let key = url.absoluteString
+            if let cached = linkStore.metadata(for: key) {
+                return cached
+            }
+            linkStore.prefetch(url: url, key: key)
+        }
+
+        if let urlString = message.mediaURL, let url = URL(string: urlString) {
+            let key = url.absoluteString
+            if let cached = linkStore.metadata(for: key) {
+                return cached
+            }
+            linkStore.prefetch(url: url, key: key)
+        }
+
+        return nil
+    }
+
+    private func firstURL(in text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        return detector.firstMatch(in: text, options: [], range: range)?.url
     }
 }
 
