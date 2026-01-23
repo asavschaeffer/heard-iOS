@@ -3,6 +3,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import UniformTypeIdentifiers
+import UIKit
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -34,6 +35,7 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var isTyping = false
     @Published var callState = CallSessionState()
+    @Published var callDuration: TimeInterval = 0
     
     // MARK: - Private Properties
 
@@ -51,6 +53,10 @@ class ChatViewModel: ObservableObject {
     private var transcriptDebounceWorkItem: DispatchWorkItem?
     private var pendingVoiceStart = false
     private var activeThread: ChatThread?
+    private var audioObservers: [NSObjectProtocol] = []
+    private var callTimer: Timer?
+    private var callStartDate: Date?
+    private var callDurationAccumulated: TimeInterval = 0
 
     private struct PendingMessage {
         let message: ChatMessage
@@ -62,6 +68,7 @@ class ChatViewModel: ObservableObject {
 
     init() {
         setupAudioSession()
+        observeAudioSession()
     }
 
     func setModelContext(_ context: ModelContext) {
@@ -119,6 +126,109 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    private func preferSpeaker() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.overrideOutputAudioPort(.speaker)
+        } catch {
+            print("Audio Session override error: \(error)")
+        }
+    }
+
+    private func startCallTimer() {
+        if callStartDate == nil {
+            callStartDate = Date()
+        }
+        callTimer?.invalidate()
+        callTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateCallDuration()
+        }
+        updateCallDuration()
+    }
+
+    private func pauseCallTimer() {
+        if let start = callStartDate {
+            callDurationAccumulated += Date().timeIntervalSince(start)
+        }
+        callStartDate = nil
+        callTimer?.invalidate()
+        callTimer = nil
+        updateCallDuration()
+    }
+
+    private func resetCallTimer() {
+        callTimer?.invalidate()
+        callTimer = nil
+        callStartDate = nil
+        callDurationAccumulated = 0
+        callDuration = 0
+    }
+
+    private func updateCallDuration() {
+        let active = callStartDate.map { Date().timeIntervalSince($0) } ?? 0
+        callDuration = callDurationAccumulated + active
+    }
+
+    var callDurationText: String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = callDuration >= 3600 ? [.hour, .minute, .second] : [.minute, .second]
+        formatter.zeroFormattingBehavior = .pad
+        return formatter.string(from: callDuration) ?? "0:00"
+    }
+
+    private func sendCallHaptic(style: UINotificationFeedbackGenerator.FeedbackType) {
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(style)
+    }
+
+    private func observeAudioSession() {
+        let center = NotificationCenter.default
+        audioObservers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            self?.handleRouteChange(note)
+        })
+
+        audioObservers.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            self?.handleInterruption(note)
+        })
+    }
+
+    private func handleRouteChange(_ notification: Notification) {
+        let session = AVAudioSession.sharedInstance()
+        let outputs = session.currentRoute.outputs
+        callState.isListening = audioEngine?.isRunning == true && !outputs.isEmpty
+    }
+
+    private func handleInterruption(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            return
+        }
+
+        switch type {
+        case .began:
+            stopAudioCapture()
+        case .ended:
+            let optionsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue ?? 0)
+            if options.contains(.shouldResume) && callState.isPresented {
+                startAudioCapture()
+                callState.isListening = true
+            }
+        @unknown default:
+            break
+        }
+    }
+
     // MARK: - Actions
 
     func connect() {
@@ -156,21 +266,28 @@ class ChatViewModel: ObservableObject {
     // MARK: - Voice Session Management
 
     func startVoiceSession() {
+        let wasPresented = callState.isPresented
         callState.isPresented = true
         if connectionState == .disconnected {
             connect()
         }
         
         if connectionState == .connected {
+            preferSpeaker()
             startAudioCapture()
             callState.isListening = true
             pendingVoiceStart = false
         } else {
             pendingVoiceStart = true
         }
+        
+        if !wasPresented {
+            updateCallDuration()
+        }
     }
 
     func stopVoiceSession() {
+        let wasPresented = callState.isPresented
         callState.isPresented = false
         stopAudioCapture()
         callState.isListening = false
@@ -178,6 +295,10 @@ class ChatViewModel: ObservableObject {
         stopVideoStreaming()
         cancelTranscriptDebounce()
         finalizeDraftIfNeeded()
+        resetCallTimer()
+        if wasPresented {
+            sendCallHaptic(style: .warning)
+        }
     }
     
     func toggleMute() {
@@ -548,6 +669,10 @@ extension ChatViewModel: GeminiServiceDelegate {
     func geminiServiceDidConnect(_ service: GeminiService) {
         connectionState = .connected
         flushPendingMessages()
+        if callState.isPresented {
+            startCallTimer()
+            sendCallHaptic(style: .success)
+        }
         if pendingVoiceStart {
             startAudioCapture()
             callState.isListening = true
@@ -560,6 +685,9 @@ extension ChatViewModel: GeminiServiceDelegate {
         callState.isListening = false
         isTyping = false
         if callState.isPresented {
+            pauseCallTimer()
+        }
+        if callState.isPresented {
             pendingVoiceStart = true
         }
     }
@@ -568,6 +696,9 @@ extension ChatViewModel: GeminiServiceDelegate {
         connectionState = .error(error.localizedDescription)
         isTyping = false
         markPendingMessagesFailed()
+        if callState.isPresented {
+            pauseCallTimer()
+        }
     }
 
     func geminiService(_ service: GeminiService, didReceiveTranscript transcript: String, isFinal: Bool) {

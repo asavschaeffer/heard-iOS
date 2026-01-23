@@ -31,39 +31,49 @@ struct CallView: View {
             .padding(.horizontal)
             .padding(.top, 12)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Text("Heard, Chef")
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
 
-                HStack(spacing: 6) {
-                    if viewModel.connectionState != .connected {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(.white.opacity(0.8))
-                            .scaleEffect(0.8)
-                    }
-
-                    Text(viewModel.connectionState == .connected ? "Call answered" : "Calling...")
+                if viewModel.connectionState == .connected {
+                    Text(viewModel.callDurationText)
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.8))
+                } else {
+                    HStack(spacing: 6) {
+                        if showsProgress {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(.white.opacity(0.8))
+                                .scaleEffect(0.8)
+                        }
+
+                        Text(statusText)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.8))
+
+                        if showsDots {
+                            CallStatusDots()
+                        }
+                    }
                 }
             }
-            .padding(.top, 20)
+            .padding(.top, 12)
 
             Spacer()
 
             ZStack {
                 Circle()
                     .fill(Color.white.opacity(0.08))
-                    .frame(width: 220, height: 220)
-                    .scaleEffect(viewModel.callState.isSpeaking ? 1.08 : 1.0)
+                    .frame(width: 180, height: 180)
+                    .scaleEffect(viewModel.callState.isSpeaking ? 1.06 : 1.0)
                     .animation(.easeInOut(duration: 0.3).repeatForever(), value: viewModel.callState.isSpeaking)
 
                 Image("app-icon-template")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 110)
+                    .frame(width: 90)
             }
 
             Spacer()
@@ -71,7 +81,7 @@ struct CallView: View {
             CallControlsView(viewModel: viewModel) {
                 viewModel.stopVoiceSession()
             }
-            .padding(.bottom, 36)
+            .padding(.bottom, 28)
         }
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -81,6 +91,32 @@ struct CallView: View {
         }
         .onDisappear {
             viewModel.stopVoiceSession()
+        }
+    }
+
+    private var statusText: String {
+        switch viewModel.connectionState {
+        case .connected:
+            return "Connected"
+        case .connecting:
+            return "Connecting…"
+        case .disconnected:
+            return "Reconnecting…"
+        case .error:
+            return "Connection issue"
+        }
+    }
+
+    private var showsProgress: Bool {
+        viewModel.connectionState != .connected
+    }
+
+    private var showsDots: Bool {
+        switch viewModel.connectionState {
+        case .connecting, .disconnected:
+            return true
+        case .connected, .error:
+            return false
         }
     }
     
@@ -104,6 +140,26 @@ struct CallView: View {
                 Color.clear
             }
         }
+    }
+}
+
+private struct CallStatusDots: View {
+    @State private var animate = false
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Color.white.opacity(0.7))
+                    .frame(width: 4, height: 4)
+                    .scaleEffect(animate ? 1.0 : 0.6)
+                    .animation(
+                        .easeInOut(duration: 0.6).repeatForever(autoreverses: true).delay(Double(index) * 0.2),
+                        value: animate
+                    )
+            }
+        }
+        .onAppear { animate = true }
     }
 }
 

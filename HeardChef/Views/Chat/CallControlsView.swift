@@ -5,7 +5,7 @@ struct CallControlsView: View {
     let onEnd: () -> Void
     
     var body: some View {
-        HStack(spacing: 36) {
+        HStack(spacing: 28) {
             CallControlButton(
                 title: viewModel.callState.isListening ? "Mute" : "Unmute",
                 systemImage: viewModel.callState.isListening ? "mic.slash.fill" : "mic.fill",
@@ -15,6 +15,16 @@ struct CallControlsView: View {
             ) {
                 viewModel.toggleMute()
             }
+
+            VStack(spacing: 8) {
+                AudioRoutePickerView()
+                    .frame(width: 56, height: 56)
+                    .background(Color.white.opacity(0.18), in: Circle())
+                Text("Audio")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            .opacity(viewModel.connectionState == .connected ? 1.0 : 0.6)
 
             CallControlButton(
                 title: "End",
