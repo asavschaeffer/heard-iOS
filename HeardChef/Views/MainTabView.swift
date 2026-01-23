@@ -5,7 +5,7 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            VoiceView()
+            ChatView()
                 .tabItem {
                     Label("Heard", systemImage: "waveform.circle.fill")
                 }

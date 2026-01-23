@@ -4,10 +4,18 @@ import SwiftData
 import AVFoundation
 
 @MainActor
-class VoiceViewModel: ObservableObject {
+class ChatViewModel: ObservableObject {
 
-    enum VoiceConfig {
+    enum ChatConfig {
         static let transcriptDebounceInterval: TimeInterval = 0.9
+    }
+
+    struct CallSessionState {
+        var isPresented = false
+        var isListening = false
+        var isSpeaking = false
+        var audioLevel: Float = 0.0
+        var isVideoStreaming = false
     }
 
     // MARK: - Connection State
@@ -19,65 +27,12 @@ class VoiceViewModel: ObservableObject {
         case error(String)
     }
 
-    // MARK: - Message Model
-    
-    struct ChatMessage: Identifiable, Equatable {
-        let id: UUID
-        let isUser: Bool
-        let text: String?
-        let imageData: Data?
-        let timestamp: Date
-        let isDraft: Bool
-        
-        static func userText(_ text: String) -> ChatMessage {
-            make(isUser: true, text: text, imageData: nil, isDraft: false)
-        }
-        
-        static func userImage(_ data: Data) -> ChatMessage {
-            make(isUser: true, text: nil, imageData: data, isDraft: false)
-        }
-
-        static func userTextWithImage(_ text: String, imageData: Data?) -> ChatMessage {
-            make(isUser: true, text: text, imageData: imageData, isDraft: false)
-        }
-        
-        static func aiText(_ text: String) -> ChatMessage {
-            make(isUser: false, text: text, imageData: nil, isDraft: false)
-        }
-
-        static func draftUserText(_ text: String) -> ChatMessage {
-            make(isUser: true, text: text, imageData: nil, isDraft: true)
-        }
-
-        static func draftUserText(_ text: String, id: UUID) -> ChatMessage {
-            make(isUser: true, text: text, imageData: nil, isDraft: true, id: id)
-        }
-
-        static func userText(_ text: String, id: UUID) -> ChatMessage {
-            make(isUser: true, text: text, imageData: nil, isDraft: false, id: id)
-        }
-
-        private static func make(
-            isUser: Bool,
-            text: String?,
-            imageData: Data?,
-            isDraft: Bool,
-            id: UUID = UUID()
-        ) -> ChatMessage {
-            ChatMessage(id: id, isUser: isUser, text: text, imageData: imageData, timestamp: Date(), isDraft: isDraft)
-        }
-    }
-
     // MARK: - Published Properties
 
     @Published var connectionState: ConnectionState = .disconnected
     @Published var messages: [ChatMessage] = []
-    
-    // Voice Mode State
-    @Published var showVoiceMode = false
-    @Published var isListening = false
-    @Published var isSpeaking = false
-    @Published var audioLevel: Float = 0.0
+    @Published var isTyping = false
+    @Published var callState = CallSessionState()
     
     // MARK: - Private Properties
 
@@ -94,8 +49,10 @@ class VoiceViewModel: ObservableObject {
     private var lastTranscriptText: String?
     private var transcriptDebounceWorkItem: DispatchWorkItem?
     private var pendingVoiceStart = false
+    private var activeThread: ChatThread?
 
     private struct PendingMessage {
+        let message: ChatMessage
         let text: String?
         let imageData: Data?
     }
@@ -110,6 +67,45 @@ class VoiceViewModel: ObservableObject {
         self.modelContext = context
         self.geminiService = GeminiService(modelContext: context)
         self.geminiService?.delegate = self
+        loadOrCreateThread()
+    }
+
+    private func loadOrCreateThread() {
+        guard let context = modelContext else { return }
+        if activeThread != nil { return }
+
+        let descriptor = FetchDescriptor<ChatThread>(
+            predicate: #Predicate { $0.title == "Heard, Chef" },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        let existingThread = (try? context.fetch(descriptor))?.first
+        let thread = existingThread ?? ChatThread(title: "Heard, Chef")
+        if existingThread == nil {
+            context.insert(thread)
+        }
+
+        activeThread = thread
+        migrateMessagesIfNeeded()
+        fetchMessages()
+    }
+
+    private func fetchMessages() {
+        guard let context = modelContext, let thread = activeThread else { return }
+        let threadId = thread.id
+        let descriptor = FetchDescriptor<ChatMessage>(
+            predicate: #Predicate { $0.thread?.id == threadId },
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        messages = (try? context.fetch(descriptor)) ?? []
+    }
+
+    private func migrateMessagesIfNeeded() {
+        guard let context = modelContext, let thread = activeThread else { return }
+        guard !messages.isEmpty, thread.messages.isEmpty else { return }
+        for message in messages {
+            message.thread = thread
+            context.insert(message)
+        }
     }
 
     private func setupAudioSession() {
@@ -143,36 +139,36 @@ class VoiceViewModel: ObservableObject {
     func sendMessage(_ text: String, imageData: Data?) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasText = !trimmed.isEmpty
+        guard hasText || imageData != nil else { return }
 
-        if hasText && imageData != nil {
-            messages.append(.userTextWithImage(trimmed, imageData: imageData))
-        } else if hasText {
-            messages.append(.userText(trimmed))
-        } else if let imageData = imageData {
-            messages.append(.userImage(imageData))
-        } else {
-            return
-        }
+        let message = ChatMessage(
+            role: .user,
+            text: hasText ? trimmed : nil,
+            imageData: imageData,
+            mediaType: imageData == nil ? nil : .image,
+            status: .sending
+        )
+        insertMessage(message)
+        messages.append(message)
 
-        enqueueOrSend(text: hasText ? trimmed : nil, imageData: imageData)
+        enqueueOrSend(text: hasText ? trimmed : nil, imageData: imageData, message: message)
     }
 
     func sendImage(_ data: Data) {
-        messages.append(.userImage(data))
-        enqueueOrSend(text: nil, imageData: data)
+        sendMessage("", imageData: data)
     }
 
     // MARK: - Voice Session Management
 
     func startVoiceSession() {
-        showVoiceMode = true
+        callState.isPresented = true
         if connectionState == .disconnected {
             connect()
         }
         
         if connectionState == .connected {
             startAudioCapture()
-            isListening = true
+            callState.isListening = true
             pendingVoiceStart = false
         } else {
             pendingVoiceStart = true
@@ -180,17 +176,18 @@ class VoiceViewModel: ObservableObject {
     }
 
     func stopVoiceSession() {
-        showVoiceMode = false
+        callState.isPresented = false
         stopAudioCapture()
-        isListening = false
+        callState.isListening = false
         pendingVoiceStart = false
+        stopVideoStreaming()
         cancelTranscriptDebounce()
         finalizeDraftIfNeeded()
     }
     
     func toggleMute() {
-        isListening.toggle()
-        if isListening {
+        callState.isListening.toggle()
+        if callState.isListening {
             startAudioCapture()
         } else {
             stopAudioCapture()
@@ -224,7 +221,7 @@ class VoiceViewModel: ObservableObject {
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine?.stop()
         audioEngine = nil
-        audioLevel = 0
+        callState.audioLevel = 0
     }
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
@@ -236,7 +233,7 @@ class VoiceViewModel: ObservableObject {
         let average = sum / Float(frameLength)
         
         Task { @MainActor in
-            self.audioLevel = min(1.0, average * 10)
+            self.callState.audioLevel = min(1.0, average * 10)
         }
 
         // 2. Stream to Gemini
@@ -272,7 +269,7 @@ class VoiceViewModel: ObservableObject {
     private func playNextAudioChunk() {
         guard let next = pendingAudioChunks.first else {
             isPlayingAudio = false
-            isSpeaking = false
+            callState.isSpeaking = false
             return
         }
 
@@ -286,7 +283,7 @@ class VoiceViewModel: ObservableObject {
             playbackNode?.play()
         }
 
-        isSpeaking = true
+        callState.isSpeaking = true
         playbackNode?.scheduleBuffer(buffer, completionHandler: { [weak self] in
             Task { @MainActor in
                 self?.playNextAudioChunk()
@@ -337,18 +334,27 @@ class VoiceViewModel: ObservableObject {
     }
 
     // MARK: - Queueing
+    
+    private func insertMessage(_ message: ChatMessage) {
+        guard let context = modelContext else { return }
+        if message.thread == nil {
+            message.thread = activeThread
+        }
+        context.insert(message)
+        activeThread?.touch()
+    }
 
-    private func enqueueOrSend(text: String?, imageData: Data?) {
+    private func enqueueOrSend(text: String?, imageData: Data?, message: ChatMessage) {
         if connectionState == .disconnected {
             connect()
         }
 
         guard connectionState == .connected else {
-            pendingMessages.append(PendingMessage(text: text, imageData: imageData))
+            pendingMessages.append(PendingMessage(message: message, text: text, imageData: imageData))
             return
         }
 
-        sendToGemini(text: text, imageData: imageData)
+        sendToGemini(text: text, imageData: imageData, message: message)
     }
 
     private func flushPendingMessages() {
@@ -356,11 +362,11 @@ class VoiceViewModel: ObservableObject {
         let queued = pendingMessages
         pendingMessages.removeAll()
         for item in queued {
-            sendToGemini(text: item.text, imageData: item.imageData)
+            sendToGemini(text: item.text, imageData: item.imageData, message: item.message)
         }
     }
 
-    private func sendToGemini(text: String?, imageData: Data?) {
+    private func sendToGemini(text: String?, imageData: Data?, message: ChatMessage) {
         if let text = text, let imageData = imageData {
             geminiService?.sendTextWithPhoto(text, imageData: imageData)
         } else if let text = text {
@@ -368,6 +374,15 @@ class VoiceViewModel: ObservableObject {
         } else if let imageData = imageData {
             geminiService?.sendPhoto(imageData)
         }
+        message.markStatus(.sent)
+        activeThread?.touch()
+    }
+
+    private func markPendingMessagesFailed() {
+        for pending in pendingMessages {
+            pending.message.markStatus(.failed)
+        }
+        pendingMessages.removeAll()
     }
 
     // MARK: - Transcript Handling
@@ -380,26 +395,32 @@ class VoiceViewModel: ObservableObject {
         }
 
         if let draftId = draftMessageId, let index = messages.firstIndex(where: { $0.id == draftId }) {
-            let updated = isFinal
-                ? ChatMessage.userText(trimmed.isEmpty ? text : trimmed, id: draftId)
-                : ChatMessage.draftUserText(text, id: draftId)
-            messages[index] = updated
+            let message = messages[index]
+            let draftText = trimmed.isEmpty ? text : trimmed
+            message.updateText(draftText, isDraft: !isFinal)
         } else {
-            let newDraft = isFinal
-                ? ChatMessage.userText(trimmed.isEmpty ? text : trimmed)
-                : ChatMessage.draftUserText(text)
+            let draftText = trimmed.isEmpty ? text : trimmed
+            let newDraft = ChatMessage(
+                role: .user,
+                text: draftText,
+                status: .sent,
+                isDraft: !isFinal
+            )
+            insertMessage(newDraft)
             messages.append(newDraft)
             draftMessageId = newDraft.id
         }
 
-        if isFinal {
-            draftMessageId = nil
-        }
+        if isFinal { draftMessageId = nil }
     }
 
     private func clearDraftMessage() {
         if let draftId = draftMessageId, let index = messages.firstIndex(where: { $0.id == draftId }) {
+            let message = messages[index]
             messages.remove(at: index)
+            if let context = modelContext {
+                context.delete(message)
+            }
         }
         draftMessageId = nil
     }
@@ -430,38 +451,60 @@ class VoiceViewModel: ObservableObject {
             }
         }
         transcriptDebounceWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + VoiceConfig.transcriptDebounceInterval, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + ChatConfig.transcriptDebounceInterval, execute: workItem)
     }
 
     private func cancelTranscriptDebounce() {
         transcriptDebounceWorkItem?.cancel()
         transcriptDebounceWorkItem = nil
     }
+
+    // MARK: - Video Streaming (Stub)
+
+    func startVideoStreaming(with cameraService: CameraService) {
+        guard !callState.isVideoStreaming else { return }
+        callState.isVideoStreaming = true
+
+        cameraService.setVideoFrameHandler { [weak self] data in
+            Task { @MainActor in
+                self?.geminiService?.sendVideoFrame(data)
+            }
+        }
+
+        cameraService.startVideoFrameStreaming()
+    }
+
+    func stopVideoStreaming() {
+        callState.isVideoStreaming = false
+    }
 }
 
 // MARK: - Delegate
 
-extension VoiceViewModel: GeminiServiceDelegate {
+extension ChatViewModel: GeminiServiceDelegate {
     func geminiServiceDidConnect(_ service: GeminiService) {
         connectionState = .connected
         flushPendingMessages()
         if pendingVoiceStart {
             startAudioCapture()
-            isListening = true
+            callState.isListening = true
             pendingVoiceStart = false
         }
     }
 
     func geminiServiceDidDisconnect(_ service: GeminiService) {
         connectionState = .disconnected
-        isListening = false
-        if showVoiceMode {
+        callState.isListening = false
+        isTyping = false
+        if callState.isPresented {
             pendingVoiceStart = true
         }
     }
 
     func geminiService(_ service: GeminiService, didReceiveError error: Error) {
         connectionState = .error(error.localizedDescription)
+        isTyping = false
+        markPendingMessagesFailed()
     }
 
     func geminiService(_ service: GeminiService, didReceiveTranscript transcript: String, isFinal: Bool) {
@@ -475,7 +518,9 @@ extension VoiceViewModel: GeminiServiceDelegate {
     }
 
     func geminiService(_ service: GeminiService, didReceiveResponse text: String) {
-        messages.append(.aiText(text))
+        let response = ChatMessage(role: .assistant, text: text, status: .sent)
+        insertMessage(response)
+        messages.append(response)
     }
 
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data) {
@@ -486,5 +531,13 @@ extension VoiceViewModel: GeminiServiceDelegate {
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult) {
         // System message? Or just silent?
         // messages.append(.system("Executed \(name)"))
+    }
+
+    func geminiServiceDidStartResponse(_ service: GeminiService) {
+        isTyping = true
+    }
+
+    func geminiServiceDidEndResponse(_ service: GeminiService) {
+        isTyping = false
     }
 }
