@@ -66,7 +66,9 @@ struct ChatView: View {
                 if viewModel.callState.isPresented && callPresentationStyle == .translucentOverlay {
                     CallOverlayView(
                         viewModel: viewModel,
-                        onMinimize: { callPresentationStyle = .pictureInPicture }
+                        onMinimize: { callPresentationStyle = .pictureInPicture },
+                        onSwitchToVideo: { callPresentationStyle = .translucentOverlay },
+                        onAddAttachment: { showAttachmentMenu = true }
                     )
                     .transition(.opacity)
                 }
@@ -115,7 +117,12 @@ struct ChatView: View {
                 }
             }
             .fullScreenCover(isPresented: fullScreenCallBinding) {
-                CallView(viewModel: viewModel, style: .fullScreen)
+                CallView(
+                    viewModel: viewModel,
+                    style: .fullScreen,
+                    onSwitchToVideo: { callPresentationStyle = .translucentOverlay },
+                    onAddAttachment: { showAttachmentMenu = true }
+                )
             }
             .onAppear {
                 viewModel.setModelContext(modelContext)
