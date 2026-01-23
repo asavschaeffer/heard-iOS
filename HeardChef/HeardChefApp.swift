@@ -9,6 +9,8 @@ struct HeardChefApp: App {
             Recipe.self,
             RecipeIngredient.self,
             RecipeStep.self,
+            ChatThread.self,
+            ChatMessage.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

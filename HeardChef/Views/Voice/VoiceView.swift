@@ -1,379 +1,248 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct VoiceView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = VoiceViewModel()
-    @State private var showingSettings = false
+    
+    // Input State
+    @State private var inputText = ""
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var selectedImageData: Data?
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Background gradient
-                LinearGradient(
-                    colors: [Color.orange.opacity(0.1), Color.clear],
-                    startPoint: .top,
-                    endPoint: .center
-                )
-                .ignoresSafeArea()
+            VStack(spacing: 0) {
+                // 1. Chat History
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(viewModel.messages) { message in
+                                ChatMessageBubble(message: message)
+                                    .id(message.id)
+                            }
+                        }
+                        .padding()
+                    }
+                    .onChange(of: viewModel.messages.count) {
+                        if let lastId = viewModel.messages.last?.id {
+                            withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
+                        }
+                    }
+                }
+                
+                Divider()
 
-                VStack(spacing: 24) {
-                    Spacer()
+                if let previewData = selectedImageData,
+                   let previewImage = UIImage(data: previewData) {
+                    HStack(spacing: 12) {
+                        Image(uiImage: previewImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 48, height: 48)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                    // Status indicator
-                    statusView
+                        Text("Photo attached")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
 
-                    // Waveform animation
-                    waveformView
-                        .frame(height: 60)
-                        .padding(.horizontal, 40)
+                        Spacer()
 
-                    // Transcript
-                    transcriptView
-
-                    Spacer()
-
-                    // Main action button
-                    mainButton
-
-                    // Mode toggle
-                    modeToggle
-                        .padding(.bottom, 20)
+                        Button {
+                            selectedImageData = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                }
+                
+                // 2. Input Bar
+                HStack(alignment: .bottom, spacing: 12) {
+                    // Camera Button
+                    PhotosPicker(selection: $selectedItem, matching: .images) {
+                        Image(systemName: "camera.fill")
+                            .font(.title2)
+                            .foregroundStyle(.gray)
+                    }
+                    .onChange(of: selectedItem) {
+                        Task {
+                            if let data = try? await selectedItem?.loadTransferable(type: Data.self) {
+                                selectedImageData = data
+                                selectedItem = nil
+                            }
+                        }
+                    }
+                    
+                    // Text Input
+                    TextField("Message Chef...", text: $inputText, axis: .vertical)
+                        .padding(10)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(20)
+                        .lineLimit(1...5)
+                    
+                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImageData == nil {
+                        // Mic Button (Starts Voice Mode)
+                        Button {
+                            viewModel.startVoiceSession()
+                        } label: {
+                            Image(systemName: "mic.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundStyle(.orange)
+                        }
+                    } else {
+                        // Send Text Button
+                        Button {
+                            viewModel.sendMessage(inputText, imageData: selectedImageData)
+                            inputText = ""
+                            selectedImageData = nil
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundStyle(.blue)
+                        }
+                    }
                 }
                 .padding()
+                .background(.bar)
             }
             .navigationTitle("Heard, Chef")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gear")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingSettings) {
-                VoiceSettingsView(viewModel: viewModel)
+            .sheet(isPresented: $viewModel.showVoiceMode) {
+                VoiceSessionView(viewModel: viewModel)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .onAppear {
                 viewModel.setModelContext(modelContext)
             }
         }
     }
+}
 
-    // MARK: - Status View
+// MARK: - Chat Bubble
 
-    @ViewBuilder
-    private var statusView: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
-
-            Text(statusText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: Capsule())
-    }
-
-    private var statusColor: Color {
-        switch viewModel.connectionState {
-        case .disconnected:
-            return .gray
-        case .connecting:
-            return .yellow
-        case .connected:
-            return viewModel.isListening ? .green : .blue
-        case .error:
-            return .red
-        }
-    }
-
-    private var statusText: String {
-        switch viewModel.connectionState {
-        case .disconnected:
-            return "Not connected"
-        case .connecting:
-            return "Connecting..."
-        case .connected:
-            if viewModel.isListening {
-                return "Listening..."
-            } else if viewModel.isSpeaking {
-                return "Speaking..."
-            } else {
-                return "Ready"
-            }
-        case .error(let message):
-            return message
-        }
-    }
-
-    // MARK: - Waveform View
-
-    @ViewBuilder
-    private var waveformView: some View {
-        if viewModel.isListening || viewModel.isSpeaking {
-            AudioWaveformView(
-                audioLevel: viewModel.audioLevel,
-                isActive: viewModel.isListening || viewModel.isSpeaking
-            )
-        } else {
-            // Placeholder bars when inactive
-            HStack(spacing: 4) {
-                ForEach(0..<20, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 4, height: 8)
+struct ChatMessageBubble: View {
+    let message: VoiceViewModel.ChatMessage
+    
+    var body: some View {
+        HStack {
+            if message.isUser { Spacer() }
+            
+            VStack(alignment: message.isUser ? .trailing : .leading) {
+                if let text = message.text {
+                    Text(text)
+                        .padding(12)
+                        .background(message.isUser ? Color.blue : Color(.systemGray5))
+                        .foregroundStyle(message.isUser ? .white : .primary)
+                        .cornerRadius(16)
+                        .opacity(message.isDraft ? 0.6 : 1.0)
+                }
+                
+                if let imageData = message.imageData, let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 200)
+                        .cornerRadius(12)
                 }
             }
+            
+            if !message.isUser { Spacer() }
         }
     }
+}
 
-    // MARK: - Transcript View
+// MARK: - Voice Session Modal (The "Call" UI)
 
-    @ViewBuilder
-    private var transcriptView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(viewModel.transcriptEntries) { entry in
-                    TranscriptBubble(entry: entry)
+struct VoiceSessionView: View {
+    @ObservedObject var viewModel: VoiceViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        VStack(spacing: 30) {
+            // Header
+            HStack {
+                Button {
+                    // Minimize / Hide
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.title2)
+                        .foregroundStyle(.gray)
                 }
-
-                if let currentTranscript = viewModel.currentTranscript, !currentTranscript.isEmpty {
-                    TranscriptBubble(
-                        entry: TranscriptEntry(
-                            text: currentTranscript,
-                            isUser: true,
-                            timestamp: Date()
-                        )
-                    )
-                    .opacity(0.7)
+                Spacer()
+                Text(viewModel.connectionState == .connected ? "Connected" : "Connecting...")
+                    .font(.caption)
+                    .foregroundStyle(viewModel.connectionState == .connected ? .green : .orange)
+                Spacer()
+                // Mute Toggle
+                Button {
+                    viewModel.toggleMute()
+                } label: {
+                    Image(systemName: viewModel.isListening ? "mic.fill" : "mic.slash.fill")
+                        .font(.title2)
+                        .foregroundStyle(viewModel.isListening ? .primary : .red)
                 }
             }
             .padding()
-        }
-        .frame(maxHeight: 200)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    // MARK: - Main Button
-
-    @ViewBuilder
-    private var mainButton: some View {
-        Button {
-            handleMainButtonTap()
-        } label: {
+            
+            Spacer()
+            
+            // Avatar / Visualization
             ZStack {
                 Circle()
-                    .fill(mainButtonColor)
-                    .frame(width: 80, height: 80)
-                    .shadow(color: mainButtonColor.opacity(0.5), radius: 10, y: 5)
-
-                Image(systemName: mainButtonIcon)
-                    .font(.system(size: 32, weight: .medium))
-                    .foregroundStyle(.white)
+                    .fill(Color.orange.opacity(0.1))
+                    .frame(width: 200, height: 200)
+                    .scaleEffect(viewModel.isSpeaking ? 1.1 : 1.0)
+                    .animation(.easeInOut(duration: 0.3).repeatForever(), value: viewModel.isSpeaking)
+                
+                Image("app-icon-template") // Placeholder if asset exists
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 100)
+                    .foregroundStyle(.orange)
             }
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(viewModel.isListening ? 1.1 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: viewModel.isListening)
-    }
-
-    private var mainButtonColor: Color {
-        switch viewModel.connectionState {
-        case .connected:
-            return viewModel.isListening ? .red : .orange
-        case .connecting:
-            return .yellow
-        default:
-            return .orange
-        }
-    }
-
-    private var mainButtonIcon: String {
-        switch viewModel.connectionState {
-        case .disconnected, .error:
-            return "waveform"
-        case .connecting:
-            return "ellipsis"
-        case .connected:
-            return viewModel.isListening ? "stop.fill" : "mic.fill"
-        }
-    }
-
-    private func handleMainButtonTap() {
-        switch viewModel.connectionState {
-        case .disconnected, .error:
-            viewModel.connect()
-        case .connecting:
-            break
-        case .connected:
-            if viewModel.isListening {
-                viewModel.stopListening()
-            } else {
-                viewModel.startListening()
-            }
-        }
-    }
-
-    // MARK: - Mode Toggle
-
-    @ViewBuilder
-    private var modeToggle: some View {
-        HStack {
-            Text("Always Listening")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Toggle("", isOn: $viewModel.alwaysListening)
-                .labelsHidden()
-                .tint(.orange)
-        }
-    }
-}
-
-// MARK: - Transcript Entry
-
-struct TranscriptEntry: Identifiable {
-    let id = UUID()
-    let text: String
-    let isUser: Bool
-    let timestamp: Date
-}
-
-struct TranscriptBubble: View {
-    let entry: TranscriptEntry
-
-    var body: some View {
-        HStack {
-            if entry.isUser { Spacer(minLength: 40) }
-
-            Text(entry.text)
-                .font(.body)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    entry.isUser ? Color.orange : Color.gray.opacity(0.2),
-                    in: RoundedRectangle(cornerRadius: 16)
-                )
-                .foregroundStyle(entry.isUser ? .white : .primary)
-
-            if !entry.isUser { Spacer(minLength: 40) }
-        }
-    }
-}
-
-// MARK: - Audio Waveform View
-
-struct AudioWaveformView: View {
-    let audioLevel: Float
-    let isActive: Bool
-
-    @State private var phases: [Double] = Array(repeating: 0, count: 20)
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { timeline in
-            HStack(spacing: 4) {
-                ForEach(0..<20, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.orange)
-                        .frame(width: 4, height: barHeight(for: index, date: timeline.date))
-                }
-            }
-        }
-    }
-
-    private func barHeight(for index: Int, date: Date) -> CGFloat {
-        guard isActive else { return 8 }
-
-        let time = date.timeIntervalSinceReferenceDate
-        let frequency = 2.0 + Double(index) * 0.3
-        let wave = sin(time * frequency + Double(index) * 0.5)
-        let normalizedWave = (wave + 1) / 2 // 0 to 1
-
-        let levelMultiplier = CGFloat(max(0.2, audioLevel))
-        let height = 8 + normalizedWave * 40 * levelMultiplier
-
-        return max(8, min(60, height))
-    }
-}
-
-// MARK: - Settings View
-
-struct VoiceSettingsView: View {
-    @ObservedObject var viewModel: VoiceViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Connection") {
-                    HStack {
-                        Text("Status")
-                        Spacer()
-                        Text(viewModel.connectionState.description)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if case .connected = viewModel.connectionState {
-                        Button("Disconnect", role: .destructive) {
-                            viewModel.disconnect()
-                        }
-                    } else {
-                        Button("Connect") {
-                            viewModel.connect()
-                        }
-                    }
-                }
-
-                Section("Voice") {
-                    Toggle("Always Listening", isOn: $viewModel.alwaysListening)
-                }
-
-                Section("About") {
-                    HStack {
-                        Text("Model")
-                        Spacer()
-                        Text("Gemini 2.0 Flash")
-                            .foregroundStyle(.secondary)
+            
+            Spacer()
+            
+            // Controls
+            HStack(spacing: 40) {
+                // End Call
+                Button {
+                    viewModel.stopVoiceSession()
+                } label: {
+                    VStack {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 60, height: 60)
+                            .overlay(
+                                Image(systemName: "phone.down.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.white)
+                            )
+                        Text("End")
+                            .font(.caption)
                     }
                 }
             }
-            .navigationTitle("Voice Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
+            .padding(.bottom, 30)
         }
-    }
-}
-
-// MARK: - Connection State Extension
-
-extension VoiceViewModel.ConnectionState: CustomStringConvertible {
-    var description: String {
-        switch self {
-        case .disconnected:
-            return "Disconnected"
-        case .connecting:
-            return "Connecting"
-        case .connected:
-            return "Connected"
-        case .error(let message):
-            return "Error: \(message)"
+        .onAppear {
+            // Ensure connection when modal appears
+            viewModel.startVoiceSession()
+        }
+        .onDisappear {
+            // Optional: Disconnect on swipe down? 
+            // Or just mute? For now, let's stop session to save battery.
+            viewModel.stopVoiceSession()
         }
     }
 }
 
 #Preview {
     VoiceView()
-        .modelContainer(for: [Ingredient.self, Recipe.self], inMemory: true)
 }
