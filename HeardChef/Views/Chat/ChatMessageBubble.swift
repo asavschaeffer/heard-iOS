@@ -8,6 +8,7 @@ struct ChatMessageBubble: View {
     let isGroupEnd: Bool
     let statusText: String?
     @State private var quickLookItem: QuickLookItem?
+    @State private var shareURL: URL?
     @ObservedObject var linkStore: LinkMetadataStore
     
     
@@ -28,6 +29,19 @@ struct ChatMessageBubble: View {
                     LinkPreviewView(metadata: linkMetadata)
                         .frame(maxWidth: 260)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .onTapGesture {
+                            openLinkInSafari()
+                        }
+                        .contextMenu {
+                            if let url = firstURL(in: message.text ?? "") {
+                                Button("Copy Link") {
+                                    UIPasteboard.general.url = url
+                                }
+                                Button("Share…") {
+                                    shareURL = url
+                                }
+                            }
+                        }
                 }
                 
                 attachmentView
@@ -56,6 +70,9 @@ struct ChatMessageBubble: View {
         }
         .sheet(item: $quickLookItem) { item in
             QuickLookPreview(url: item.url)
+        }
+        .sheet(item: $shareURL) { url in
+            ShareSheet(items: [url])
         }
         .contextMenu {
             Button("👍") { message.toggleReaction("👍") }
@@ -109,6 +126,11 @@ struct ChatMessageBubble: View {
             return
         }
         quickLookItem = QuickLookItem(url: url)
+    }
+
+    private func openLinkInSafari() {
+        guard let url = firstURL(in: message.text ?? "") else { return }
+        UIApplication.shared.open(url)
     }
 
     private var linkMetadata: LPLinkMetadata? {

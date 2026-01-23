@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct ChatThreadView: View {
     let messages: [ChatMessage]
@@ -36,6 +37,9 @@ struct ChatThreadView: View {
                         )
                         .id(message.id)
                         .padding(.bottom, isGroupEnd ? 8 : 2)
+                        .onAppear {
+                            prefetchLinks(for: message)
+                        }
                     }
 
                     if isTyping {
@@ -51,6 +55,25 @@ struct ChatThreadView: View {
                 }
             }
         }
+    }
+    
+    private func prefetchLinks(for message: ChatMessage) {
+        var urls: [URL] = []
+        if let text = message.text, let url = firstURL(in: text) {
+            urls.append(url)
+        }
+        if let urlString = message.mediaURL, let url = URL(string: urlString) {
+            urls.append(url)
+        }
+        linkStore.prefetchMany(urls: urls)
+    }
+    
+    private func firstURL(in text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        return detector.firstMatch(in: text, options: [], range: range)?.url
     }
     
     private func shouldShowTimestamp(for message: ChatMessage, previous: ChatMessage?) -> Bool {

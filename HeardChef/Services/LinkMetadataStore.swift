@@ -10,6 +10,12 @@ final class LinkMetadataStore: ObservableObject {
         metadataByKey[key]
     }
 
+    func prefetchMany(urls: [URL]) {
+        for url in urls {
+            prefetch(url: url, key: url.absoluteString)
+        }
+    }
+
     func prefetch(url: URL, key: String? = nil) {
         let cacheKey = key ?? url.absoluteString
         guard metadataByKey[cacheKey] == nil else { return }
