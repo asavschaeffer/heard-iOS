@@ -1,27 +1,22 @@
 import SwiftUI
-import PhotosUI
 
 struct ChatInputBar: View {
     @Binding var inputText: String
-    @Binding var selectedItem: PhotosPickerItem?
-    @Binding var selectedImageData: Data?
+    let hasAttachment: Bool
+    let isDictating: Bool
+    let onAddAttachment: () -> Void
+    let onToggleDictation: () -> Void
     let onStartVoice: () -> Void
-    let onSend: (String, Data?) -> Void
+    let onSend: (String) -> Void
     
     var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
-            PhotosPicker(selection: $selectedItem, matching: .images) {
-                Image(systemName: "camera.fill")
+            Button {
+                onAddAttachment()
+            } label: {
+                Image(systemName: "plus.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.gray)
-            }
-            .onChange(of: selectedItem) {
-                Task {
-                    if let data = try? await selectedItem?.loadTransferable(type: Data.self) {
-                        selectedImageData = data
-                        selectedItem = nil
-                    }
-                }
             }
             
             TextField("Message Chef...", text: $inputText, axis: .vertical)
@@ -30,7 +25,18 @@ struct ChatInputBar: View {
                 .cornerRadius(20)
                 .lineLimit(1...5)
             
-            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImageData == nil {
+            Button {
+                onToggleDictation()
+            } label: {
+                Image(systemName: isDictating ? "mic.fill" : "mic")
+                    .font(.system(size: 20))
+                    .foregroundStyle(isDictating ? .red : .gray)
+                    .padding(6)
+                    .background(Color(.systemGray6), in: Circle())
+            }
+            .accessibilityLabel(isDictating ? "Stop dictation" : "Start dictation")
+            
+            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachment {
                 Button {
                     onStartVoice()
                 } label: {
@@ -40,7 +46,7 @@ struct ChatInputBar: View {
                 }
             } else {
                 Button {
-                    onSend(inputText, selectedImageData)
+                    onSend(inputText)
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 32))

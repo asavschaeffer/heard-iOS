@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ChatMessageBubble: View {
     let message: ChatMessage
@@ -18,13 +19,7 @@ struct ChatMessageBubble: View {
                         .opacity(message.isDraft ? 0.6 : 1.0)
                 }
                 
-                if let imageData = message.imageData, let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: 200)
-                        .cornerRadius(12)
-                }
+                attachmentView
 
                 if let statusText {
                     Text(statusText)
@@ -48,6 +43,69 @@ struct ChatMessageBubble: View {
                     .fill(fillColor)
             }
         }
+    }
+
+    @ViewBuilder
+    private var attachmentView: some View {
+        if message.mediaType == .image || (message.mediaType == nil && message.imageData != nil) {
+            if let imageData = message.imageData, let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 200)
+                    .cornerRadius(12)
+            }
+        } else if message.mediaType == .video {
+            VideoAttachmentView(thumbnailData: message.imageData)
+        } else if message.mediaType == .document {
+            DocumentAttachmentView(filename: message.mediaFilename)
+        }
+    }
+}
+
+private struct VideoAttachmentView: View {
+    let thumbnailData: Data?
+    
+    var body: some View {
+        ZStack {
+            if let data = thumbnailData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Color(.systemGray4)
+            }
+            Image(systemName: "play.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+                .padding(8)
+                .background(Color.black.opacity(0.4), in: Circle())
+        }
+        .frame(maxWidth: 220)
+        .cornerRadius(12)
+    }
+}
+
+private struct DocumentAttachmentView: View {
+    let filename: String?
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "doc.richtext")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(filename ?? "PDF Document")
+                    .font(.footnote)
+                    .foregroundStyle(.primary)
+                Text("PDF")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
     }
 }
 

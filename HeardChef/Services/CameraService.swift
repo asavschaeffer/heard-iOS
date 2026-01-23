@@ -18,9 +18,12 @@ class CameraService: NSObject, ObservableObject {
 
     private let captureSession = AVCaptureSession()
     private var videoOutput: AVCapturePhotoOutput?
+    private var videoDataOutput: AVCaptureVideoDataOutput?
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    private let videoQueue = DispatchQueue(label: "CameraService.VideoQueue")
 
     private var photoContinuation: CheckedContinuation<UIImage?, Error>?
+    private var onVideoFrame: ((Data) -> Void)?
 
     // MARK: - Initialization
 
@@ -79,6 +82,17 @@ class CameraService: NSObject, ObservableObject {
             videoOutput = photoOutput
         }
 
+        // Video Frames (Stub for live streaming)
+        let dataOutput = AVCaptureVideoDataOutput()
+        dataOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ]
+        dataOutput.setSampleBufferDelegate(self, queue: videoQueue)
+        if captureSession.canAddOutput(dataOutput) {
+            captureSession.addOutput(dataOutput)
+            videoDataOutput = dataOutput
+        }
+
         captureSession.commitConfiguration()
 
         isCameraReady = true
@@ -130,6 +144,26 @@ class CameraService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Video Frame Streaming (Stub)
+
+    func setVideoFrameHandler(_ handler: @escaping (Data) -> Void) {
+        onVideoFrame = handler
+    }
+
+    func clearVideoFrameHandler() {
+        onVideoFrame = nil
+    }
+
+    func startVideoFrameStreaming() {
+        // TODO: Provide a flag to enable/disable video frames for privacy.
+        startSession()
+    }
+
+    func stopVideoFrameStreaming() {
+        // TODO: Stop streaming without stopping preview if needed.
+        clearVideoFrameHandler()
+    }
+
     // MARK: - Image Processing
 
     func processImageForGemini(_ image: UIImage, maxSize: CGSize = CGSize(width: 1024, height: 1024)) -> Data? {
@@ -178,6 +212,29 @@ extension CameraService: AVCapturePhotoCaptureDelegate {
         capturedImage = image
         photoContinuation?.resume(returning: image)
         photoContinuation = nil
+    }
+}
+
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+
+extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        guard onVideoFrame != nil else { return }
+        guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+        // TODO: Throttle frames and use a lower-res encode.
+        let ciImage = CIImage(cvPixelBuffer: imageBuffer)
+        let context = CIContext(options: nil)
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return }
+        let uiImage = UIImage(cgImage: cgImage)
+
+        // TODO: Consider HEVC or JPEG with compression and resizing.
+        guard let jpegData = uiImage.jpegData(compressionQuality: 0.6) else { return }
+        onVideoFrame?(jpegData)
     }
 }
 

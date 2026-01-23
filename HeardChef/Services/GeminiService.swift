@@ -12,6 +12,8 @@ protocol GeminiServiceDelegate: AnyObject {
     func geminiService(_ service: GeminiService, didReceiveResponse text: String)
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data)
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult)
+    func geminiServiceDidStartResponse(_ service: GeminiService)
+    func geminiServiceDidEndResponse(_ service: GeminiService)
 }
 
 // MARK: - Gemini Service
@@ -27,6 +29,7 @@ class GeminiService: NSObject {
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
     private var isConnected = false
+    private var isStreamingResponse = false
 
     // API Configuration
     private let apiKey: String
@@ -73,6 +76,7 @@ class GeminiService: NSObject {
         webSocketTask = nil
         urlSession = nil
         isConnected = false
+        isStreamingResponse = false
     }
 
     // MARK: - Setup Message
@@ -227,6 +231,16 @@ class GeminiService: NSObject {
         sendJSON(message)
     }
 
+    // MARK: - Video Streaming (Stub)
+
+    /// Stub for live video streaming. Wire to Gemini realtime input when supported.
+    func sendVideoFrame(_ imageData: Data) {
+        guard isConnected else { return }
+        // TODO: Convert to the correct mime type and send as realtime input video chunk.
+        // TODO: Decide cadence / throttling and whether to bundle with audio.
+        _ = imageData
+    }
+
     // MARK: - Message Handling
 
     private func receiveMessage() {
@@ -290,6 +304,12 @@ class GeminiService: NSObject {
               let parts = modelTurn["parts"] as? [[String: Any]] else {
             return
         }
+        
+        let isComplete = content["turnComplete"] as? Bool ?? false
+        if !isStreamingResponse {
+            isStreamingResponse = true
+            delegate?.geminiServiceDidStartResponse(self)
+        }
 
         for part in parts {
             // Text response
@@ -309,6 +329,11 @@ class GeminiService: NSObject {
                 let isFinal = content["turnComplete"] as? Bool ?? false
                 delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: isFinal)
             }
+        }
+
+        if isComplete {
+            isStreamingResponse = false
+            delegate?.geminiServiceDidEndResponse(self)
         }
     }
 
@@ -1043,6 +1068,7 @@ extension GeminiService: URLSessionWebSocketDelegate {
     ) {
         Task { @MainActor in
             self.isConnected = false
+            self.isStreamingResponse = false
             self.delegate?.geminiServiceDidDisconnect(self)
         }
     }

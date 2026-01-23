@@ -133,29 +133,23 @@ class ChatViewModel: ObservableObject {
     }
 
     func sendMessage(_ text: String) {
-        sendMessage(text, imageData: nil)
+        sendMessage(text, attachment: nil)
     }
 
-    func sendMessage(_ text: String, imageData: Data?) {
+    func sendMessage(_ text: String, attachment: ChatAttachment?) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasText = !trimmed.isEmpty
-        guard hasText || imageData != nil else { return }
+        guard hasText || attachment != nil else { return }
 
-        let message = ChatMessage(
-            role: .user,
-            text: hasText ? trimmed : nil,
-            imageData: imageData,
-            mediaType: imageData == nil ? nil : .image,
-            status: .sending
-        )
+        let message = buildMessage(text: hasText ? trimmed : nil, attachment: attachment)
         insertMessage(message)
         messages.append(message)
 
-        enqueueOrSend(text: hasText ? trimmed : nil, imageData: imageData, message: message)
-    }
-
-    func sendImage(_ data: Data) {
-        sendMessage("", imageData: data)
+        enqueueOrSend(
+            text: textPayload(for: message, originalText: hasText ? trimmed : nil),
+            imageData: message.imageData,
+            message: message
+        )
     }
 
     // MARK: - Voice Session Management
@@ -367,15 +361,72 @@ class ChatViewModel: ObservableObject {
     }
 
     private func sendToGemini(text: String?, imageData: Data?, message: ChatMessage) {
-        if let text = text, let imageData = imageData {
+        if let text = text, let imageData = imageData, message.mediaType == .image {
             geminiService?.sendTextWithPhoto(text, imageData: imageData)
         } else if let text = text {
             geminiService?.sendText(text)
-        } else if let imageData = imageData {
+        } else if let imageData = imageData, message.mediaType == .image {
             geminiService?.sendPhoto(imageData)
         }
         message.markStatus(.sent)
         activeThread?.touch()
+    }
+
+    private func buildMessage(text: String?, attachment: ChatAttachment?) -> ChatMessage {
+        switch attachment?.kind {
+        case .image:
+            return ChatMessage(
+                role: .user,
+                text: text,
+                imageData: attachment?.imageData,
+                mediaType: .image,
+                status: .sending
+            )
+        case .video:
+            return ChatMessage(
+                role: .user,
+                text: text,
+                imageData: attachment?.imageData,
+                mediaType: .video,
+                mediaURL: attachment?.fileURL?.absoluteString,
+                mediaFilename: attachment?.filename,
+                mediaUTType: attachment?.utType,
+                status: .sending
+            )
+        case .pdf:
+            return ChatMessage(
+                role: .user,
+                text: text,
+                mediaType: .document,
+                mediaURL: attachment?.fileURL?.absoluteString,
+                mediaFilename: attachment?.filename,
+                mediaUTType: attachment?.utType,
+                status: .sending
+            )
+        case .none:
+            return ChatMessage(
+                role: .user,
+                text: text,
+                status: .sending
+            )
+        }
+    }
+
+    private func textPayload(for message: ChatMessage, originalText: String?) -> String? {
+        if let originalText {
+            return originalText
+        }
+
+        guard let mediaType = message.mediaType else { return nil }
+        let filename = message.mediaFilename ?? "attachment"
+        switch mediaType {
+        case .video:
+            return "Attached a video: \(filename)"
+        case .document:
+            return "Attached a PDF: \(filename)"
+        case .image, .audio:
+            return nil
+        }
     }
 
     private func markPendingMessagesFailed() {

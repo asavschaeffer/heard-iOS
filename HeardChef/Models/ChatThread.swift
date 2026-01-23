@@ -21,6 +21,7 @@ enum ChatMediaType: String, Codable {
     case image
     case video
     case audio
+    case document
 }
 
 @Model
@@ -63,6 +64,8 @@ final class ChatMessage {
     
     var mediaTypeRaw: String?
     var mediaURL: String?
+    var mediaFilename: String?
+    var mediaUTType: String?
     var statusRaw: String
     var isDraft: Bool
     var createdAt: Date
@@ -97,6 +100,8 @@ final class ChatMessage {
         imageData: Data? = nil,
         mediaType: ChatMediaType? = nil,
         mediaURL: String? = nil,
+        mediaFilename: String? = nil,
+        mediaUTType: String? = nil,
         status: ChatMessageStatus = .sent,
         isDraft: Bool = false,
         createdAt: Date = .now,
@@ -109,6 +114,8 @@ final class ChatMessage {
         self.imageData = imageData
         self.mediaTypeRaw = mediaType?.rawValue
         self.mediaURL = mediaURL
+        self.mediaFilename = mediaFilename
+        self.mediaUTType = mediaUTType
         self.statusRaw = status.rawValue
         self.isDraft = isDraft
         self.createdAt = createdAt
