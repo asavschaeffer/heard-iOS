@@ -37,6 +37,7 @@ class ChatViewModel: ObservableObject {
     @Published var isTyping = false
     @Published var callState = CallSessionState()
     @Published var callDuration: TimeInterval = 0
+    @Published var callKitEnabled = true
     
     // MARK: - Private Properties
 
@@ -58,6 +59,8 @@ class ChatViewModel: ObservableObject {
     private var callTimer: Timer?
     private var callStartDate: Date?
     private var callDurationAccumulated: TimeInterval = 0
+    private var callKitManager: CallKitManager?
+    private let liveActivityManager = LiveActivityManager()
 
     private struct PendingMessage {
         let message: ChatMessage
@@ -68,7 +71,11 @@ class ChatViewModel: ObservableObject {
     // MARK: - Initialization
 
     init() {
-        setupAudioSession()
+        if callKitEnabled {
+            setupCallKit()
+        } else {
+            setupAudioSession()
+        }
         observeAudioSession()
     }
 
@@ -127,6 +134,39 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    private func setupCallKit() {
+        let manager = CallKitManager(appName: "Heard, Chef")
+        manager.onStartAudio = { [weak self] in
+            self?.configureAudioSessionForCall()
+            self?.startAudioCapture()
+            self?.callState.isListening = true
+        }
+        manager.onStopAudio = { [weak self] in
+            self?.stopAudioCapture()
+            self?.callState.isListening = false
+        }
+        manager.onMuteChanged = { [weak self] isMuted in
+            guard let self else { return }
+            self.callState.isListening = !isMuted
+            if isMuted {
+                self.stopAudioCapture()
+            } else {
+                self.startAudioCapture()
+            }
+        }
+        callKitManager = manager
+    }
+
+    private func configureAudioSessionForCall() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
+            try session.setActive(true)
+        } catch {
+            print("Audio Session Error: \(error)")
+        }
+    }
+
     private func preferSpeaker() {
         let session = AVAudioSession.sharedInstance()
         do {
@@ -168,6 +208,8 @@ class ChatViewModel: ObservableObject {
     private func updateCallDuration() {
         let active = callStartDate.map { Date().timeIntervalSince($0) } ?? 0
         callDuration = callDurationAccumulated + active
+        // TODO: Update Live Activity with call status/duration.
+        liveActivityManager.updateCallActivity(status: connectionStateLabel, duration: callDuration)
     }
 
     var callDurationText: String {
@@ -175,6 +217,19 @@ class ChatViewModel: ObservableObject {
         formatter.allowedUnits = callDuration >= 3600 ? [.hour, .minute, .second] : [.minute, .second]
         formatter.zeroFormattingBehavior = .pad
         return formatter.string(from: callDuration) ?? "0:00"
+    }
+
+    private var connectionStateLabel: String {
+        switch connectionState {
+        case .connected:
+            return "Connected"
+        case .connecting:
+            return "Connecting"
+        case .disconnected:
+            return "Reconnecting"
+        case .error:
+            return "Connection issue"
+        }
     }
 
     private func sendCallHaptic(style: UINotificationFeedbackGenerator.FeedbackType) {
@@ -205,7 +260,9 @@ class ChatViewModel: ObservableObject {
     private func handleRouteChange(_ notification: Notification) {
         let session = AVAudioSession.sharedInstance()
         let outputs = session.currentRoute.outputs
-        callState.isListening = audioEngine?.isRunning == true && !outputs.isEmpty
+        if !callKitEnabled {
+            callState.isListening = audioEngine?.isRunning == true && !outputs.isEmpty
+        }
     }
 
     private func handleInterruption(_ notification: Notification) {
@@ -217,13 +274,17 @@ class ChatViewModel: ObservableObject {
 
         switch type {
         case .began:
-            stopAudioCapture()
+            if !callKitEnabled {
+                stopAudioCapture()
+            }
         case .ended:
             let optionsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue ?? 0)
             if options.contains(.shouldResume) && callState.isPresented {
-                startAudioCapture()
-                callState.isListening = true
+                if !callKitEnabled {
+                    startAudioCapture()
+                    callState.isListening = true
+                }
             }
         @unknown default:
             break
@@ -269,14 +330,21 @@ class ChatViewModel: ObservableObject {
     func startVoiceSession() {
         let wasPresented = callState.isPresented
         callState.isPresented = true
+        // TODO: Start Live Activity when Dynamic Island is implemented.
+        liveActivityManager.startCallActivity(displayName: "Heard, Chef")
+        if callKitEnabled {
+            callKitManager?.startCall(displayName: "Heard, Chef")
+        }
         if connectionState == .disconnected {
             connect()
         }
         
         if connectionState == .connected {
-            preferSpeaker()
-            startAudioCapture()
-            callState.isListening = true
+            if !callKitEnabled {
+                preferSpeaker()
+                startAudioCapture()
+                callState.isListening = true
+            }
             pendingVoiceStart = false
         } else {
             pendingVoiceStart = true
@@ -290,8 +358,14 @@ class ChatViewModel: ObservableObject {
     func stopVoiceSession() {
         let wasPresented = callState.isPresented
         callState.isPresented = false
-        stopAudioCapture()
-        callState.isListening = false
+        // TODO: End Live Activity when Dynamic Island is implemented.
+        liveActivityManager.endCallActivity()
+        if callKitEnabled {
+            callKitManager?.endCall()
+        } else {
+            stopAudioCapture()
+            callState.isListening = false
+        }
         pendingVoiceStart = false
         stopVideoStreaming()
         cancelTranscriptDebounce()
@@ -682,10 +756,15 @@ extension ChatViewModel: GeminiServiceDelegate {
         if callState.isPresented {
             startCallTimer()
             sendCallHaptic(style: .success)
+            if callKitEnabled {
+                callKitManager?.reportConnected()
+            }
         }
         if pendingVoiceStart {
-            startAudioCapture()
-            callState.isListening = true
+            if !callKitEnabled {
+                startAudioCapture()
+                callState.isListening = true
+            }
             pendingVoiceStart = false
         }
     }
