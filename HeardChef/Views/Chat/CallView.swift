@@ -5,20 +5,20 @@ struct CallView: View {
     let style: CallPresentationStyle
     @Environment(\.dismiss) private var dismiss
     let onMinimize: (() -> Void)?
-    let onSwitchToVideo: (() -> Void)?
+    let onToggleVideo: (() -> Void)?
     let onAddAttachment: (() -> Void)?
     
     init(
         viewModel: ChatViewModel,
         style: CallPresentationStyle,
         onMinimize: (() -> Void)? = nil,
-        onSwitchToVideo: (() -> Void)? = nil,
+        onToggleVideo: (() -> Void)? = nil,
         onAddAttachment: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self.style = style
         self.onMinimize = onMinimize
-        self.onSwitchToVideo = onSwitchToVideo
+        self.onToggleVideo = onToggleVideo
         self.onAddAttachment = onAddAttachment
     }
     
@@ -90,8 +90,8 @@ struct CallView: View {
 
             CallControlsView(
                 viewModel: viewModel,
-                showVideoButton: style != .translucentOverlay,
-                onSwitchToVideo: { onSwitchToVideo?() },
+                isVideoActive: viewModel.callState.isVideoStreaming,
+                onToggleVideo: { onToggleVideo?() },
                 onAddAttachment: { onAddAttachment?() }
             ) {
                 viewModel.stopVoiceSession()
@@ -181,7 +181,7 @@ private struct CallStatusDots: View {
 struct CallOverlayView: View {
     @ObservedObject var viewModel: ChatViewModel
     let onMinimize: () -> Void
-    let onSwitchToVideo: (() -> Void)?
+    let onToggleVideo: (() -> Void)?
     let onAddAttachment: (() -> Void)?
     
     var body: some View {
@@ -189,7 +189,7 @@ struct CallOverlayView: View {
             viewModel: viewModel,
             style: .translucentOverlay,
             onMinimize: onMinimize,
-            onSwitchToVideo: onSwitchToVideo,
+            onToggleVideo: onToggleVideo,
             onAddAttachment: onAddAttachment
         )
     }

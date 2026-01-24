@@ -11,15 +11,6 @@ struct ChatView: View {
     @StateObject private var settings = ChatSettings()
     @StateObject private var linkStore = LinkMetadataStore()
     
-    struct CallButtonPreference {
-        let iconStyle: CallPresentationStyle
-        let actionStyle: CallPresentationStyle
-    }
-    
-    // TODO: Wire these to app settings / user defaults.
-    // nil keeps the call-style menu; set to force icon + action.
-    @State private var preferCallButton: CallButtonPreference? = nil
-    
     // Input State
     @State private var inputText = ""
     @State private var dictationBaseText = ""
@@ -74,7 +65,7 @@ struct ChatView: View {
                     CallOverlayView(
                         viewModel: viewModel,
                         onMinimize: { callPresentationStyle = .pictureInPicture },
-                        onSwitchToVideo: { callPresentationStyle = .translucentOverlay },
+                        onToggleVideo: { toggleVideoMode() },
                         onAddAttachment: { showAttachmentMenu = true }
                     )
                     .transition(.opacity)
@@ -95,31 +86,11 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if let prefer = preferCallButton {
-                        Button {
-                            callPresentationStyle = prefer.actionStyle
-                            viewModel.startVoiceSession()
-                        } label: {
-                            Image(systemName: prefer.iconStyle == .fullScreen ? "phone.fill" : "video.fill")
-                        }
-                    } else {
-                        Menu {
-                            Button {
-                                callPresentationStyle = .fullScreen
-                                viewModel.startVoiceSession()
-                            } label: {
-                                Label("Call", systemImage: "phone.fill")
-                            }
-                            
-                            Button {
-                                callPresentationStyle = .translucentOverlay
-                                viewModel.startVoiceSession()
-                            } label: {
-                                Label("FaceTime", systemImage: "video.fill")
-                            }
-                        } label: {
-                            Image(systemName: "phone.fill")
-                        }
+                    Button {
+                        callPresentationStyle = .fullScreen
+                        viewModel.startVoiceSession()
+                    } label: {
+                        Image(systemName: "phone.fill")
                     }
                 }
             }
@@ -127,7 +98,7 @@ struct ChatView: View {
                 CallView(
                     viewModel: viewModel,
                     style: .fullScreen,
-                    onSwitchToVideo: { callPresentationStyle = .translucentOverlay },
+                    onToggleVideo: { toggleVideoMode() },
                     onAddAttachment: { showAttachmentMenu = true }
                 )
             }
@@ -196,6 +167,10 @@ struct ChatView: View {
                 }
             }
         )
+    }
+
+    private func toggleVideoMode() {
+        callPresentationStyle = callPresentationStyle == .translucentOverlay ? .fullScreen : .translucentOverlay
     }
 
     private func handleDictationToggle() {

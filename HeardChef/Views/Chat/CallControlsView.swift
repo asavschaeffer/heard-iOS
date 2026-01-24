@@ -2,8 +2,8 @@ import SwiftUI
 
 struct CallControlsView: View {
     @ObservedObject var viewModel: ChatViewModel
-    let showVideoButton: Bool
-    let onSwitchToVideo: () -> Void
+    let isVideoActive: Bool
+    let onToggleVideo: () -> Void
     let onAddAttachment: () -> Void
     let onEnd: () -> Void
     
@@ -30,16 +30,14 @@ struct CallControlsView: View {
                 }
                 .opacity(viewModel.connectionState == .connected ? 1.0 : 0.6)
 
-                if showVideoButton {
-                    CallControlButton(
-                        title: "Video",
-                        systemImage: "video.fill",
-                        background: .white.opacity(0.18),
-                        foreground: .white,
-                        isEnabled: viewModel.connectionState == .connected
-                    ) {
-                        onSwitchToVideo()
-                    }
+                CallControlButton(
+                    title: isVideoActive ? "Stop Video" : "Video",
+                    systemImage: isVideoActive ? "video.slash.fill" : "video.fill",
+                    background: .white.opacity(0.18),
+                    foreground: .white,
+                    isEnabled: viewModel.connectionState == .connected
+                ) {
+                    onToggleVideo()
                 }
             }
 
