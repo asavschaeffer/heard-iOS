@@ -77,7 +77,8 @@ struct ChatView: View {
                         pipCenter: $pipCenter,
                         pipDragStart: $pipDragStart,
                         pipInitialized: $pipInitialized,
-                        onExpand: { callPresentationStyle = .translucentOverlay }
+                        onExpand: { callPresentationStyle = .translucentOverlay },
+                        onToggleVideo: { toggleVideoMode() }
                     )
                     .transition(.opacity)
                 }
