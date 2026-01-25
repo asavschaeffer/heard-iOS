@@ -1,0 +1,153 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-01-24",
+  "entries": [
+    {
+      "id": "ingredient.tomato",
+      "type": "ingredient",
+      "name": "Tomato",
+      "aliases": ["tomatoes", "roma tomato", "beefsteak tomato"],
+      "flavor_tags": ["sweet", "acidic", "umami", "fresh"],
+      "techniques": ["raw", "saute", "roast", "braise"],
+      "pairings": ["ingredient.garlic", "ingredient.basil", "ingredient.olive-oil", "ingredient.onion"],
+      "path": "docs/compendium/ingredients/tomato.md"
+    },
+    {
+      "id": "ingredient.garlic",
+      "type": "ingredient",
+      "name": "Garlic",
+      "aliases": ["garlic cloves"],
+      "flavor_tags": ["pungent", "savory", "sulfurous"],
+      "techniques": ["saute", "roast", "raw"],
+      "pairings": ["ingredient.tomato", "ingredient.olive-oil", "ingredient.onion"],
+      "path": "docs/compendium/ingredients/garlic.md"
+    },
+    {
+      "id": "ingredient.basil",
+      "type": "ingredient",
+      "name": "Basil",
+      "aliases": ["sweet basil"],
+      "flavor_tags": ["sweet", "herbal", "peppery"],
+      "techniques": ["raw", "infuse"],
+      "pairings": ["ingredient.tomato", "ingredient.olive-oil", "ingredient.garlic"],
+      "path": "docs/compendium/ingredients/basil.md"
+    },
+    {
+      "id": "ingredient.olive-oil",
+      "type": "ingredient",
+      "name": "Olive Oil",
+      "aliases": ["extra virgin olive oil", "evoo"],
+      "flavor_tags": ["fruity", "bitter", "peppery"],
+      "techniques": ["saute", "roast", "raw"],
+      "pairings": ["ingredient.tomato", "ingredient.garlic", "ingredient.basil"],
+      "path": "docs/compendium/ingredients/olive-oil.md"
+    },
+    {
+      "id": "ingredient.onion",
+      "type": "ingredient",
+      "name": "Onion",
+      "aliases": ["yellow onion", "white onion"],
+      "flavor_tags": ["sweet", "pungent", "savory"],
+      "techniques": ["saute", "caramelize", "braise"],
+      "pairings": ["ingredient.tomato", "ingredient.garlic", "ingredient.olive-oil"],
+      "path": "docs/compendium/ingredients/onion.md"
+    },
+    {
+      "id": "ingredient.tomato-paste",
+      "type": "ingredient",
+      "name": "Tomato Paste",
+      "aliases": ["double-concentrated tomato paste"],
+      "flavor_tags": ["umami", "acidic", "concentrated"],
+      "techniques": ["saute", "braise"],
+      "pairings": ["ingredient.garlic", "ingredient.olive-oil"],
+      "path": "docs/compendium/ingredients/tomato-paste.md"
+    },
+    {
+      "id": "ingredient.canned-tomato",
+      "type": "ingredient",
+      "name": "Canned Tomato",
+      "aliases": ["canned tomatoes", "crushed tomato"],
+      "flavor_tags": ["acidic", "umami", "stewed"],
+      "techniques": ["braise", "simmer"],
+      "pairings": ["ingredient.garlic", "ingredient.onion", "ingredient.olive-oil"],
+      "path": "docs/compendium/ingredients/canned-tomato.md"
+    },
+    {
+      "id": "ingredient.red-bell-pepper",
+      "type": "ingredient",
+      "name": "Red Bell Pepper",
+      "aliases": ["red pepper", "sweet pepper"],
+      "flavor_tags": ["sweet", "fruity"],
+      "techniques": ["roast", "saute", "raw"],
+      "pairings": ["ingredient.olive-oil", "ingredient.garlic", "ingredient.onion"],
+      "path": "docs/compendium/ingredients/red-bell-pepper.md"
+    },
+    {
+      "id": "book.le-guide-culinaire",
+      "type": "book",
+      "name": "Le Guide Culinaire",
+      "aliases": ["Guide Culinaire", "Escoffier"],
+      "authors": ["Auguste Escoffier"],
+      "region": ["france"],
+      "themes": ["classical-technique", "sauces", "brigade-system"],
+      "path": "docs/compendium/books/le-guide-culinaire.md"
+    },
+    {
+      "id": "book.on-food-and-cooking",
+      "type": "book",
+      "name": "On Food and Cooking",
+      "aliases": ["McGee", "Food and Cooking"],
+      "authors": ["Harold McGee"],
+      "region": ["global"],
+      "themes": ["food-science", "ingredients", "technique"],
+      "path": "docs/compendium/books/on-food-and-cooking.md"
+    },
+    {
+      "id": "book.the-flavor-bible",
+      "type": "book",
+      "name": "The Flavor Bible",
+      "aliases": ["Flavor Bible"],
+      "authors": ["Karen Page", "Andrew Dornenburg"],
+      "region": ["global"],
+      "themes": ["pairings", "menu-design", "ingredients"],
+      "path": "docs/compendium/books/the-flavor-bible.md"
+    },
+    {
+      "id": "book.larousse-gastronomique",
+      "type": "book",
+      "name": "Larousse Gastronomique",
+      "aliases": ["Larousse"],
+      "authors": ["Prosper Montagne", "Larousse"],
+      "region": ["france"],
+      "themes": ["encyclopedia", "classical-technique", "ingredients"],
+      "path": "docs/compendium/books/larousse-gastronomique.md"
+    },
+    {
+      "id": "technique.saute",
+      "type": "technique",
+      "name": "Saute",
+      "aliases": ["sauteing"],
+      "heat_level": ["medium-high"],
+      "fat_required": true,
+      "path": "docs/compendium/techniques/saute.md"
+    },
+    {
+      "id": "technique.braise",
+      "type": "technique",
+      "name": "Braise",
+      "aliases": ["braising"],
+      "heat_level": ["medium", "low"],
+      "fat_required": true,
+      "path": "docs/compendium/techniques/braise.md"
+    },
+    {
+      "id": "technique.emulsify",
+      "type": "technique",
+      "name": "Emulsify",
+      "aliases": ["emulsion"],
+      "heat_level": ["none", "low"],
+      "fat_required": true,
+      "path": "docs/compendium/techniques/emulsify.md"
+    }
+  ]
+}
