@@ -375,6 +375,8 @@ final class Ingredient {
             let withoutEs = String(result.dropLast(2))
             if withoutEs.hasSuffix("o") || withoutEs.hasSuffix("ch") || withoutEs.hasSuffix("sh") {
                 result = withoutEs
+            } else {
+                result = String(result.dropLast())
             }
         } else if result.hasSuffix("s") && result.count > 2 {
             result = String(result.dropLast())

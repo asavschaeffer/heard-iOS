@@ -817,8 +817,12 @@ class GeminiService: NSObject {
         if let ingredientsJSON = call.string("ingredients"),
            let ingredientsData = ingredientsJSON.data(using: .utf8),
            let ingredientsArray = try? JSONSerialization.jsonObject(with: ingredientsData) as? [[String: Any]] {
+            let oldIngredients = recipe.ingredients
             let newIngredients = ingredientsArray.compactMap { RecipeIngredient.fromArguments($0) }
             recipe.ingredients = newIngredients // SwiftData relationship update
+            for ingredient in oldIngredients {
+                modelContext.delete(ingredient)
+            }
             changes["ingredients"] = "\(newIngredients.count) items"
         }
 
@@ -826,6 +830,7 @@ class GeminiService: NSObject {
         if let stepsJSON = call.string("steps"),
            let stepsData = stepsJSON.data(using: .utf8),
            let stepsArray = try? JSONSerialization.jsonObject(with: stepsData) as? [Any] {
+            let oldSteps = recipe.steps
             var newSteps: [RecipeStep] = []
             for (index, stepItem) in stepsArray.enumerated() {
                 if let stepStr = stepItem as? String {
@@ -836,6 +841,9 @@ class GeminiService: NSObject {
                 }
             }
             recipe.steps = newSteps // SwiftData relationship update
+            for step in oldSteps {
+                modelContext.delete(step)
+            }
             changes["steps"] = "\(newSteps.count) steps"
         }
 
