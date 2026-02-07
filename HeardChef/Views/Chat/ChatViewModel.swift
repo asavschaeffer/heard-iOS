@@ -486,9 +486,9 @@ class ChatViewModel: ObservableObject {
         }
 
         callState.isSpeaking = true
-        playbackNode?.scheduleBuffer(buffer, completionHandler: { [weak self] in
+        playbackNode?.scheduleBuffer(buffer, completionHandler: {
             Task { @MainActor in
-                self?.playNextAudioChunk()
+                self.playNextAudioChunk()
             }
         })
     }

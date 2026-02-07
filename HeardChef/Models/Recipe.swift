@@ -237,11 +237,6 @@ final class RecipeStep {
 
     /// Create from LLM function call arguments
     static func fromArguments(_ args: [String: Any], index: Int) -> RecipeStep? {
-        // Handle both string and dict formats
-        if let instruction = args as? String {
-            return RecipeStep(instruction: instruction, orderIndex: index)
-        }
-
         guard let instruction = args["instruction"] as? String else {
             return nil
         }

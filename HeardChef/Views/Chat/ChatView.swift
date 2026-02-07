@@ -85,10 +85,10 @@ struct ChatView: View {
     }
     
     private func handleSelectedItemChange() {
-        guard let item = selectedItem else { return }
+        guard selectedItem != nil else { return }
         Task {
             // TODO: Fix PhotosPickerItem compatibility for iOS 18.6
-            // if let attachment = try? await ChatAttachmentService.loadFromPhotos(item: item) {
+            // if let attachment = try? await ChatAttachmentService.loadFromPhotos(item: selectedItem!) {
             //     selectedAttachment = attachment
             // }
             selectedItem = nil

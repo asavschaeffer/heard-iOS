@@ -18,12 +18,11 @@ final class CallKitManager: NSObject {
     var onMuteChanged: ((Bool) -> Void)?
 
     init(appName: String) {
-        let config = CXProviderConfiguration(localizedName: appName)
+        let config = CXProviderConfiguration()
         config.supportsVideo = false
         config.supportedHandleTypes = [.generic]
         config.maximumCallsPerCallGroup = 1
         config.includesCallsInRecents = true
-        // config.supportsHolding = true // Not available in iOS 26.2
         config.ringtoneSound = nil
 
         self.provider = CXProvider(configuration: config)
