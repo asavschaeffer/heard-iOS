@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 final class ChatSettings: ObservableObject {
     @Published var showReadReceipts: Bool {

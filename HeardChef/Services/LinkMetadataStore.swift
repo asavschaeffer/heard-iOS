@@ -1,5 +1,6 @@
 import Foundation
 import LinkPresentation
+import Combine
 
 @MainActor
 final class LinkMetadataStore: ObservableObject {

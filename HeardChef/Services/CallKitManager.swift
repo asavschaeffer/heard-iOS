@@ -23,7 +23,7 @@ final class CallKitManager: NSObject {
         config.supportedHandleTypes = [.generic]
         config.maximumCallsPerCallGroup = 1
         config.includesCallsInRecents = true
-        config.supportsHolding = true
+        // config.supportsHolding = true // Not available in iOS 26.2
         config.ringtoneSound = nil
 
         self.provider = CXProvider(configuration: config)

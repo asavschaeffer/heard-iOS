@@ -3,12 +3,17 @@ import UIKit
 import UniformTypeIdentifiers
 import LinkPresentation
 
+struct IdentifiableURL: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
 struct ChatMessageBubble: View {
     let message: ChatMessage
     let isGroupEnd: Bool
     let statusText: String?
     @State private var quickLookItem: QuickLookItem?
-    @State private var shareURL: URL?
+    @State private var shareURL: IdentifiableURL?
     @ObservedObject var linkStore: LinkMetadataStore
     
     
@@ -38,7 +43,7 @@ struct ChatMessageBubble: View {
                                     UIPasteboard.general.url = url
                                 }
                                 Button("Share…") {
-                                    shareURL = url
+                                    shareURL = IdentifiableURL(url: url)
                                 }
                             }
                         }
@@ -71,8 +76,8 @@ struct ChatMessageBubble: View {
         .sheet(item: $quickLookItem) { item in
             QuickLookPreview(url: item.url)
         }
-        .sheet(item: $shareURL) { url in
-            ShareSheet(items: [url])
+        .sheet(item: $shareURL) { identifiableURL in
+            ShareSheet(items: [identifiableURL.url])
         }
         .contextMenu {
             Button("👍") { message.toggleReaction("👍") }

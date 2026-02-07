@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import UIKit
 import SwiftUI
+import Combine
 
 // MARK: - Camera Service
 

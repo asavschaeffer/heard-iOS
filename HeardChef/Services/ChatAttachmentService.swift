@@ -28,7 +28,7 @@ enum ChatAttachmentError: Error {
 final class ChatAttachmentService {
     private static let attachmentsFolder = "ChatAttachments"
 
-    static func loadFromPhotos(item: PhotosPickerItem) async throws -> ChatAttachment {
+    /* static func loadFromPhotos(item: PhotosPickerItem) async throws -> ChatAttachment {
         let contentTypes = item.supportedContentTypes
         if contentTypes.contains(where: { $0.conforms(to: .image) }) {
             if let data = try await item.loadTransferable(type: Data.self) {
@@ -53,7 +53,7 @@ final class ChatAttachmentService {
         }
 
         throw ChatAttachmentError.unsupported
-    }
+    } */
 
     static func loadFromDocument(url: URL) throws -> ChatAttachment {
         let copiedURL = try copyToDocuments(url: url)

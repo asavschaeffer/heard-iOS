@@ -1,7 +1,8 @@
 # Xcode
-*.xcodeproj/
+# Keep xcodeproj but ignore user data inside it
 *.xcworkspace/
-xcuserdata/
+**/xcuserdata/
+**/project.xcworkspace/
 *.xcuserstate
 DerivedData/
 *.moved-aside

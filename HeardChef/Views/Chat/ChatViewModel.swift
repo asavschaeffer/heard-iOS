@@ -4,6 +4,7 @@ import SwiftData
 import AVFoundation
 import UniformTypeIdentifiers
 import UIKit
+import Combine
 
 @MainActor
 class ChatViewModel: ObservableObject {

@@ -28,133 +28,171 @@ struct ChatView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                VStack(spacing: 0) {
-                    ChatThreadView(
-                        messages: viewModel.messages,
-                        isTyping: viewModel.isTyping,
-                        showReadReceipts: settings.showReadReceipts,
-                        linkStore: linkStore
-                    )
-                    
-                    Divider()
-
-                    if let attachment = selectedAttachment {
-                        AttachmentPreview(
-                            attachment: attachment,
-                            onClear: { selectedAttachment = nil }
-                        )
-                    }
-                    
-                    ChatInputBar(
-                        inputText: $inputText,
-                        hasAttachment: selectedAttachment != nil,
-                        isDictating: dictationController.isRecording,
-                        onAddAttachment: { showAttachmentMenu = true },
-                        onToggleDictation: handleDictationToggle,
-                        onStartVoice: { viewModel.startVoiceSession() },
-                        onSend: { text in
-                            viewModel.sendMessage(text, attachment: selectedAttachment)
-                            inputText = ""
-                            selectedAttachment = nil
-                        }
-                    )
-                }
-                
-                if viewModel.callState.isPresented && callPresentationStyle == .translucentOverlay {
-                    CallOverlayView(
-                        viewModel: viewModel,
-                        onMinimize: { callPresentationStyle = .pictureInPicture },
-                        onToggleVideo: { toggleVideoMode() },
-                        onAddAttachment: { showAttachmentMenu = true }
-                    )
-                    .transition(.opacity)
-                }
-                
-                if viewModel.callState.isPresented && callPresentationStyle == .pictureInPicture {
-                    PiPCallOverlayView(
-                        viewModel: viewModel,
-                        pipCenter: $pipCenter,
-                        pipDragStart: $pipDragStart,
-                        pipInitialized: $pipInitialized,
-                        onExpand: { callPresentationStyle = .translucentOverlay },
-                        onToggleVideo: { toggleVideoMode() }
-                    )
-                    .transition(.opacity)
-                }
-            }
+            mainContentWithModifiers
+        }
+    }
+    
+    private var mainContentWithModifiers: some View {
+        mainContent
             .navigationTitle("Heard, Chef")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        callPresentationStyle = .fullScreen
-                        viewModel.startVoiceSession()
-                    } label: {
-                        Image(systemName: "phone.fill")
-                    }
-                }
-            }
-            .fullScreenCover(isPresented: fullScreenCallBinding) {
-                CallView(
-                    viewModel: viewModel,
-                    style: .fullScreen,
-                    onToggleVideo: { toggleVideoMode() },
-                    onAddAttachment: { showAttachmentMenu = true }
-                )
-            }
+            .toolbar { navigationToolbar }
+            .fullScreenCover(isPresented: fullScreenCallBinding) { callFullScreenCover }
             .onAppear {
                 viewModel.setModelContext(modelContext)
             }
             .confirmationDialog("Add attachment", isPresented: $showAttachmentMenu, titleVisibility: .visible) {
-                Button("Camera Photo") { showCameraPhotoPicker = true }
-                Button("Camera Video") { showCameraVideoPicker = true }
-                Button("Photos") { showPhotosPicker = true }
-                Button("Files") { showDocumentPicker = true }
+                attachmentDialogButtons
             }
             .photosPicker(isPresented: $showPhotosPicker, selection: $selectedItem, matching: .any(of: [.images, .videos]))
-            .sheet(isPresented: $showDocumentPicker) {
-                DocumentPicker(allowedTypes: [.item]) { url in
-                    handleDocumentSelection(url)
-                }
+            .sheet(isPresented: $showDocumentPicker) { documentPicker }
+            .sheet(isPresented: $showCameraPhotoPicker) { cameraPhotoPicker }
+            .sheet(isPresented: $showCameraVideoPicker) { cameraVideoPicker }
+            .onChange(of: selectedItem) { handleSelectedItemChange() }
+            .onChange(of: dictationController.transcript) { handleTranscriptChange() }
+    }
+    
+    @ViewBuilder
+    private var attachmentDialogButtons: some View {
+        Button("Camera Photo") { showCameraPhotoPicker = true }
+        Button("Camera Video") { showCameraVideoPicker = true }
+        Button("Photos") { showPhotosPicker = true }
+        Button("Files") { showDocumentPicker = true }
+    }
+    
+    private var documentPicker: some View {
+        DocumentPicker(allowedTypes: [.item]) { url in
+            handleDocumentSelection(url)
+        }
+    }
+    
+    private var cameraPhotoPicker: some View {
+        CameraCapturePicker(mode: .photo) { image, videoURL in
+            if let image {
+                selectedAttachment = ChatAttachmentService.loadFromCameraImage(image)
             }
-            .sheet(isPresented: $showCameraPhotoPicker) {
-                CameraCapturePicker(mode: .photo) { image, videoURL in
-                    if let image {
-                        selectedAttachment = ChatAttachmentService.loadFromCameraImage(image)
-                    }
-                    showCameraPhotoPicker = false
-                }
+            showCameraPhotoPicker = false
+        }
+    }
+    
+    private var cameraVideoPicker: some View {
+        CameraCapturePicker(mode: .video) { image, videoURL in
+            if let videoURL, let attachment = try? ChatAttachmentService.loadFromCameraVideo(videoURL) {
+                selectedAttachment = attachment
             }
-            .sheet(isPresented: $showCameraVideoPicker) {
-                CameraCapturePicker(mode: .video) { image, videoURL in
-                    if let videoURL, let attachment = try? ChatAttachmentService.loadFromCameraVideo(videoURL) {
-                        selectedAttachment = attachment
-                    }
-                    showCameraVideoPicker = false
-                }
+            showCameraVideoPicker = false
+        }
+    }
+    
+    private func handleSelectedItemChange() {
+        guard let item = selectedItem else { return }
+        Task {
+            // TODO: Fix PhotosPickerItem compatibility for iOS 18.6
+            // if let attachment = try? await ChatAttachmentService.loadFromPhotos(item: item) {
+            //     selectedAttachment = attachment
+            // }
+            selectedItem = nil
+        }
+    }
+    
+    private func handleTranscriptChange() {
+        guard dictationController.isRecording else { return }
+        let trimmed = dictationController.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            inputText = dictationBaseText
+        } else if dictationBaseText.isEmpty {
+            inputText = trimmed
+        } else {
+            inputText = "\(dictationBaseText) \(trimmed)"
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        ZStack {
+            chatInterface
+            callOverlayViews
+        }
+    }
+    
+    @ViewBuilder
+    private var chatInterface: some View {
+        VStack(spacing: 0) {
+            ChatThreadView(
+                messages: viewModel.messages,
+                isTyping: viewModel.isTyping,
+                showReadReceipts: settings.showReadReceipts,
+                linkStore: linkStore
+            )
+            
+            Divider()
+
+            if let attachment = selectedAttachment {
+                AttachmentPreview(
+                    attachment: attachment,
+                    onClear: { selectedAttachment = nil }
+                )
             }
-            .onChange(of: selectedItem) {
-                guard let item = selectedItem else { return }
-                Task {
-                    if let attachment = try? await ChatAttachmentService.loadFromPhotos(item: item) {
-                        selectedAttachment = attachment
-                    }
-                    selectedItem = nil
+            
+            ChatInputBar(
+                inputText: $inputText,
+                hasAttachment: selectedAttachment != nil,
+                isDictating: dictationController.isRecording,
+                onAddAttachment: { showAttachmentMenu = true },
+                onToggleDictation: handleDictationToggle,
+                onStartVoice: { viewModel.startVoiceSession() },
+                onSend: { text in
+                    viewModel.sendMessage(text, attachment: selectedAttachment)
+                    inputText = ""
+                    selectedAttachment = nil
                 }
-            }
-            .onChange(of: dictationController.transcript) {
-                guard dictationController.isRecording else { return }
-                let trimmed = dictationController.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty {
-                    inputText = dictationBaseText
-                } else if dictationBaseText.isEmpty {
-                    inputText = trimmed
-                } else {
-                    inputText = "\(dictationBaseText) \(trimmed)"
-                }
+            )
+        }
+    }
+    
+    @ViewBuilder
+    private var callOverlayViews: some View {
+        if viewModel.callState.isPresented && callPresentationStyle == .translucentOverlay {
+            CallOverlayView(
+                viewModel: viewModel,
+                onMinimize: { callPresentationStyle = .pictureInPicture },
+                onToggleVideo: { toggleVideoMode() },
+                onAddAttachment: { showAttachmentMenu = true }
+            )
+            .transition(.opacity)
+        }
+        
+        if viewModel.callState.isPresented && callPresentationStyle == .pictureInPicture {
+            PiPCallOverlayView(
+                viewModel: viewModel,
+                pipCenter: $pipCenter,
+                pipDragStart: $pipDragStart,
+                pipInitialized: $pipInitialized,
+                onExpand: { callPresentationStyle = .translucentOverlay },
+                onToggleVideo: { toggleVideoMode() }
+            )
+            .transition(.opacity)
+        }
+    }
+    
+    private var navigationToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button {
+                callPresentationStyle = .fullScreen
+                viewModel.startVoiceSession()
+            } label: {
+                Image(systemName: "phone.fill")
             }
         }
+    }
+    
+    private var callFullScreenCover: some View {
+        CallView(
+            viewModel: viewModel,
+            style: .fullScreen,
+            onToggleVideo: { toggleVideoMode() },
+            onAddAttachment: { showAttachmentMenu = true }
+        )
     }
     
     private var fullScreenCallBinding: Binding<Bool> {

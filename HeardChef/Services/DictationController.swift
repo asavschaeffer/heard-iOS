@@ -1,6 +1,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import Combine
 
 @MainActor
 final class DictationController: ObservableObject {
