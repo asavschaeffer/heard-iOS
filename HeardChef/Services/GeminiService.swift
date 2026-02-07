@@ -198,8 +198,11 @@ class GeminiService: NSObject {
     // MARK: - Text & Image Sending (Multimodal)
 
     /// Send a text message to the active session.
-    func sendText(_ text: String, messageID: UUID? = nil) {
-        guard isConnected else { return }
+    /// Returns Result indicating if the WebSocket successfully sent the message.
+    func sendText(_ text: String, messageID: UUID? = nil) -> Result<Void, Error> {
+        guard isConnected else {
+            return .failure(GeminiError.connectionFailed)
+        }
 
         let message: [String: Any] = [
             "client_content": [
@@ -215,16 +218,21 @@ class GeminiService: NSObject {
             ]
         ]
 
-        if let id = messageID {
+        let result = sendJSON(message)
+
+        if case .success = result, let id = messageID {
             startRequestTracking(messageID: id)
         }
-        sendJSON(message)
+
+        return result
     }
 
     /// Send an image to the active session (e.g. for vision tasks).
     /// Use client_content so the image is tied to a user turn.
-    func sendPhoto(_ imageData: Data, messageID: UUID? = nil) {
-        guard isConnected else { return }
+    func sendPhoto(_ imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
+        guard isConnected else {
+            return .failure(GeminiError.connectionFailed)
+        }
 
         let base64Image = imageData.base64EncodedString()
 
@@ -247,15 +255,20 @@ class GeminiService: NSObject {
             ]
         ]
 
-        if let id = messageID {
+        let result = sendJSON(message)
+
+        if case .success = result, let id = messageID {
             startRequestTracking(messageID: id)
         }
-        sendJSON(message)
+
+        return result
     }
 
     /// Send text + image together as one multimodal user turn.
-    func sendTextWithPhoto(_ text: String, imageData: Data, messageID: UUID? = nil) {
-        guard isConnected else { return }
+    func sendTextWithPhoto(_ text: String, imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
+        guard isConnected else {
+            return .failure(GeminiError.connectionFailed)
+        }
 
         let base64Image = imageData.base64EncodedString()
 
@@ -279,10 +292,13 @@ class GeminiService: NSObject {
             ]
         ]
 
-        if let id = messageID {
+        let result = sendJSON(message)
+
+        if case .success = result, let id = messageID {
             startRequestTracking(messageID: id)
         }
-        sendJSON(message)
+
+        return result
     }
 
     // MARK: - Video Streaming
@@ -1123,17 +1139,25 @@ class GeminiService: NSObject {
 
     // MARK: - Helpers
 
-    private func sendJSON(_ json: [String: Any]) {
+    private func sendJSON(_ json: [String: Any]) -> Result<Void, Error> {
         guard let data = try? JSONSerialization.data(withJSONObject: json),
               let string = String(data: data, encoding: .utf8) else {
-            return
+            return .failure(GeminiError.invalidJSON)
         }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: Result<Void, Error> = .success(())
 
         webSocketTask?.send(.string(string)) { error in
             if let error = error {
+                result = .failure(error)
                 print("WebSocket send error: \(error)")
             }
+            semaphore.signal()
         }
+
+        semaphore.wait()
+        return result
     }
 }
 
@@ -1171,6 +1195,7 @@ enum GeminiError: LocalizedError {
     case requestTimeout
     case serviceUnavailable
     case cancelled
+    case invalidJSON
 
     var errorDescription: String? {
         switch self {
@@ -1186,6 +1211,8 @@ enum GeminiError: LocalizedError {
             return "Service temporarily unavailable"
         case .cancelled:
             return "Request was cancelled"
+        case .invalidJSON:
+            return "Failed to encode message"
         }
     }
 }

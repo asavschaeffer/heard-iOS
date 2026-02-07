@@ -569,12 +569,23 @@ class ChatViewModel: ObservableObject {
     }
 
     private func sendToGemini(text: String?, imageData: Data?, message: ChatMessage) {
+        let result: Result<Void, Error>
+
         if let text = text, let imageData = imageData, message.mediaType == .image {
-            geminiService?.sendTextWithPhoto(text, imageData: imageData, messageID: message.id)
+            result = geminiService?.sendTextWithPhoto(text, imageData: imageData, messageID: message.id) ?? .failure(GeminiError.serviceUnavailable)
         } else if let text = text {
-            geminiService?.sendText(text, messageID: message.id)
+            result = geminiService?.sendText(text, messageID: message.id) ?? .failure(GeminiError.serviceUnavailable)
         } else if let imageData = imageData, message.mediaType == .image {
-            geminiService?.sendPhoto(imageData, messageID: message.id)
+            result = geminiService?.sendPhoto(imageData, messageID: message.id) ?? .failure(GeminiError.serviceUnavailable)
+        } else {
+            result = .success(())
+        }
+
+        switch result {
+        case .success:
+            message.markStatus(.sent)
+        case .failure:
+            message.markStatus(.failed)
         }
 
         if let urlString = message.mediaURL, let url = URL(string: urlString) {
@@ -583,9 +594,6 @@ class ChatViewModel: ObservableObject {
             } else if message.mediaType == .document {
                 geminiService?.sendDocumentAttachment(url: url, utType: message.mediaUTType)
             }
-        }
-        if message.status != .failed {
-            message.markStatus(.sent)
         }
         activeThread?.touch()
     }
