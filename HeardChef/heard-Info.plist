@@ -2,5 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Heard, Chef uses speech recognition to transcribe your voice messages and enable voice commands for recipe and inventory management.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Heard, Chef needs access to your microphone for voice calls and speech recognition features.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Heard, Chef uses the camera to let you take photos of ingredients and recipes to add to your collection.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Heard, Chef needs access to your photo library so you can attach photos of ingredients and recipes.</string>
 </dict>
 </plist>
