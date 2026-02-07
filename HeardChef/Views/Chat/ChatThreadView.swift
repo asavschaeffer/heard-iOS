@@ -1,18 +1,19 @@
 import SwiftUI
 import Foundation
+import SwiftData
 
 struct ChatThreadView: View {
     let messages: [ChatMessage]
     let isTyping: Bool
     let showReadReceipts: Bool
     @ObservedObject var linkStore: LinkMetadataStore
+    let onRetry: (ChatMessage) -> Void
     
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    ForEach(messages.indices, id: \.self) { index in
-                        let message = messages[index]
+                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         let nextMessage = index + 1 < messages.count ? messages[index + 1] : nil
                         let previousMessage = index > 0 ? messages[index - 1] : nil
                         let isGroupEnd = nextMessage?.role.isUser != message.role.isUser
@@ -33,7 +34,8 @@ struct ChatThreadView: View {
                             message: message,
                             isGroupEnd: isGroupEnd,
                             statusText: statusText,
-                            linkStore: linkStore
+                            linkStore: linkStore,
+                            onRetry: { onRetry(message) }
                         )
                         .id(message.id)
                         .padding(.bottom, isGroupEnd ? 8 : 2)
