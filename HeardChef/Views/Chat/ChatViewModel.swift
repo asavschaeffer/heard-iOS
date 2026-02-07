@@ -570,11 +570,11 @@ class ChatViewModel: ObservableObject {
 
     private func sendToGemini(text: String?, imageData: Data?, message: ChatMessage) {
         if let text = text, let imageData = imageData, message.mediaType == .image {
-            geminiService?.sendTextWithPhoto(text, imageData: imageData)
+            geminiService?.sendTextWithPhoto(text, imageData: imageData, messageID: message.id)
         } else if let text = text {
-            geminiService?.sendText(text)
+            geminiService?.sendText(text, messageID: message.id)
         } else if let imageData = imageData, message.mediaType == .image {
-            geminiService?.sendPhoto(imageData)
+            geminiService?.sendPhoto(imageData, messageID: message.id)
         }
 
         if let urlString = message.mediaURL, let url = URL(string: urlString) {
@@ -585,7 +585,7 @@ class ChatViewModel: ObservableObject {
             }
         }
         if message.status != .failed {
-            message.markStatus(.delivered)
+            message.markStatus(.sent)
         }
         activeThread?.touch()
     }
@@ -816,17 +816,18 @@ extension ChatViewModel: GeminiServiceDelegate {
         insertMessage(response)
         messages.append(response)
         markLatestUserMessageRead()
+        geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
     }
 
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data) {
         finalizeDraftIfNeeded()
         playAudio(data: data)
         markLatestUserMessageRead()
+        geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
     }
 
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult) {
-        // System message? Or just silent?
-        // messages.append(.system("Executed \(name)"))
+        geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
     }
 
     func geminiServiceDidStartResponse(_ service: GeminiService) {

@@ -32,6 +32,11 @@ class GeminiService: NSObject {
     private var isStreamingResponse = false
     private let supportsFileAttachments = false
 
+    // Pending requests tracking with timeout
+    private var pendingMessageID: UUID?
+    private var timeoutTask: Task<Void, Never>?
+    private let requestTimeout: TimeInterval = 30.0
+
     // API Configuration
     private let apiKey: String
     private let model = "gemini-2.0-flash-exp"
@@ -130,6 +135,45 @@ class GeminiService: NSObject {
         """
     }
 
+    // MARK: - Pending Request Tracking
+
+    @MainActor
+    private func startRequestTracking(messageID: UUID) {
+        timeoutTask?.cancel()
+        pendingMessageID = messageID
+
+        timeoutTask = Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                try await Task.sleep(nanoseconds: UInt64(self.requestTimeout * 1_000_000_000))
+                self.handleRequestTimeout(messageID: messageID)
+            } catch {
+            }
+        }
+    }
+
+    private func handleRequestTimeout(messageID: UUID) {
+        Task { @MainActor [weak self] in
+            guard self?.pendingMessageID == messageID else { return }
+            self?.pendingMessageID = nil
+            self?.timeoutTask = nil
+            self?.delegate?.geminiService(self!, didReceiveError: GeminiError.requestTimeout)
+        }
+    }
+
+    @MainActor
+    private func cancelRequestTracking(messageID: UUID) {
+        guard pendingMessageID == messageID else { return }
+        pendingMessageID = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
+    }
+
+    func notifySendResult(messageID: UUID) {
+        cancelRequestTracking(messageID: messageID)
+    }
+
     // MARK: - Audio Streaming
 
     func sendAudio(data: Data) {
@@ -154,7 +198,7 @@ class GeminiService: NSObject {
     // MARK: - Text & Image Sending (Multimodal)
 
     /// Send a text message to the active session.
-    func sendText(_ text: String) {
+    func sendText(_ text: String, messageID: UUID? = nil) {
         guard isConnected else { return }
 
         let message: [String: Any] = [
@@ -171,12 +215,15 @@ class GeminiService: NSObject {
             ]
         ]
 
+        if let id = messageID {
+            startRequestTracking(messageID: id)
+        }
         sendJSON(message)
     }
 
     /// Send an image to the active session (e.g. for vision tasks).
     /// Use client_content so the image is tied to a user turn.
-    func sendPhoto(_ imageData: Data) {
+    func sendPhoto(_ imageData: Data, messageID: UUID? = nil) {
         guard isConnected else { return }
 
         let base64Image = imageData.base64EncodedString()
@@ -200,11 +247,14 @@ class GeminiService: NSObject {
             ]
         ]
 
+        if let id = messageID {
+            startRequestTracking(messageID: id)
+        }
         sendJSON(message)
     }
 
     /// Send text + image together as one multimodal user turn.
-    func sendTextWithPhoto(_ text: String, imageData: Data) {
+    func sendTextWithPhoto(_ text: String, imageData: Data, messageID: UUID? = nil) {
         guard isConnected else { return }
 
         let base64Image = imageData.base64EncodedString()
@@ -229,6 +279,9 @@ class GeminiService: NSObject {
             ]
         ]
 
+        if let id = messageID {
+            startRequestTracking(messageID: id)
+        }
         sendJSON(message)
     }
 
@@ -1115,6 +1168,9 @@ enum GeminiError: LocalizedError {
     case missingAPIKey
     case invalidURL
     case connectionFailed
+    case requestTimeout
+    case serviceUnavailable
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -1124,6 +1180,12 @@ enum GeminiError: LocalizedError {
             return "Invalid API URL"
         case .connectionFailed:
             return "Failed to connect to Gemini"
+        case .requestTimeout:
+            return "Request timed out - Gemini may be busy or rate limited"
+        case .serviceUnavailable:
+            return "Service temporarily unavailable"
+        case .cancelled:
+            return "Request was cancelled"
         }
     }
 }
