@@ -128,7 +128,7 @@ class ChatViewModel: ObservableObject {
     private func setupAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
         } catch {
             print("Audio Session Error: \(error)")
@@ -161,7 +161,7 @@ class ChatViewModel: ObservableObject {
     private func configureAudioSessionForCall() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
         } catch {
             print("Audio Session Error: \(error)")
@@ -183,7 +183,9 @@ class ChatViewModel: ObservableObject {
         }
         callTimer?.invalidate()
         callTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateCallDuration()
+            Task { @MainActor in
+                self?.updateCallDuration()
+            }
         }
         updateCallDuration()
     }
@@ -246,7 +248,9 @@ class ChatViewModel: ObservableObject {
             object: AVAudioSession.sharedInstance(),
             queue: .main
         ) { [weak self] note in
-            self?.handleRouteChange(note)
+            Task { @MainActor in
+                self?.handleRouteChange(note)
+            }
         })
 
         audioObservers.append(center.addObserver(
@@ -254,7 +258,9 @@ class ChatViewModel: ObservableObject {
             object: AVAudioSession.sharedInstance(),
             queue: .main
         ) { [weak self] note in
-            self?.handleInterruption(note)
+            Task { @MainActor in
+                self?.handleInterruption(note)
+            }
         })
     }
 
@@ -519,7 +525,7 @@ class ChatViewModel: ObservableObject {
                   let dst = buffer.int16ChannelData?[0] else {
                 return
             }
-            dst.assign(from: src, count: Int(frameCount))
+            dst.update(from: src, count: Int(frameCount))
         }
 
         return buffer
