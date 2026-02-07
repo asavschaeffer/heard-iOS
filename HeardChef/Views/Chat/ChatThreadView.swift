@@ -14,34 +14,7 @@ struct ChatThreadView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                        let nextMessage = index + 1 < messages.count ? messages[index + 1] : nil
-                        let previousMessage = index > 0 ? messages[index - 1] : nil
-                        let isGroupEnd = nextMessage?.role.isUser != message.role.isUser
-                        let showTimestamp = shouldShowTimestamp(for: message, previous: previousMessage)
-                        let statusText = statusText(for: message, isGroupEnd: isGroupEnd)
-
-                        if showTimestamp {
-                            HStack {
-                                Spacer()
-                                Text(timestampText(for: message.createdAt))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                        }
-
-                        ChatMessageBubble(
-                            message: message,
-                            isGroupEnd: isGroupEnd,
-                            statusText: statusText,
-                            linkStore: linkStore,
-                            onRetry: { onRetry(message) }
-                        )
-                        .id(message.id)
-                        .padding(.bottom, isGroupEnd ? 8 : 2)
-                        .onAppear {
-                            prefetchLinks(for: message)
-                        }
+                        messageView(for: message, at: index)
                     }
 
                     if isTyping {
@@ -56,6 +29,37 @@ struct ChatThreadView: View {
                     withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
                 }
             }
+        }
+    }
+    
+    @ViewBuilder
+    private func messageView(for message: ChatMessage, at index: Int) -> some View {
+        let nextMessage = index + 1 < messages.count ? messages[index + 1] : nil
+        let previousMessage = index > 0 ? messages[index - 1] : nil
+        let isGroupEnd = nextMessage?.role.isUser != message.role.isUser
+        let showTimestamp = shouldShowTimestamp(for: message, previous: previousMessage)
+        let statusText = statusText(for: message, isGroupEnd: isGroupEnd)
+
+        if showTimestamp {
+            HStack {
+                Spacer()
+                Text(timestampText(for: message.createdAt))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+
+        ChatMessageBubble(
+            message: message,
+            isGroupEnd: isGroupEnd,
+            statusText: statusText,
+            linkStore: linkStore
+        )
+        .id(message.id)
+        .padding(.bottom, isGroupEnd ? 8 : 2)
+        .onAppear {
+            prefetchLinks(for: message)
         }
     }
     

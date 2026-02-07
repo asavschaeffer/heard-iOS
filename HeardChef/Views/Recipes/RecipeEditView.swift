@@ -324,7 +324,7 @@ struct RecipeEditView: View {
 
     private func saveRecipe() {
         // Filter out empty steps and reindex
-        var filteredSteps = validSteps
+        let filteredSteps = validSteps
         for i in 0..<filteredSteps.count {
             filteredSteps[i].orderIndex = i
         }

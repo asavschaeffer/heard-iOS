@@ -240,7 +240,7 @@ struct ChatView: View {
     
     private func handleRetry(_ message: ChatMessage) {
         // Prefer a concrete API on the view model if available
-        if let retry = (viewModel as AnyObject).perform?(Selector(("retrySendingMessage:"))) {
+        if (viewModel as AnyObject).perform?(Selector(("retrySendingMessage:"))) != nil {
             // If a dynamic selector exists, attempt to call via selector bridge is not available in SwiftUI context.
             // Fallback to a common pattern: resend the same content.
         }
