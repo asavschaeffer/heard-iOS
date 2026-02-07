@@ -69,6 +69,7 @@ final class ChatMessage {
     var mediaFilename: String?
     var mediaUTType: String?
     var statusRaw: String
+    @Attribute(.externalStorage)
     var reactions: [String]
     var isDraft: Bool
     var createdAt: Date

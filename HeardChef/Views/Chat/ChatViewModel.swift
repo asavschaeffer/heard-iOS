@@ -429,6 +429,7 @@ class ChatViewModel: ObservableObject {
         // 1. Visuals
         guard let channelData = buffer.floatChannelData?[0] else { return }
         let frameLength = Int(buffer.frameLength)
+        guard frameLength > 0 else { return }
         var sum: Float = 0
         for i in 0..<frameLength { sum += abs(channelData[i]) }
         let average = sum / Float(frameLength)

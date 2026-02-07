@@ -11,6 +11,7 @@
 		EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB9DC2F37CEE700904A9F /* heard-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "heard-Info.plist"; sourceTree = "<group>"; };
 		EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		EC5CBAD72F37DDAD00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -55,6 +56,11 @@
 			sourceTree = "<group>";
 		};
 		EC5CBA0E2F37D08F00904A9F /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EC5CBADA2F37DDAD00904A9F /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -113,12 +119,16 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
-					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
-				},
-				{
 					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
 					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC5CBADA2F37DDAD00904A9F /* Products */;
+					ProjectRef = EC5CBAD72F37DDAD00904A9F /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
+					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
 				},
 			);
 			projectRoot = "";
