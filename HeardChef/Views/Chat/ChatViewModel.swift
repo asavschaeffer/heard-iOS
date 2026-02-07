@@ -334,6 +334,15 @@ class ChatViewModel: ObservableObject {
             message: message
         )
     }
+    
+    func retryMessage(_ message: ChatMessage) {
+        guard message.role.isUser, message.status == .failed else { return }
+        message.markStatus(.sending)
+        let text = message.text
+        let imageData = message.imageData
+        enqueueOrSend(text: text, imageData: imageData, message: message)
+        activeThread?.touch()
+    }
 
     // MARK: - Voice Session Management
 
@@ -569,6 +578,7 @@ class ChatViewModel: ObservableObject {
     }
 
     private func sendToGemini(text: String?, imageData: Data?, message: ChatMessage) {
+        // Keep message status as .sending initially (set on buildMessage)
         let result: Result<Void, Error>
 
         if let text = text, let imageData = imageData, message.mediaType == .image {
@@ -581,10 +591,8 @@ class ChatViewModel: ObservableObject {
             result = .success(())
         }
 
-        switch result {
-        case .success:
-            message.markStatus(.sent)
-        case .failure:
+        // Only mark failed if result is failure; leave .sending otherwise
+        if case .failure = result {
             message.markStatus(.failed)
         }
 
@@ -670,6 +678,20 @@ class ChatViewModel: ObservableObject {
         if latest.status != .read {
             latest.markStatus(.read)
         }
+    }
+
+    // New helper to mark latest user message with status .sent if currently .sending
+    private func markLatestUserMessageSent() {
+        guard let latest = messages.last(where: { $0.role.isUser && $0.status == .sending }) else { return }
+        latest.markStatus(.sent)
+        print("[Chat] Marked latest user message as Sent")
+    }
+    
+    // New helper to mark latest user message with status .failed if currently .sending
+    private func markLatestUserMessageFailedIfSending() {
+        guard let latest = messages.last(where: { $0.role.isUser && $0.status == .sending }) else { return }
+        latest.markStatus(.failed)
+        print("[Chat] Marked latest user message as Failed")
     }
 
     // MARK: - Transcript Handling
@@ -804,6 +826,7 @@ extension ChatViewModel: GeminiServiceDelegate {
         connectionState = .error(error.localizedDescription)
         isTyping = false
         markPendingMessagesFailed()
+        markLatestUserMessageFailedIfSending()
         if callState.isPresented {
             pauseCallTimer()
         }
@@ -840,6 +863,7 @@ extension ChatViewModel: GeminiServiceDelegate {
 
     func geminiServiceDidStartResponse(_ service: GeminiService) {
         isTyping = true
+        markLatestUserMessageSent()
     }
 
     func geminiServiceDidEndResponse(_ service: GeminiService) {
@@ -847,3 +871,4 @@ extension ChatViewModel: GeminiServiceDelegate {
         markLatestUserMessageRead()
     }
 }
+

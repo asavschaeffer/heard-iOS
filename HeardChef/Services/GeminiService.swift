@@ -35,7 +35,15 @@ class GeminiService: NSObject {
     // Pending requests tracking with timeout
     private var pendingMessageID: UUID?
     private var timeoutTask: Task<Void, Never>?
+    private var acceptanceTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
+
     private let requestTimeout: TimeInterval = 30.0
+    private let acceptanceTimeout: TimeInterval = 6.0
+    private let streamHeartbeatTimeout: TimeInterval = 20.0
+
+    private var hasAccepted = false
+    private var lastStreamChunkAt: Date?
 
     // API Configuration
     private let apiKey: String
@@ -75,6 +83,24 @@ class GeminiService: NSObject {
 
         sendSetupMessage()
         receiveMessage()
+
+        acceptanceTask?.cancel()
+        acceptanceTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(nanoseconds: UInt64(self.acceptanceTimeout * 1_000_000_000))
+                if !self.hasAccepted {
+                    print("[Gemini] Acceptance timeout")
+                    await MainActor.run {
+                        self.delegate?.geminiService(self, didReceiveError: GeminiError.connectionFailed)
+                        self.webSocketTask?.cancel(with: .goingAway, reason: nil)
+                        self.resetTrackingState()
+                    }
+                }
+            } catch {
+                // Task cancelled, no action needed
+            }
+        }
     }
 
     func disconnect() {
@@ -83,6 +109,21 @@ class GeminiService: NSObject {
         urlSession = nil
         isConnected = false
         isStreamingResponse = false
+
+        acceptanceTask?.cancel()
+        acceptanceTask = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+
+        resetTrackingState()
+    }
+
+    private func resetTrackingState() {
+        hasAccepted = false
+        lastStreamChunkAt = nil
+        pendingMessageID = nil
     }
 
     // MARK: - Setup Message
@@ -351,6 +392,13 @@ class GeminiService: NSObject {
 
                 case .failure(let error):
                     self.delegate?.geminiService(self, didReceiveError: error)
+                    self.acceptanceTask?.cancel()
+                    self.acceptanceTask = nil
+                    self.timeoutTask?.cancel()
+                    self.timeoutTask = nil
+                    self.heartbeatTask?.cancel()
+                    self.heartbeatTask = nil
+                    self.resetTrackingState()
                 }
             }
         }
@@ -401,10 +449,40 @@ class GeminiService: NSObject {
             return
         }
         
-        let isComplete = content["turnComplete"] as? Bool ?? false
+        // Accept on first content
+        if !hasAccepted {
+            hasAccepted = true
+            acceptanceTask?.cancel()
+            acceptanceTask = nil
+            print("[Gemini] Accepted and responding")
+        }
+        
+        lastStreamChunkAt = Date()
+        
         if !isStreamingResponse {
             isStreamingResponse = true
             delegate?.geminiServiceDidStartResponse(self)
+
+            // Start heartbeat monitor
+            heartbeatTask?.cancel()
+            heartbeatTask = Task { [weak self] in
+                guard let self else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: UInt64(self.streamHeartbeatTimeout * 1_000_000_000))
+                    await MainActor.run {
+                        if self.isStreamingResponse,
+                           let last = self.lastStreamChunkAt,
+                           Date().timeIntervalSince(last) > self.streamHeartbeatTimeout {
+                            print("[Gemini] Stream heartbeat timeout")
+                            self.delegate?.geminiService(self, didReceiveError: GeminiError.requestTimeout)
+                            self.isStreamingResponse = false
+                            self.delegate?.geminiServiceDidEndResponse(self)
+                            self.heartbeatTask?.cancel()
+                            self.heartbeatTask = nil
+                        }
+                    }
+                }
+            }
         }
 
         for part in parts {
@@ -426,9 +504,17 @@ class GeminiService: NSObject {
                 delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: isFinal)
             }
         }
+        
+        if let id = pendingMessageID {
+            cancelRequestTracking(messageID: id)
+        }
 
+        let isComplete = content["turnComplete"] as? Bool ?? false
         if isComplete {
             isStreamingResponse = false
+            heartbeatTask?.cancel()
+            heartbeatTask = nil
+            lastStreamChunkAt = nil
             delegate?.geminiServiceDidEndResponse(self)
         }
     }
@@ -1181,6 +1267,16 @@ extension GeminiService: URLSessionWebSocketDelegate {
         Task { @MainActor in
             self.isConnected = false
             self.isStreamingResponse = false
+
+            self.acceptanceTask?.cancel()
+            self.acceptanceTask = nil
+            self.timeoutTask?.cancel()
+            self.timeoutTask = nil
+            self.heartbeatTask?.cancel()
+            self.heartbeatTask = nil
+
+            self.resetTrackingState()
+
             self.delegate?.geminiServiceDidDisconnect(self)
         }
     }

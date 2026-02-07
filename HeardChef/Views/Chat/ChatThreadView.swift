@@ -54,6 +54,7 @@ struct ChatThreadView: View {
             message: message,
             isGroupEnd: isGroupEnd,
             statusText: statusText,
+            onRetry: { onRetry($0) },
             linkStore: linkStore
         )
         .id(message.id)
@@ -104,7 +105,7 @@ struct ChatThreadView: View {
         case .read:
             return showReadReceipts ? "Read" : nil
         case .failed:
-            return "Failed"
+            return "Not Delivered"
         }
     }
 

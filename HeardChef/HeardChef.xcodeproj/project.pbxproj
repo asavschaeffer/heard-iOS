@@ -14,9 +14,22 @@
 		EC5CBAD72F37DDAD00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		EC5CBB0F2F37FBB500904A9F /* Exceptions for "." folder in "heard" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"heard-Info.plist",
+			);
+			target = EC5CB97A2F36AF4900904A9F /* heard */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		EC5CB97D2F36AF4900904A9F /* . */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				EC5CBB0F2F37FBB500904A9F /* Exceptions for "." folder in "heard" target */,
+			);
 			path = .;
 			sourceTree = "<group>";
 		};

@@ -12,6 +12,7 @@ struct ChatMessageBubble: View {
     let message: ChatMessage
     let isGroupEnd: Bool
     let statusText: String?
+    let onRetry: ((ChatMessage) -> Void)?
     @State private var quickLookItem: QuickLookItem?
     @State private var shareURL: IdentifiableURL?
     @ObservedObject var linkStore: LinkMetadataStore
@@ -22,52 +23,64 @@ struct ChatMessageBubble: View {
             if message.role.isUser { Spacer() }
             
             VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
-                if let text = message.text {
-                    Text(text)
-                        .padding(12)
-                        .background(bubbleBackground)
-                        .foregroundStyle(message.role.isUser ? .white : .primary)
-                        .opacity(message.isDraft ? 0.6 : 1.0)
-                }
-                
-                if let linkMetadata = linkMetadata {
-                    LinkPreviewView(metadata: linkMetadata)
-                        .frame(maxWidth: 260)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .onTapGesture {
-                            openLinkInSafari()
+                HStack(alignment: .top, spacing: 4) {
+                    VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
+                        if let text = message.text {
+                            Text(text)
+                                .padding(12)
+                                .background(bubbleBackground)
+                                .foregroundStyle(message.role.isUser ? .white : .primary)
+                                .opacity(message.isDraft ? 0.6 : 1.0)
                         }
-                        .contextMenu {
-                            if let url = firstURL(in: message.text ?? "") {
-                                Button("Copy Link") {
-                                    UIPasteboard.general.url = url
+                        
+                        if let linkMetadata = linkMetadata {
+                            LinkPreviewView(metadata: linkMetadata)
+                                .frame(maxWidth: 260)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .onTapGesture {
+                                    openLinkInSafari()
                                 }
-                                Button("Share…") {
-                                    shareURL = IdentifiableURL(url: url)
+                                .contextMenu {
+                                    if let url = firstURL(in: message.text ?? "") {
+                                        Button("Copy Link") {
+                                            UIPasteboard.general.url = url
+                                        }
+                                        Button("Share…") {
+                                            shareURL = IdentifiableURL(url: url)
+                                        }
+                                    }
+                                }
+                        }
+                        
+                        attachmentView
+
+                        if !message.reactions.isEmpty {
+                            HStack(spacing: 4) {
+                                ForEach(message.reactions, id: \.self) { emoji in
+                                    Text(emoji)
+                                        .font(.caption)
                                 }
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.systemGray6))
+                            .clipShape(Capsule())
                         }
-                }
-                
-                attachmentView
-
-                if !message.reactions.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(message.reactions, id: \.self) { emoji in
-                            Text(emoji)
-                                .font(.caption)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(.systemGray6))
-                    .clipShape(Capsule())
-                }
 
                 if let statusText {
                     Text(statusText)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(message.status == .failed ? .red : .secondary)
+                }
+                    }
+                    
+                    // Red exclamation mark indicator for failed messages
+                    if message.status == .failed && message.role.isUser {
+                        failureIndicator
+                            .onTapGesture {
+                                onRetry?(message)
+                            }
+                    }
                 }
             }
             
@@ -87,6 +100,18 @@ struct ChatMessageBubble: View {
             Button("😢") { message.toggleReaction("😢") }
             Button("😡") { message.toggleReaction("😡") }
         }
+    }
+    
+    private var failureIndicator: some View {
+        Circle()
+            .fill(Color.red)
+            .frame(width: 20, height: 20)
+            .overlay(
+                Text("!")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+            )
     }
     
     private var bubbleBackground: some View {
