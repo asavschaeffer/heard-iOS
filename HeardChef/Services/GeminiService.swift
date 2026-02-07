@@ -273,10 +273,8 @@ class GeminiService: NSObject {
     // MARK: - Message Handling
 
     private func receiveMessage() {
-        webSocketTask?.receive { [weak self] result in
+        webSocketTask?.receive { result in
             Task { @MainActor in
-                guard let self = self else { return }
-
                 switch result {
                 case .success(let message):
                     self.handleMessage(message)

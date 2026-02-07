@@ -24,11 +24,11 @@ final class LinkMetadataStore: ObservableObject {
         inFlight.insert(cacheKey)
 
         let provider = LPMetadataProvider()
-        provider.startFetchingMetadata(for: url) { [weak self] metadata, _ in
+        provider.startFetchingMetadata(for: url) { metadata, _ in
             Task { @MainActor in
-                self?.inFlight.remove(cacheKey)
+                self.inFlight.remove(cacheKey)
                 if let metadata {
-                    self?.metadataByKey[cacheKey] = metadata
+                    self.metadataByKey[cacheKey] = metadata
                 }
             }
         }

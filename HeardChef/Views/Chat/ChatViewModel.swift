@@ -183,8 +183,9 @@ class ChatViewModel: ObservableObject {
         }
         callTimer?.invalidate()
         callTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateCallDuration()
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.updateCallDuration()
             }
         }
         updateCallDuration()
@@ -248,8 +249,9 @@ class ChatViewModel: ObservableObject {
             object: AVAudioSession.sharedInstance(),
             queue: .main
         ) { [weak self] note in
-            Task { @MainActor in
-                self?.handleRouteChange(note)
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.handleRouteChange(note)
             }
         })
 
@@ -258,8 +260,9 @@ class ChatViewModel: ObservableObject {
             object: AVAudioSession.sharedInstance(),
             queue: .main
         ) { [weak self] note in
-            Task { @MainActor in
-                self?.handleInterruption(note)
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.handleInterruption(note)
             }
         })
     }
