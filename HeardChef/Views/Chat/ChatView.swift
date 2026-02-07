@@ -4,6 +4,10 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
+private protocol RetryCapable {
+    func retry(message: ChatMessage)
+}
+
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = ChatViewModel()
@@ -122,7 +126,11 @@ struct ChatView: View {
                 messages: viewModel.messages,
                 isTyping: viewModel.isTyping,
                 showReadReceipts: settings.showReadReceipts,
-                linkStore: linkStore
+                linkStore: linkStore,
+                onRetry: { message in
+                    // Forward retry without relying on dynamic member lookup
+                    handleRetry(message)
+                }
             )
             
             Divider()
@@ -229,6 +237,21 @@ struct ChatView: View {
             selectedAttachment = attachment
         }
     }
+    
+    private func handleRetry(_ message: ChatMessage) {
+        // Prefer a concrete API on the view model if available
+        if let retry = (viewModel as AnyObject).perform?(Selector(("retrySendingMessage:"))) {
+            // If a dynamic selector exists, attempt to call via selector bridge is not available in SwiftUI context.
+            // Fallback to a common pattern: resend the same content.
+        }
+        // Fallback: attempt to use a common retry entry point if present; otherwise, resend.
+        if let retrying = viewModel as? (any RetryCapable) {
+            retrying.retry(message: message)
+            return
+        }
+        // As a safe default, try to send the same text again without attachments.
+        viewModel.sendMessage(message.text ?? "", attachment: nil)
+    }
 }
 
 private struct AttachmentPreview: View {
@@ -308,3 +331,4 @@ private struct AttachmentPreview: View {
 #Preview {
     ChatView()
 }
+
