@@ -64,8 +64,14 @@ final class DictationController: ObservableObject {
         stop()
         transcript = ""
 
-        // 3. Configure audio session
+        // 3. Check if audio input is available at all
         let session = AVAudioSession.sharedInstance()
+        guard session.isInputAvailable else {
+            print("[Dictation] No audio input available. If on simulator, use a real device or enable mic in Simulator > I/O > Input.")
+            return
+        }
+
+        // 4. Configure audio session
         do {
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
@@ -73,7 +79,7 @@ final class DictationController: ObservableObject {
             print("[Dictation] Audio session error: \(error.localizedDescription)")
         }
 
-        // 4. Create a fresh audio engine each time (avoids stale input node state)
+        // 5. Create a fresh audio engine each time (avoids stale input node state)
         let engine = AVAudioEngine()
         audioEngine = engine
 
@@ -81,7 +87,7 @@ final class DictationController: ObservableObject {
         let recordingFormat = inputNode.outputFormat(forBus: 0)
 
         guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
-            print("[Dictation] No microphone input available (format: \(recordingFormat))")
+            print("[Dictation] Invalid audio format (\(Int(recordingFormat.sampleRate)) Hz, \(recordingFormat.channelCount) ch). Microphone not routed — if on simulator, go to Simulator > I/O > Input and select a mic.")
             audioEngine = nil
             return
         }

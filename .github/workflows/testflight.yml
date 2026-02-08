@@ -1,0 +1,151 @@
+name: Build and Deploy to TestFlight
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Release notes for TestFlight'
+        required: false
+        default: 'Automated build from GitHub Actions'
+
+jobs:
+  build-and-deploy:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+          
+      - name: Install CocoaPods (if needed)
+        run: |
+          cd HeardChef
+          if [ -f "Podfile" ]; then
+            pod install
+          fi
+
+      - name: Create Secrets.xcconfig
+        run: |
+          cd HeardChef
+          cat > Secrets.xcconfig << EOF
+          // Gemini API Key from GitHub Secrets
+          GEMINI_API_KEY = ${{ secrets.GEMINI_API_KEY }}
+          EOF
+          echo "Created Secrets.xcconfig file"
+
+      - name: Setup App Store Connect API Key
+        env:
+          API_KEY_CONTENT: ${{ secrets.APPSTORE_API_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$API_KEY_CONTENT" > ~/private_keys/AuthKey_${{ secrets.APPSTORE_API_KEY_ID }}.p8
+          echo "API Key file created"
+          echo "File size: $(wc -c < ~/private_keys/AuthKey_${{ secrets.APPSTORE_API_KEY_ID }}.p8) bytes"
+          echo "First line: $(head -n 1 ~/private_keys/AuthKey_${{ secrets.APPSTORE_API_KEY_ID }}.p8)"
+          echo "Last line: $(tail -n 1 ~/private_keys/AuthKey_${{ secrets.APPSTORE_API_KEY_ID }}.p8)"
+
+      - name: Decode Secrets
+        env:
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
+        run: |
+          echo "Available secrets:"
+          echo "$SECRETS_CONTEXT" | jq -r 'keys[]'
+          
+      - name: Build Archive
+        run: |
+          cd HeardChef
+          echo "Building iOS archive..."
+
+          # Build the archive
+          xcodebuild -project HeardChef.xcodeproj \
+                    -scheme heard \
+                    -configuration Release \
+                    -sdk iphoneos \
+                    -destination generic/platform=iOS \
+                    -archivePath $PWD/build.xcarchive \
+                    -allowProvisioningUpdates \
+                    -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_API_KEY_ID }}.p8 \
+                    -authenticationKeyID ${{ secrets.APPSTORE_API_KEY_ID }} \
+                    -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }} \
+                    archive
+
+          echo "Archive completed successfully!"
+          
+      - name: Export IPA
+        run: |
+          cd HeardChef
+          echo "Exporting IPA from archive..."
+          
+          # Create export options
+          cat > ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>teamID</key>
+              <string>9L6Y9T3PPW</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          
+          # Export the IPA
+          xcodebuild -exportArchive \
+                    -archivePath $PWD/build.xcarchive \
+                    -exportPath $PWD/build \
+                    -exportOptionsPlist ExportOptions.plist \
+                    -allowProvisioningUpdates \
+                    -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_API_KEY_ID }}.p8 \
+                    -authenticationKeyID ${{ secrets.APPSTORE_API_KEY_ID }} \
+                    -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}
+
+          echo "IPA export completed!"
+          ls -la build/
+          
+      - name: Upload to TestFlight
+        if: github.event_name == 'push'
+        uses: apple-actions/upload-testflight-build@v1
+        with:
+          app-path: HeardChef/build/heard.ipa
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_KEY }}
+          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+          
+      - name: Upload to TestFlight (Manual)
+        if: github.event_name == 'workflow_dispatch'
+        uses: apple-actions/upload-testflight-build@v1
+        with:
+          app-path: HeardChef/build/heard.ipa
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_KEY }}
+          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+          changelog: ${{ github.event.inputs.release_notes || 'Automated build from GitHub Actions' }}
+          
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "🎉 Build and deployment successful!"
+          echo "📱 Check TestFlight: https://appstoreconnect.apple.com/apps"
+          echo "🔄 Your app will be available on your device shortly"
+          
+      - name: Archive Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: |
+            HeardChef/build/heard.ipa
+            HeardChef/build/heard.app.dSYM.zip
+          retention-days: 30
