@@ -286,8 +286,17 @@ final class Recipe {
     /// Number of servings
     var servings: Int?
 
-    /// Recipe tags (cuisine, diet, etc.)
-    var tags: [String]
+    /// Recipe tags (cuisine, diet, etc.) - stored as comma-separated string for SwiftData compatibility
+    private var tagsData: String = ""
+    
+    var tags: [String] {
+        get {
+            tagsData.isEmpty ? [] : tagsData.components(separatedBy: ",").filter { !$0.isEmpty }
+        }
+        set {
+            tagsData = newValue.joined(separator: ",")
+        }
+    }
 
     /// Difficulty level (stored as raw string)
     var difficultyRaw: String
@@ -385,7 +394,7 @@ final class Recipe {
         self.prepTime = prepTime.map { max(0, $0) }
         self.cookTime = cookTime.map { max(0, $0) }
         self.servings = servings.map { max(1, $0) }
-        self.tags = tags.map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
+        self.tagsData = tags.map { $0.lowercased().trimmingCharacters(in: .whitespaces) }.joined(separator: ",")
         self.difficultyRaw = difficulty.rawValue
         self.sourceRaw = source.rawValue
         self.imageData = imageData
@@ -426,7 +435,7 @@ final class Recipe {
             self.servings = max(1, newServings)
         }
         if let newTags = changes["tags"] as? [String] {
-            self.tags = newTags.map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
+            self.tagsData = newTags.map { $0.lowercased().trimmingCharacters(in: .whitespaces) }.joined(separator: ",")
         }
         if let newDifficultyStr = changes["difficulty"] as? String,
            let newDifficulty = RecipeDifficulty.parse(newDifficultyStr) {

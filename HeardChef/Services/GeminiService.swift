@@ -1,6 +1,32 @@
 import Foundation
 import SwiftData
 
+// MARK: - Session Mode
+
+enum SessionMode {
+    case text
+    case audio
+}
+
+struct SessionConfig {
+    let mode: SessionMode
+    let model: String
+
+    // For Live API (voice/video calls) - requires audio input, outputs audio or text
+    static let liveAudioModel = "gemini-2.5-flash-native-audio-preview-12-2025"
+    
+    // For standard text chat via generateContent REST API
+    static let defaultTextModel = "gemini-2.5-flash"
+
+    static func text(model: String = defaultTextModel) -> SessionConfig {
+        SessionConfig(mode: .text, model: model)
+    }
+
+    static func audio(model: String = liveAudioModel) -> SessionConfig {
+        SessionConfig(mode: .audio, model: model)
+    }
+}
+
 // MARK: - Delegate Protocol
 
 @MainActor
@@ -9,6 +35,7 @@ protocol GeminiServiceDelegate: AnyObject {
     func geminiServiceDidDisconnect(_ service: GeminiService)
     func geminiService(_ service: GeminiService, didReceiveError error: Error)
     func geminiService(_ service: GeminiService, didReceiveTranscript transcript: String, isFinal: Bool)
+    func geminiService(_ service: GeminiService, didReceiveInputTranscript transcript: String, isFinal: Bool)
     func geminiService(_ service: GeminiService, didReceiveResponse text: String)
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data)
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult)
@@ -47,29 +74,45 @@ class GeminiService: NSObject {
 
     // API Configuration
     private let apiKey: String
-    private let model = "gemini-2.0-flash-exp"
+    private(set) var activeConfig: SessionConfig?
+    var currentMode: SessionMode? { activeConfig?.mode }
     private let baseURL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+    private let restBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    // REST conversation history (stateless API needs context each request)
+    private var conversationHistory: [[String: Any]] = []
+    private let maxConversationTurns = 20
+    private var restTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
 
-        // Get API key from environment or Info.plist
-        self.apiKey = ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String
-            ?? ""
+        // Get API key from Info.plist (populated via Secrets.xcconfig) or environment
+        let plistKey = Bundle.main.object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String
+        let envKey = ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
+        self.apiKey = plistKey ?? envKey ?? ""
+
+        print("[Gemini] API key loaded: \(!apiKey.isEmpty ? "✓" : "✗")")
+        if apiKey.isEmpty {
+            print("[Gemini] Info.plist key: \(!(plistKey?.isEmpty ?? true) ? "✓" : "✗")")
+            print("[Gemini] Environment key: \(!(envKey?.isEmpty ?? true) ? "✓" : "✗")")
+            print("[Gemini] Add GEMINI_API_KEY to Secrets.xcconfig or environment")
+        }
 
         super.init()
     }
 
     // MARK: - Connection
 
-    func connect() {
+    func connect(config: SessionConfig? = nil) {
         guard !apiKey.isEmpty else {
             delegate?.geminiService(self, didReceiveError: GeminiError.missingAPIKey)
             return
         }
+
+        self.activeConfig = config ?? .text()
 
         let urlString = "\(baseURL)?key=\(apiKey)"
         guard let url = URL(string: urlString) else {
@@ -109,6 +152,7 @@ class GeminiService: NSObject {
         urlSession = nil
         isConnected = false
         isStreamingResponse = false
+        activeConfig = nil
 
         acceptanceTask?.cancel()
         acceptanceTask = nil
@@ -116,8 +160,18 @@ class GeminiService: NSObject {
         timeoutTask = nil
         heartbeatTask?.cancel()
         heartbeatTask = nil
+        restTask?.cancel()
+        restTask = nil
 
         resetTrackingState()
+    }
+
+    // MARK: - Mode Switching
+
+    /// Switch to audio mode (for live voice calls)
+    func switchToAudioMode() {
+        disconnect()
+        connect(config: .audio())
     }
 
     private func resetTrackingState() {
@@ -129,31 +183,35 @@ class GeminiService: NSObject {
     // MARK: - Setup Message
 
     private func sendSetupMessage() {
-        let setupMessage: [String: Any] = [
-            "setup": [
-                "model": "models/\(model)",
-                "generation_config": [
-                    "response_modalities": ["AUDIO"],
-                    "speech_config": [
-                        "voice_config": [
-                            "prebuilt_voice_config": [
-                                "voice_name": "Aoede"
-                            ]
-                        ]
+        let config = activeConfig ?? .audio()
+        let model = config.model
+
+        // WebSocket is only used for audio mode now
+        let generationConfig: [String: Any] = [
+            "response_modalities": ["AUDIO"],
+            "speech_config": [
+                "voice_config": [
+                    "prebuilt_voice_config": [
+                        "voice_name": "Aoede"
                     ]
-                ],
-                "system_instruction": [
-                    "parts": [
-                        ["text": systemPrompt]
-                    ]
-                ],
-                "tools": [
-                    ["function_declarations": GeminiTools.toAPIFormat()]
                 ]
             ]
         ]
+        let setup: [String: Any] = [
+            "model": "models/\(model)",
+            "generation_config": generationConfig,
+            "system_instruction": [
+                "parts": [
+                    ["text": systemPrompt]
+                ]
+            ],
+            "tools": [
+                ["function_declarations": GeminiTools.toAPIFormat()]
+            ],
+            "output_audio_transcription": [String: Any]()
+        ]
 
-        sendJSON(setupMessage)
+        sendJSON(["setup": setup])
     }
 
     private var systemPrompt: String {
@@ -238,108 +296,286 @@ class GeminiService: NSObject {
 
     // MARK: - Text & Image Sending (Multimodal)
 
-    /// Send a text message to the active session.
-    /// Returns Result indicating if the WebSocket successfully sent the message.
+    /// Send a text message. Routes through REST API unless WebSocket is connected (during a call).
     func sendText(_ text: String, messageID: UUID? = nil) -> Result<Void, Error> {
-        guard isConnected else {
-            return .failure(GeminiError.connectionFailed)
-        }
-
-        let message: [String: Any] = [
-            "client_content": [
-                "turns": [
-                    [
-                        "role": "user",
-                        "parts": [
-                            ["text": text]
+        // During a call with active WebSocket, send via WebSocket
+        if isConnected {
+            let message: [String: Any] = [
+                "client_content": [
+                    "turns": [
+                        [
+                            "role": "user",
+                            "parts": [
+                                ["text": text]
+                            ]
                         ]
-                    ]
-                ],
-                "turn_complete": true
+                    ],
+                    "turn_complete": true
+                ]
             ]
-        ]
 
-        let result = sendJSON(message)
-
-        if case .success = result, let id = messageID {
-            startRequestTracking(messageID: id)
+            let result = sendJSON(message)
+            if case .success = result, let id = messageID {
+                startRequestTracking(messageID: id)
+            }
+            return result
         }
 
-        return result
+        // Otherwise use REST API
+        sendTextREST(text, messageID: messageID)
+        return .success(())
     }
 
-    /// Send an image to the active session (e.g. for vision tasks).
-    /// Use client_content so the image is tied to a user turn.
+    /// Send an image. Routes through REST API unless WebSocket is connected (during a call).
     func sendPhoto(_ imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
-        guard isConnected else {
-            return .failure(GeminiError.connectionFailed)
-        }
-
-        let base64Image = imageData.base64EncodedString()
-
-        let message: [String: Any] = [
-            "client_content": [
-                "turns": [
-                    [
-                        "role": "user",
-                        "parts": [
-                            [
-                                "inline_data": [
-                                    "mime_type": "image/jpeg",
-                                    "data": base64Image
+        if isConnected {
+            let base64Image = imageData.base64EncodedString()
+            let message: [String: Any] = [
+                "client_content": [
+                    "turns": [
+                        [
+                            "role": "user",
+                            "parts": [
+                                [
+                                    "inline_data": [
+                                        "mime_type": "image/jpeg",
+                                        "data": base64Image
+                                    ]
                                 ]
                             ]
                         ]
-                    ]
-                ],
-                "turn_complete": true
+                    ],
+                    "turn_complete": true
+                ]
             ]
-        ]
 
-        let result = sendJSON(message)
-
-        if case .success = result, let id = messageID {
-            startRequestTracking(messageID: id)
+            let result = sendJSON(message)
+            if case .success = result, let id = messageID {
+                startRequestTracking(messageID: id)
+            }
+            return result
         }
 
-        return result
+        sendPhotoREST(imageData, messageID: messageID)
+        return .success(())
     }
 
-    /// Send text + image together as one multimodal user turn.
+    /// Send text + image together. Routes through REST API unless WebSocket is connected.
     func sendTextWithPhoto(_ text: String, imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
-        guard isConnected else {
-            return .failure(GeminiError.connectionFailed)
-        }
-
-        let base64Image = imageData.base64EncodedString()
-
-        let message: [String: Any] = [
-            "client_content": [
-                "turns": [
-                    [
-                        "role": "user",
-                        "parts": [
-                            ["text": text],
-                            [
-                                "inline_data": [
-                                    "mime_type": "image/jpeg",
-                                    "data": base64Image
+        if isConnected {
+            let base64Image = imageData.base64EncodedString()
+            let message: [String: Any] = [
+                "client_content": [
+                    "turns": [
+                        [
+                            "role": "user",
+                            "parts": [
+                                ["text": text],
+                                [
+                                    "inline_data": [
+                                        "mime_type": "image/jpeg",
+                                        "data": base64Image
+                                    ]
                                 ]
                             ]
                         ]
-                    ]
-                ],
-                "turn_complete": true
+                    ],
+                    "turn_complete": true
+                ]
             ]
-        ]
 
-        let result = sendJSON(message)
-
-        if case .success = result, let id = messageID {
-            startRequestTracking(messageID: id)
+            let result = sendJSON(message)
+            if case .success = result, let id = messageID {
+                startRequestTracking(messageID: id)
+            }
+            return result
         }
 
-        return result
+        sendTextWithPhotoREST(text, imageData: imageData, messageID: messageID)
+        return .success(())
+    }
+
+    // MARK: - REST API Methods
+
+    func sendTextREST(_ text: String, messageID: UUID? = nil) {
+        let userParts: [[String: Any]] = [["text": text]]
+        let userTurn: [String: Any] = ["role": "user", "parts": userParts]
+        sendRESTRequest(userTurn: userTurn, messageID: messageID)
+    }
+
+    func sendPhotoREST(_ imageData: Data, messageID: UUID? = nil) {
+        let base64Image = imageData.base64EncodedString()
+        let userParts: [[String: Any]] = [
+            ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]]
+        ]
+        let userTurn: [String: Any] = ["role": "user", "parts": userParts]
+        sendRESTRequest(userTurn: userTurn, messageID: messageID)
+    }
+
+    func sendTextWithPhotoREST(_ text: String, imageData: Data, messageID: UUID? = nil) {
+        let base64Image = imageData.base64EncodedString()
+        let userParts: [[String: Any]] = [
+            ["text": text],
+            ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]]
+        ]
+        let userTurn: [String: Any] = ["role": "user", "parts": userParts]
+        sendRESTRequest(userTurn: userTurn, messageID: messageID)
+    }
+
+    private func sendRESTRequest(userTurn: [String: Any], messageID: UUID?) {
+        guard !apiKey.isEmpty else {
+            delegate?.geminiService(self, didReceiveError: GeminiError.missingAPIKey)
+            return
+        }
+
+        delegate?.geminiServiceDidStartResponse(self)
+
+        // Append user turn to history
+        conversationHistory.append(userTurn)
+        trimConversationHistory()
+
+        restTask?.cancel()
+        restTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let responseText = try await self.executeRESTRequest(messageID: messageID)
+                await MainActor.run {
+                    if !responseText.isEmpty {
+                        self.delegate?.geminiService(self, didReceiveResponse: responseText)
+                    }
+                    self.delegate?.geminiServiceDidEndResponse(self)
+                }
+            } catch is CancellationError {
+                // Task cancelled, no action
+            } catch {
+                await MainActor.run {
+                    self.delegate?.geminiService(self, didReceiveError: error)
+                    self.delegate?.geminiServiceDidEndResponse(self)
+                }
+            }
+        }
+    }
+
+    private func executeRESTRequest(messageID: UUID?) async throws -> String {
+        let model = SessionConfig.defaultTextModel
+        let urlString = "\(restBaseURL)/\(model):generateContent?key=\(apiKey)"
+        guard let url = URL(string: urlString) else {
+            throw GeminiError.invalidURL
+        }
+
+        let body = buildRESTBody()
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = requestTimeout
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GeminiError.connectionFailed
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("[Gemini REST] HTTP \(httpResponse.statusCode): \(errorBody)")
+            if httpResponse.statusCode == 429 {
+                throw GeminiError.requestTimeout
+            }
+            throw GeminiError.serviceUnavailable
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = json["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]] else {
+            throw GeminiError.invalidJSON
+        }
+
+        // Check for function calls
+        let functionCalls = parts.compactMap { part -> (String, String, [String: Any])? in
+            guard let fc = part["functionCall"] as? [String: Any],
+                  let name = fc["name"] as? String else { return nil }
+            let args = fc["args"] as? [String: Any] ?? [:]
+            let id = UUID().uuidString
+            return (id, name, args)
+        }
+
+        if !functionCalls.isEmpty {
+            // Append model's function call turn to history
+            let modelParts = parts
+            let modelTurn: [String: Any] = ["role": "model", "parts": modelParts]
+            conversationHistory.append(modelTurn)
+
+            // Execute functions and collect results
+            var functionResponses: [[String: Any]] = []
+            for (id, name, args) in functionCalls {
+                let call = FunctionCall(id: id, name: name, arguments: args)
+
+                let result: FunctionResult
+                if let validationError = GeminiTools.validate(call: call) {
+                    result = .error(id: id, name: name, message: validationError)
+                } else {
+                    result = await MainActor.run { self.executeFunction(call) }
+                }
+
+                await MainActor.run {
+                    self.delegate?.geminiService(self, didExecuteFunctionCall: name, result: result)
+                }
+
+                functionResponses.append([
+                    "functionResponse": [
+                        "name": name,
+                        "response": result.response
+                    ]
+                ])
+            }
+
+            // Append tool response turn
+            let toolTurn: [String: Any] = ["role": "user", "parts": functionResponses]
+            conversationHistory.append(toolTurn)
+            trimConversationHistory()
+
+            // Follow-up request to get final text
+            return try await executeRESTRequest(messageID: messageID)
+        }
+
+        // Extract text response
+        let textParts = parts.compactMap { $0["text"] as? String }
+        let responseText = textParts.joined()
+
+        // Append assistant turn to history
+        if !responseText.isEmpty {
+            let modelTurn: [String: Any] = ["role": "model", "parts": [["text": responseText]]]
+            conversationHistory.append(modelTurn)
+            trimConversationHistory()
+        }
+
+        return responseText
+    }
+
+    private func buildRESTBody() -> [String: Any] {
+        [
+            "contents": conversationHistory,
+            "systemInstruction": [
+                "parts": [["text": systemPrompt]]
+            ],
+            "tools": [
+                ["functionDeclarations": GeminiTools.toAPIFormat()]
+            ]
+        ]
+    }
+
+    private func trimConversationHistory() {
+        // Each turn is one entry; cap at maxConversationTurns
+        while conversationHistory.count > maxConversationTurns {
+            conversationHistory.removeFirst()
+        }
+    }
+
+    func clearConversationHistory() {
+        conversationHistory.removeAll()
     }
 
     // MARK: - Video Streaming
@@ -391,6 +627,7 @@ class GeminiService: NSObject {
                     self.receiveMessage()
 
                 case .failure(let error):
+                    print("[Gemini] Receive error: \(error)")
                     self.delegate?.geminiService(self, didReceiveError: error)
                     self.acceptanceTask?.cancel()
                     self.acceptanceTask = nil
@@ -444,11 +681,6 @@ class GeminiService: NSObject {
     }
 
     private func handleServerContent(_ content: [String: Any]) {
-        guard let modelTurn = content["modelTurn"] as? [String: Any],
-              let parts = modelTurn["parts"] as? [[String: Any]] else {
-            return
-        }
-        
         // Accept on first content
         if !hasAccepted {
             hasAccepted = true
@@ -456,57 +688,68 @@ class GeminiService: NSObject {
             acceptanceTask = nil
             print("[Gemini] Accepted and responding")
         }
-        
-        lastStreamChunkAt = Date()
-        
-        if !isStreamingResponse {
-            isStreamingResponse = true
-            delegate?.geminiServiceDidStartResponse(self)
 
-            // Start heartbeat monitor
-            heartbeatTask?.cancel()
-            heartbeatTask = Task { [weak self] in
-                guard let self else { return }
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: UInt64(self.streamHeartbeatTimeout * 1_000_000_000))
-                    await MainActor.run {
-                        if self.isStreamingResponse,
-                           let last = self.lastStreamChunkAt,
-                           Date().timeIntervalSince(last) > self.streamHeartbeatTimeout {
-                            print("[Gemini] Stream heartbeat timeout")
-                            self.delegate?.geminiService(self, didReceiveError: GeminiError.requestTimeout)
-                            self.isStreamingResponse = false
-                            self.delegate?.geminiServiceDidEndResponse(self)
-                            self.heartbeatTask?.cancel()
-                            self.heartbeatTask = nil
+        // Handle input transcript (user speech-to-text in audio mode)
+        if let inputTranscript = content["inputTranscript"] as? String {
+            let isFinal = content["turnComplete"] as? Bool ?? false
+            delegate?.geminiService(self, didReceiveInputTranscript: inputTranscript, isFinal: isFinal)
+        }
+
+        // Handle model turn (text, audio, output transcript)
+        if let modelTurn = content["modelTurn"] as? [String: Any],
+           let parts = modelTurn["parts"] as? [[String: Any]] {
+
+            lastStreamChunkAt = Date()
+
+            if !isStreamingResponse {
+                isStreamingResponse = true
+                delegate?.geminiServiceDidStartResponse(self)
+
+                // Start heartbeat monitor
+                heartbeatTask?.cancel()
+                heartbeatTask = Task { [weak self] in
+                    guard let self else { return }
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: UInt64(self.streamHeartbeatTimeout * 1_000_000_000))
+                        await MainActor.run {
+                            if self.isStreamingResponse,
+                               let last = self.lastStreamChunkAt,
+                               Date().timeIntervalSince(last) > self.streamHeartbeatTimeout {
+                                print("[Gemini] Stream heartbeat timeout")
+                                self.delegate?.geminiService(self, didReceiveError: GeminiError.requestTimeout)
+                                self.isStreamingResponse = false
+                                self.delegate?.geminiServiceDidEndResponse(self)
+                                self.heartbeatTask?.cancel()
+                                self.heartbeatTask = nil
+                            }
                         }
                     }
                 }
             }
-        }
 
-        for part in parts {
-            // Text response
-            if let text = part["text"] as? String {
-                delegate?.geminiService(self, didReceiveResponse: text)
+            for part in parts {
+                // Text response
+                if let text = part["text"] as? String {
+                    delegate?.geminiService(self, didReceiveResponse: text)
+                }
+
+                // Audio response
+                if let inlineData = part["inlineData"] as? [String: Any],
+                   let base64Data = inlineData["data"] as? String,
+                   let audioData = Data(base64Encoded: base64Data) {
+                    delegate?.geminiService(self, didReceiveAudio: audioData)
+                }
+
+                // Output transcript (AI speech-to-text)
+                if let transcript = part["transcript"] as? String {
+                    let isFinal = content["turnComplete"] as? Bool ?? false
+                    delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: isFinal)
+                }
             }
 
-            // Audio response
-            if let inlineData = part["inlineData"] as? [String: Any],
-               let base64Data = inlineData["data"] as? String,
-               let audioData = Data(base64Encoded: base64Data) {
-                delegate?.geminiService(self, didReceiveAudio: audioData)
+            if let id = pendingMessageID {
+                cancelRequestTracking(messageID: id)
             }
-
-            // Transcript
-            if let transcript = part["transcript"] as? String {
-                let isFinal = content["turnComplete"] as? Bool ?? false
-                delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: isFinal)
-            }
-        }
-        
-        if let id = pendingMessageID {
-            cancelRequestTracking(messageID: id)
         }
 
         let isComplete = content["turnComplete"] as? Bool ?? false
@@ -1225,25 +1468,28 @@ class GeminiService: NSObject {
 
     // MARK: - Helpers
 
+    @discardableResult
     private func sendJSON(_ json: [String: Any]) -> Result<Void, Error> {
         guard let data = try? JSONSerialization.data(withJSONObject: json),
               let string = String(data: data, encoding: .utf8) else {
             return .failure(GeminiError.invalidJSON)
         }
 
-        let semaphore = DispatchSemaphore(value: 0)
-        var result: Result<Void, Error> = .success(())
-
-        webSocketTask?.send(.string(string)) { error in
-            if let error = error {
-                result = .failure(error)
-                print("WebSocket send error: \(error)")
-            }
-            semaphore.signal()
+        guard let task = webSocketTask else {
+            return .failure(GeminiError.connectionFailed)
         }
 
-        semaphore.wait()
-        return result
+        task.send(.string(string)) { [weak self] error in
+            if let error = error {
+                print("[Gemini] WebSocket send error: \(error)")
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.delegate?.geminiService(self, didReceiveError: error)
+                }
+            }
+        }
+
+        return .success(())
     }
 }
 
@@ -1255,7 +1501,7 @@ extension GeminiService: URLSessionWebSocketDelegate {
         webSocketTask: URLSessionWebSocketTask,
         didOpenWithProtocol protocol: String?
     ) {
-        // Connection opened
+        print("[Gemini] WebSocket opened")
     }
 
     nonisolated func urlSession(
@@ -1264,6 +1510,8 @@ extension GeminiService: URLSessionWebSocketDelegate {
         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
         reason: Data?
     ) {
+        let reasonStr = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "none"
+        print("[Gemini] WebSocket closed: code=\(closeCode.rawValue) reason=\(reasonStr)")
         Task { @MainActor in
             self.isConnected = false
             self.isStreamingResponse = false

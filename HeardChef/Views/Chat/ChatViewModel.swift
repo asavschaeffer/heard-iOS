@@ -303,10 +303,11 @@ class ChatViewModel: ObservableObject {
 
     // MARK: - Actions
 
-    func connect() {
+    /// Connect WebSocket for audio mode (voice calls only). Text uses REST.
+    func connect(mode: SessionMode = .audio) {
         guard connectionState != .connecting else { return }
         connectionState = .connecting
-        geminiService?.connect()
+        geminiService?.connect(config: .audio())
     }
     
     func disconnect() {
@@ -354,8 +355,9 @@ class ChatViewModel: ObservableObject {
         if callKitEnabled {
             callKitManager?.startCall(displayName: "Heard, Chef")
         }
-        if connectionState == .disconnected {
-            connect()
+        // Connect WebSocket for audio
+        if connectionState != .connecting && connectionState != .connected {
+            connect(mode: .audio)
         }
         
         if connectionState == .connected {
@@ -390,6 +392,9 @@ class ChatViewModel: ObservableObject {
         cancelTranscriptDebounce()
         finalizeDraftIfNeeded()
         resetCallTimer()
+        // Disconnect the audio session; next text send will lazy-reconnect in text mode
+        geminiService?.disconnect()
+        connectionState = .disconnected
         if wasPresented {
             sendCallHaptic(style: .warning)
         }
@@ -556,15 +561,21 @@ class ChatViewModel: ObservableObject {
     }
 
     private func enqueueOrSend(text: String?, imageData: Data?, message: ChatMessage) {
-        if connectionState == .disconnected {
-            connect()
-        }
-
-        guard connectionState == .connected else {
-            pendingMessages.append(PendingMessage(message: message, text: text, imageData: imageData))
+        // During a call, route through WebSocket (may need to queue if connecting)
+        if callState.isPresented {
+            if connectionState == .connected {
+                sendToGemini(text: text, imageData: imageData, message: message)
+            } else {
+                // Queue for when WebSocket connects
+                pendingMessages.append(PendingMessage(message: message, text: text, imageData: imageData))
+                if connectionState == .disconnected {
+                    connect(mode: .audio)
+                }
+            }
             return
         }
 
+        // Not in a call — send directly via REST (GeminiService routes automatically)
         sendToGemini(text: text, imageData: imageData, message: message)
     }
 
@@ -801,7 +812,7 @@ extension ChatViewModel: GeminiServiceDelegate {
                 callKitManager?.reportConnected()
             }
         }
-        if pendingVoiceStart {
+        if pendingVoiceStart, geminiService?.currentMode == .audio {
             if !callKitEnabled {
                 startAudioCapture()
                 callState.isListening = true
@@ -816,9 +827,8 @@ extension ChatViewModel: GeminiServiceDelegate {
         isTyping = false
         if callState.isPresented {
             pauseCallTimer()
-        }
-        if callState.isPresented {
             pendingVoiceStart = true
+            connect(mode: .audio)
         }
     }
 
@@ -833,6 +843,17 @@ extension ChatViewModel: GeminiServiceDelegate {
     }
 
     func geminiService(_ service: GeminiService, didReceiveTranscript transcript: String, isFinal: Bool) {
+        // Output transcript: what the AI said (speech-to-text of AI audio)
+        // In audio mode, show as assistant message so user can read it
+        guard geminiService?.currentMode == .audio else { return }
+        let response = ChatMessage(role: .assistant, text: transcript, status: .sent)
+        insertMessage(response)
+        messages.append(response)
+        markLatestUserMessageRead()
+    }
+
+    func geminiService(_ service: GeminiService, didReceiveInputTranscript transcript: String, isFinal: Bool) {
+        // Input transcript: what the user said (speech-to-text of user audio)
         lastTranscriptText = transcript
         updateDraftMessage(text: transcript, isFinal: isFinal)
         if isFinal {

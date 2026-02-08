@@ -7,11 +7,15 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		EC0D25632F38F1C70028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB97B2F36AF4900904A9F /* heard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = heard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB9DC2F37CEE700904A9F /* heard-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "heard-Info.plist"; sourceTree = "<group>"; };
 		EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CBAD72F37DDAD00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		EC7C41422F38EE55009FB9AF /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		EC7C41FF2F38FF00009FB9AF /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -46,9 +50,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		EC0D25672F38F1C70028674C /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EC0D26012F390AEF0028674C /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		EC5CB9722F36AF4900904A9F = {
 			isa = PBXGroup;
 			children = (
+				EC7C41FF2F38FF00009FB9AF /* Secrets.xcconfig */,
 				EC5CB9DC2F37CEE700904A9F /* heard-Info.plist */,
 				EC5CB97D2F36AF4900904A9F /* . */,
 				EC5CB97C2F36AF4900904A9F /* Products */,
@@ -74,6 +89,11 @@
 			sourceTree = "<group>";
 		};
 		EC5CBADA2F37DDAD00904A9F /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EC7C41462F38EE55009FB9AF /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -132,16 +152,28 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
-					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
+					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC0D25672F38F1C70028674C /* Products */;
+					ProjectRef = EC0D25632F38F1C70028674C /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC7C41462F38EE55009FB9AF /* Products */;
+					ProjectRef = EC7C41422F38EE55009FB9AF /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC0D26012F390AEF0028674C /* Products */;
+					ProjectRef = EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = EC5CBADA2F37DDAD00904A9F /* Products */;
 					ProjectRef = EC5CBAD72F37DDAD00904A9F /* HeardChef.xcodeproj */;
 				},
 				{
-					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
-					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
+					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -290,6 +322,7 @@
 		};
 		EC5CB9872F36AF4B00904A9F /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = EC7C41FF2F38FF00009FB9AF /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -335,6 +368,7 @@
 		};
 		EC5CB9882F36AF4B00904A9F /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = EC7C41FF2F38FF00009FB9AF /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

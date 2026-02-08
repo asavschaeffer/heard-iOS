@@ -70,7 +70,16 @@ final class ChatMessage {
     var mediaUTType: String?
     var statusRaw: String
     @Attribute(.externalStorage)
-    var reactions: [String]
+    private var reactionsData: String = ""
+    
+    var reactions: [String] {
+        get {
+            reactionsData.isEmpty ? [] : reactionsData.components(separatedBy: ",")
+        }
+        set {
+            reactionsData = newValue.joined(separator: ",")
+        }
+    }
     var isDraft: Bool
     var createdAt: Date
     var updatedAt: Date
@@ -122,7 +131,7 @@ final class ChatMessage {
         self.mediaFilename = mediaFilename
         self.mediaUTType = mediaUTType
         self.statusRaw = status.rawValue
-        self.reactions = reactions
+        self.reactionsData = reactions.joined(separator: ",")
         self.isDraft = isDraft
         self.createdAt = createdAt
         self.updatedAt = updatedAt
