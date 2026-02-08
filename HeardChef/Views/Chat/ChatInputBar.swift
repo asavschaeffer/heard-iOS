@@ -6,9 +6,12 @@ struct ChatInputBar: View {
     let isDictating: Bool
     let onAddAttachment: () -> Void
     let onToggleDictation: () -> Void
-    let onStartVoice: () -> Void
     let onSend: (String) -> Void
-    
+
+    private var canSend: Bool {
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasAttachment
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
             Button {
@@ -18,13 +21,13 @@ struct ChatInputBar: View {
                     .font(.title2)
                     .foregroundStyle(.gray)
             }
-            
+
             TextField("Message Chef...", text: $inputText, axis: .vertical)
                 .padding(10)
                 .background(Color(.systemGray6))
                 .cornerRadius(20)
                 .lineLimit(1...5)
-            
+
             Button {
                 onToggleDictation()
             } label: {
@@ -35,24 +38,15 @@ struct ChatInputBar: View {
                     .background(Color(.systemGray6), in: Circle())
             }
             .accessibilityLabel(isDictating ? "Stop dictation" : "Start dictation")
-            
-            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasAttachment {
-                Button {
-                    onStartVoice()
-                } label: {
-                    Image(systemName: "mic.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.orange)
-                }
-            } else {
-                Button {
-                    onSend(inputText)
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.blue)
-                }
+
+            Button {
+                onSend(inputText)
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(canSend ? .blue : Color(.systemGray4))
             }
+            .disabled(!canSend)
         }
         .padding()
         .background(.bar)

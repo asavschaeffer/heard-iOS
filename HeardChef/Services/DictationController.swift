@@ -10,7 +10,7 @@ final class DictationController: ObservableObject {
     @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
 
     private let recognizer = SFSpeechRecognizer()
-    private let audioEngine = AVAudioEngine()
+    private var audioEngine: AVAudioEngine?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
 
@@ -23,6 +23,14 @@ final class DictationController: ObservableObject {
         authorizationStatus = status
     }
 
+    private func requestMicrophoneAccess() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+    }
+
     func toggleDictation() async {
         if isRecording {
             stop()
@@ -32,19 +40,49 @@ final class DictationController: ObservableObject {
     }
 
     func start() async {
+        // 1. Request speech recognition permission
         if authorizationStatus == .notDetermined {
             await requestAuthorization()
         }
-        guard authorizationStatus == .authorized else { return }
+        guard authorizationStatus == .authorized else {
+            print("[Dictation] Speech recognition not authorized: \(authorizationStatus.rawValue)")
+            return
+        }
+
+        // 2. Request microphone permission
+        let micGranted = await requestMicrophoneAccess()
+        guard micGranted else {
+            print("[Dictation] Microphone permission denied")
+            return
+        }
+
+        guard recognizer?.isAvailable == true else {
+            print("[Dictation] Speech recognizer not available")
+            return
+        }
 
         stop()
         transcript = ""
 
+        // 3. Configure audio session
+        let session = AVAudioSession.sharedInstance()
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setActive(true)
         } catch {
+            print("[Dictation] Audio session error: \(error.localizedDescription)")
+        }
+
+        // 4. Create a fresh audio engine each time (avoids stale input node state)
+        let engine = AVAudioEngine()
+        audioEngine = engine
+
+        let inputNode = engine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+        guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+            print("[Dictation] No microphone input available (format: \(recordingFormat))")
+            audioEngine = nil
             return
         }
 
@@ -52,39 +90,44 @@ final class DictationController: ObservableObject {
         request.shouldReportPartialResults = true
         recognitionRequest = request
 
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
 
-        audioEngine.prepare()
+        engine.prepare()
         do {
-            try audioEngine.start()
+            try engine.start()
         } catch {
+            print("[Dictation] Audio engine start error: \(error)")
             stop()
             return
         }
 
         recognitionTask = recognizer?.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
-            if let result {
-                self.transcript = result.bestTranscription.formattedString
-            }
-            if error != nil || (result?.isFinal ?? false) {
-                self.stop()
+            Task { @MainActor in
+                guard let self else { return }
+                if let result {
+                    self.transcript = result.bestTranscription.formattedString
+                }
+                if let error {
+                    print("[Dictation] Recognition error: \(error)")
+                    self.stop()
+                } else if result?.isFinal == true {
+                    self.stop()
+                }
             }
         }
 
         isRecording = true
+        print("[Dictation] Started recording (\(recordingFormat.sampleRate) Hz)")
     }
 
     func stop() {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
+        if let engine = audioEngine, engine.isRunning {
+            engine.stop()
+            engine.inputNode.removeTap(onBus: 0)
         }
+        audioEngine = nil
         recognitionRequest?.endAudio()
         recognitionRequest = nil
         recognitionTask?.cancel()

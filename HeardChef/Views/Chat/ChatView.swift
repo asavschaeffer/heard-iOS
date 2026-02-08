@@ -144,7 +144,6 @@ struct ChatView: View {
                 isDictating: dictationController.isRecording,
                 onAddAttachment: { showAttachmentMenu = true },
                 onToggleDictation: handleDictationToggle,
-                onStartVoice: { viewModel.startVoiceSession() },
                 onSend: { text in
                     viewModel.sendMessage(text, attachment: selectedAttachment)
                     inputText = ""

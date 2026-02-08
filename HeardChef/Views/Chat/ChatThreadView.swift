@@ -24,6 +24,7 @@ struct ChatThreadView: View {
                 }
                 .padding()
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.count) {
                 if let lastId = messages.last?.id {
                     withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
