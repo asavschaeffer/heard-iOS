@@ -71,7 +71,7 @@ For local builds, ensure your Gemini API key is configured:
 
 ```bash
 # Edit secrets file
-open HeardChef/Secrets.xcconfig
+open app/Secrets.xcconfig
 # Replace placeholder with your actual Gemini key
 ```
 

@@ -25,14 +25,14 @@ jobs:
           
       - name: Install CocoaPods (if needed)
         run: |
-          cd HeardChef
+          cd app
           if [ -f "Podfile" ]; then
             pod install
           fi
 
       - name: Create Secrets.xcconfig
         run: |
-          cd HeardChef
+          cd app
           cat > Secrets.xcconfig << EOF
           // Gemini API Key from GitHub Secrets
           GEMINI_API_KEY = ${{ secrets.GEMINI_API_KEY }}
@@ -59,7 +59,7 @@ jobs:
           
       - name: Build Archive
         run: |
-          cd HeardChef
+          cd app
           echo "Building iOS archive..."
 
           # Build the archive
@@ -79,7 +79,7 @@ jobs:
           
       - name: Export IPA
         run: |
-          cd HeardChef
+          cd app
           echo "Exporting IPA from archive..."
           
           # Create export options
@@ -119,7 +119,7 @@ jobs:
         if: github.event_name == 'push'
         uses: apple-actions/upload-testflight-build@v1
         with:
-          app-path: HeardChef/build/heard.ipa
+          app-path: app/build/heard.ipa
           issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_KEY }}
           api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
@@ -128,7 +128,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: apple-actions/upload-testflight-build@v1
         with:
-          app-path: HeardChef/build/heard.ipa
+          app-path: app/build/heard.ipa
           issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_KEY }}
           api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
@@ -146,6 +146,6 @@ jobs:
         with:
           name: ios-build
           path: |
-            HeardChef/build/heard.ipa
-            HeardChef/build/heard.app.dSYM.zip
+            app/build/heard.ipa
+            app/build/heard.app.dSYM.zip
           retention-days: 30

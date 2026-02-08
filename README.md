@@ -7,7 +7,7 @@
 > **"Heard, chef!"** - this AI definitely will not say "you're absolutely right!"
 
 <div align="center">
-  <img src="assets/app-icon-template.png" alt="Heard, Chef" width="35%">
+  <img src="design/app-icon-template.png" alt="Heard, Chef" width="35%">
 </div>
 
 ## Overview
@@ -105,7 +105,7 @@ cd heard-chef
 
 ```
 
-_Note: If the `.xcodeproj` file is not tracked, create a new iOS App in Xcode, select "SwiftData" for storage, and drag the `HeardChef/` folder into the project navigator._
+_Note: If the `.xcodeproj` file is not tracked, create a new iOS App in Xcode, select "SwiftData" for storage, and drag the `app/` folder into the project navigator._
 
 ### 2. API Key Configuration
 
