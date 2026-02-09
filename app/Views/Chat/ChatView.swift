@@ -87,10 +87,6 @@ struct ChatView: View {
     private func handleSelectedItemChange() {
         guard selectedItem != nil else { return }
         Task {
-            // TODO: Fix PhotosPickerItem compatibility for iOS 18.6
-            // if let attachment = try? await ChatAttachmentService.loadFromPhotos(item: selectedItem!) {
-            //     selectedAttachment = attachment
-            // }
             selectedItem = nil
         }
     }
@@ -234,9 +230,7 @@ struct ChatView: View {
     }
     
     private func handleRetry(_ message: ChatMessage) {
-        // Use the specific retryMessage method on ChatViewModel
-        let chatViewModel = viewModel as! ChatViewModel
-        chatViewModel.retryMessage(message)
+        viewModel.retryMessage(message)
     }
 }
 

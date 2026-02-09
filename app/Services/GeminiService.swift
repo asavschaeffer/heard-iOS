@@ -1258,7 +1258,7 @@ class GeminiService: NSObject {
         let recipes = Recipe.list(tag: tag, in: modelContext)
 
         if recipes.isEmpty {
-            let message = tag != nil ? "No recipes with tag '\(tag!)'" : "No recipes saved yet"
+            let message = if let tag { "No recipes with tag '\(tag)'" } else { "No recipes saved yet" }
             return .success(id: call.id, name: call.name, message: message, data: ["count": 0, "recipes": []])
         }
 

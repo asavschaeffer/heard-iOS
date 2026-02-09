@@ -80,6 +80,12 @@ class ChatViewModel: ObservableObject {
         observeAudioSession()
     }
 
+    deinit {
+        audioObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        audioObservers.removeAll()
+        callTimer?.invalidate()
+    }
+
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
         self.geminiService = GeminiService(modelContext: context)

@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+import OSLog
+
+private let logger = Logger(subsystem: "com.heardchef", category: "App")
 
 @main
 struct HeardChefApp: App {
@@ -17,7 +20,10 @@ struct HeardChefApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            logger.error("Failed to create ModelContainer: \(error.localizedDescription)")
+            // Return in-memory container as fallback
+            let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            return try! ModelContainer(for: schema, configurations: [fallbackConfig])
         }
     }()
 
