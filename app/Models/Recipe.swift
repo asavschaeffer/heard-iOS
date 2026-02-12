@@ -190,8 +190,24 @@ final class RecipeIngredient {
             return nil
         }
 
-        let quantity = args["quantity"] as? Double
-            ?? (args["quantity"] as? Int).map { Double($0) }
+        let quantity: Double? = {
+            if let raw = args["quantity"] {
+                if let qty = raw as? Double {
+                    return qty
+                }
+                if let qty = raw as? Int {
+                    return Double(qty)
+                }
+                if let qtyStr = raw as? String {
+                    let trimmed = qtyStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty {
+                        return nil
+                    }
+                    return Double(trimmed)
+                }
+            }
+            return nil
+        }()
 
         var unit: Unit? = nil
         if let unitStr = args["unit"] as? String {
