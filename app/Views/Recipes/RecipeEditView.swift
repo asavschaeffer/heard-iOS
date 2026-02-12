@@ -9,6 +9,7 @@ struct RecipeEditView: View {
 
     @State private var name = ""
     @State private var description = ""
+    @State private var cookingTemperature = ""
     @State private var ingredients: [RecipeIngredient] = []
     @State private var steps: [RecipeStep] = []
     @State private var prepTime: Int?
@@ -130,6 +131,14 @@ struct RecipeEditView: View {
                     .frame(width: 60)
                 Text("min")
                     .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Text("Cooking Temp")
+                Spacer()
+                TextField("e.g. 350F", text: $cookingTemperature)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 140)
             }
 
             HStack {
@@ -311,6 +320,7 @@ struct RecipeEditView: View {
 
         name = recipe.name
         description = recipe.descriptionText ?? ""
+        cookingTemperature = recipe.cookingTemperature ?? ""
         ingredients = recipe.ingredients
         steps = recipe.steps
         prepTime = recipe.prepTime
@@ -336,6 +346,9 @@ struct RecipeEditView: View {
             recipe.name = trimmedName
             recipe.normalizedName = Recipe.normalize(trimmedName)
             recipe.descriptionText = description.isEmpty ? nil : description
+            recipe.cookingTemperature = cookingTemperature.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil
+                : cookingTemperature.trimmingCharacters(in: .whitespacesAndNewlines)
             recipe.ingredients = ingredients
             recipe.steps = filteredSteps
             recipe.prepTime = prepTime
@@ -349,6 +362,7 @@ struct RecipeEditView: View {
             let newRecipe = Recipe(
                 name: trimmedName,
                 description: description.isEmpty ? nil : description,
+                cookingTemperature: cookingTemperature,
                 ingredients: ingredients,
                 steps: filteredSteps,
                 prepTime: prepTime,

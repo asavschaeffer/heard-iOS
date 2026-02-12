@@ -161,6 +161,8 @@ enum RecipeTools {
             properties: [
                 "name": .string("Recipe name"),
                 "description": .string("Description"),
+                "notes": .string("Freeform notes: variations, tips, pairings, substitutions (Optional)"),
+                "cookingTemperature": .string("Cooking temperature, e.g. 350F, 180C, medium-high (Optional)"),
                 "ingredients": .string("JSON array: [{name, quantity?, unit?, preparation?}]"),
                 "steps": .string("JSON array: [string] or [{instruction, durationMinutes?}]"),
                 "prepTime": .number("Minutes"),
@@ -183,6 +185,8 @@ enum RecipeTools {
                 "name": .string("Name of recipe to update"),
                 "newName": .string("New name"),
                 "description": .string("New description"),
+                "notes": .string("New notes. Use empty string to clear."),
+                "cookingTemperature": .string("New cooking temperature. Use empty string to clear."),
                 "ingredients": .string("New JSON array (replaces old list)"),
                 "steps": .string("New JSON array (replaces old list)"),
                 "prepTime": .number("New prep time"),

@@ -142,6 +142,10 @@ struct RecipeDetailView: View {
                 StatBadge(title: "Serves", value: "\(servings)", icon: "person.2")
             }
 
+            if let temp = recipe.cookingTemperature, !temp.isEmpty {
+                StatBadge(title: "Temp", value: temp, icon: "thermometer.medium")
+            }
+
             Spacer()
         }
     }

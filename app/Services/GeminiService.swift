@@ -1138,6 +1138,8 @@ class GeminiService: NSObject {
 
         // Parse optional parameters
         let description = call.string("description")
+        let notes = call.string("notes")
+        let cookingTemperature = call.string("cookingTemperature")
         let prepTime = call.int("prepTime")
         let cookTime = call.int("cookTime")
         let servings = call.int("servings")
@@ -1159,6 +1161,8 @@ class GeminiService: NSObject {
         let recipe = Recipe(
             name: name,
             description: description,
+            notes: notes,
+            cookingTemperature: cookingTemperature,
             ingredients: recipeIngredients,
             steps: recipeSteps,
             prepTime: prepTime,
@@ -1197,6 +1201,12 @@ class GeminiService: NSObject {
         // Update simple fields
         if let newName = call.string("newName") { changes["name"] = newName }
         if let description = call.string("description") { changes["description"] = description }
+        if call.arguments.keys.contains("notes") {
+            changes["notes"] = call.string("notes") ?? ""
+        }
+        if call.arguments.keys.contains("cookingTemperature") {
+            changes["cookingTemperature"] = call.string("cookingTemperature") ?? ""
+        }
         if let prepTime = call.int("prepTime") { changes["prepTime"] = prepTime }
         if let cookTime = call.int("cookTime") { changes["cookTime"] = cookTime }
         if let servings = call.int("servings") { changes["servings"] = servings }
@@ -1269,6 +1279,7 @@ class GeminiService: NSObject {
             return [
                 "name": recipe.name,
                 "description": recipe.descriptionText ?? "",
+                "cookingTemperature": recipe.cookingTemperature ?? "",
                 "canMake": canMake,
                 "missingCount": missing,
                 "totalTime": recipe.formattedTotalTime ?? "Unknown",
@@ -1402,6 +1413,8 @@ class GeminiService: NSObject {
             data: [
                 "name": recipe.name,
                 "description": recipe.descriptionText ?? "",
+                "notes": recipe.notes ?? "",
+                "cookingTemperature": recipe.cookingTemperature ?? "",
                 "ingredients": ingredientList,
                 "steps": stepList,
                 "missingCount": missing.count,

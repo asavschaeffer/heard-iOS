@@ -286,6 +286,12 @@ final class Recipe {
     /// Optional description
     var descriptionText: String?
 
+    /// Freeform notes for variations, tips, pairings, and chef context.
+    var notes: String?
+
+    /// Optional cooking temperature (e.g. "350F", "180C", "medium-high").
+    var cookingTemperature: String?
+
     /// Proper Relational Storage. NO JSON BLOBS.
     @Relationship(deleteRule: .cascade, inverse: \RecipeIngredient.recipe)
     var ingredients: [RecipeIngredient]
@@ -391,6 +397,8 @@ final class Recipe {
         id: UUID = UUID(),
         name: String,
         description: String? = nil,
+        notes: String? = nil,
+        cookingTemperature: String? = nil,
         ingredients: [RecipeIngredient] = [],
         steps: [RecipeStep] = [],
         prepTime: Int? = nil,
@@ -405,6 +413,18 @@ final class Recipe {
         self.name = name.trimmingCharacters(in: .whitespaces)
         self.normalizedName = Recipe.normalize(name)
         self.descriptionText = description?.trimmingCharacters(in: .whitespaces)
+        if let notes {
+            let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+        } else {
+            self.notes = nil
+        }
+        if let cookingTemperature {
+            let trimmedTemperature = cookingTemperature.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.cookingTemperature = trimmedTemperature.isEmpty ? nil : trimmedTemperature
+        } else {
+            self.cookingTemperature = nil
+        }
         self.ingredients = ingredients
         self.steps = steps
         self.prepTime = prepTime.map { max(0, $0) }
@@ -439,7 +459,16 @@ final class Recipe {
             self.normalizedName = Recipe.normalize(newName)
         }
         if let newDesc = changes["description"] as? String {
-            self.descriptionText = newDesc.isEmpty ? nil : newDesc.trimmingCharacters(in: .whitespaces)
+            let trimmedDesc = newDesc.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.descriptionText = trimmedDesc.isEmpty ? nil : trimmedDesc
+        }
+        if let newNotes = changes["notes"] as? String {
+            let trimmedNotes = newNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+        }
+        if let newCookingTemperature = changes["cookingTemperature"] as? String {
+            let trimmedTemperature = newCookingTemperature.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.cookingTemperature = trimmedTemperature.isEmpty ? nil : trimmedTemperature
         }
         if let newPrepTime = changes["prepTime"] as? Int {
             self.prepTime = max(0, newPrepTime)
@@ -662,6 +691,8 @@ extension Recipe {
         Recipe schema:
         - name: String (required) - Recipe name
         - description: String (optional) - Brief description of the dish
+        - notes: String (optional) - Freeform text for variations, tips, pairings, substitutions, or chef's notes
+        - cookingTemperature: String (optional) - Target cooking temperature like "350F", "180C", or "medium-high"
         - prepTime: Number (optional) - Preparation time in minutes
         - cookTime: Number (optional) - Cooking time in minutes
         - servings: Number (optional) - Number of servings
@@ -682,6 +713,7 @@ extension Recipe {
         - Names are matched case-insensitively
         - Ingredients are matched to inventory using normalized names
         - Tags should be lowercase
+        - Use notes for useful freeform context that doesn't fit structured fields
         """
     }
 }
