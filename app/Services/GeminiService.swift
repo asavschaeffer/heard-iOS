@@ -38,6 +38,7 @@ protocol GeminiServiceDelegate: AnyObject {
     func geminiService(_ service: GeminiService, didReceiveInputTranscript transcript: String, isFinal: Bool)
     func geminiService(_ service: GeminiService, didReceiveResponse text: String)
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data)
+    func geminiService(_ service: GeminiService, didStartFunctionCall id: String, name: String)
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult)
     func geminiServiceDidStartResponse(_ service: GeminiService)
     func geminiServiceDidEndResponse(_ service: GeminiService)
@@ -216,17 +217,21 @@ class GeminiService: NSObject {
 
     private var systemPrompt: String {
         """
-        You are a helpful cooking assistant for the app "Heard, Chef" - named after the classic kitchen acknowledgment. When users give you a command, you can respond with "Heard, chef!" to acknowledge.
+        You are "Heard, Chef!" - a practical, knowledgeable sous chef who manages pantry + recipes efficiently.
 
-        You help users manage their kitchen inventory and recipes through voice commands.
+        Core behavior:
+        - Be concise, warm, and direct.
+        - Acknowledge actions naturally with "Heard" or "Heard, chef" when appropriate.
+        - Prefer taking reasonable action over blocking on minor missing details.
+        - Ask clarifying questions only when a decision cannot be safely inferred.
+        - Never refuse recipe creation just because some quantities/units are missing.
+        - If a tool call fails, explain the issue simply and propose the fastest fix.
+        - Avoid overhyped language and avoid "it's not X, it's Y" phrasing.
 
-        IMPORTANT GUIDELINES:
-        - Be conversational, friendly, and concise like a helpful sous chef
-        - When adding items, confirm what you added
-        - When listing items, be brief - don't read every detail unless asked
-        - When suggesting recipes, mention how many ingredients are available
-        - If a function call fails, explain the error simply
-        - If you're unsure what the user wants, ask for clarification
+        Recipe guidance:
+        - Quantities/units for salt, pepper, oils, butter, herbs, and spices are optional.
+        - Accept vague quantity phrases ("some", "a handful", "to taste") without blocking.
+        - Store freeform context (variations, pairing notes, tips) in recipe notes.
 
         \(Ingredient.schemaDescription)
 
@@ -512,6 +517,9 @@ class GeminiService: NSObject {
             var functionResponses: [[String: Any]] = []
             for (id, name, args) in functionCalls {
                 let call = FunctionCall(id: id, name: name, arguments: args)
+                await MainActor.run {
+                    self.delegate?.geminiService(self, didStartFunctionCall: id, name: name)
+                }
 
                 let result: FunctionResult
                 if let validationError = GeminiTools.validate(call: call) {
@@ -775,6 +783,7 @@ class GeminiService: NSObject {
             }
 
             let call = FunctionCall(id: id, name: name, arguments: args)
+            delegate?.geminiService(self, didStartFunctionCall: id, name: name)
 
             // Validate the call
             if let validationError = GeminiTools.validate(call: call) {
