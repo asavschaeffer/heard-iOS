@@ -27,7 +27,9 @@ struct ChatMessageBubble: View {
                     VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
                         if let text = message.text {
                             Text(text)
-                                .padding(12)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 11)
+                                .padding(.bottom, isGroupEnd ? 13 : 11)
                                 .background(bubbleBackground)
                                 .foregroundStyle(message.role.isUser ? .white : .primary)
                                 .opacity(message.isDraft ? 0.6 : 1.0)
@@ -251,22 +253,28 @@ struct BubbleTailShape: Shape {
     let isUser: Bool
     
     func path(in rect: CGRect) -> Path {
-        let tailWidth: CGFloat = 8
+        let tailWidth: CGFloat = 7
         let tailHeight: CGFloat = 8
         let cornerRadius: CGFloat = 16
-        let tailOffset: CGFloat = 4
+        let tailOffset: CGFloat = 10
         
         var bubbleRect = rect
         bubbleRect.size.height -= tailHeight
         
         var path = Path(roundedRect: bubbleRect, cornerRadius: cornerRadius)
-        
-        let tailX = isUser ? bubbleRect.maxX - tailOffset : bubbleRect.minX + tailOffset
-        let tailTipX = isUser ? tailX + tailWidth : tailX - tailWidth
-        
-        path.move(to: CGPoint(x: tailX, y: bubbleRect.maxY))
-        path.addLine(to: CGPoint(x: tailTipX, y: bubbleRect.maxY + tailHeight))
-        path.addLine(to: CGPoint(x: tailX, y: bubbleRect.maxY))
+
+        let baseStartX = isUser
+            ? bubbleRect.maxX - tailOffset - tailWidth
+            : bubbleRect.minX + tailOffset
+        let baseEndX = isUser
+            ? bubbleRect.maxX - tailOffset
+            : bubbleRect.minX + tailOffset + tailWidth
+        let tipX = isUser ? baseEndX + tailWidth : baseStartX - tailWidth
+
+        path.move(to: CGPoint(x: baseStartX, y: bubbleRect.maxY))
+        path.addLine(to: CGPoint(x: tipX, y: bubbleRect.maxY + tailHeight))
+        path.addLine(to: CGPoint(x: baseEndX, y: bubbleRect.maxY))
+        path.closeSubpath()
         
         return path
     }

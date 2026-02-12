@@ -48,8 +48,14 @@ struct ChatThreadView: View {
         let nextMessage = index + 1 < messages.count ? messages[index + 1] : nil
         let previousMessage = index > 0 ? messages[index - 1] : nil
         let isGroupEnd = nextMessage?.role.isUser != message.role.isUser
+        let latestUserMessageID = messages.last(where: { $0.role.isUser })?.id
+        let isMostRecentUserMessage = message.id == latestUserMessageID
         let showTimestamp = shouldShowTimestamp(for: message, previous: previousMessage)
-        let statusText = statusText(for: message, isGroupEnd: isGroupEnd)
+        let statusText = statusText(
+            for: message,
+            isGroupEnd: isGroupEnd,
+            isMostRecentUserMessage: isMostRecentUserMessage
+        )
 
         if showTimestamp {
             HStack {
@@ -104,8 +110,12 @@ struct ChatThreadView: View {
         Self.timestampFormatter.string(from: date)
     }
 
-    private func statusText(for message: ChatMessage, isGroupEnd: Bool) -> String? {
-        guard message.role.isUser, isGroupEnd else { return nil }
+    private func statusText(
+        for message: ChatMessage,
+        isGroupEnd: Bool,
+        isMostRecentUserMessage: Bool
+    ) -> String? {
+        guard message.role.isUser, isGroupEnd, isMostRecentUserMessage else { return nil }
         switch message.status {
         case .sending:
             return "Sending..."
@@ -162,11 +172,14 @@ private struct ToolCallChipRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
                 Image(systemName: statusIcon)
+                    .font(.caption)
                     .foregroundStyle(statusColor)
+                    .frame(width: 14, height: 14, alignment: .center)
                 Text(chip.summary)
                     .font(.caption)
+                    .baselineOffset(0.8)
                     .foregroundStyle(.primary)
                 Spacer()
                 if chip.details != nil {
@@ -174,6 +187,7 @@ private struct ToolCallChipRow: View {
                         onToggleExpand()
                     }
                     .font(.caption2)
+                    .baselineOffset(0.8)
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                 }
