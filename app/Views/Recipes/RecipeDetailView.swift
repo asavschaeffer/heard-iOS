@@ -11,6 +11,7 @@ struct RecipeDetailView: View {
     @State private var showingEditSheet = false
     @State private var currentStep = 0
     @State private var showingCookingMode = false
+    @State private var notesExpanded = true
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,11 @@ struct RecipeDetailView: View {
 
                         // Quick stats
                         statsSection
+
+                        if let notes = recipe.notes, !notes.isEmpty {
+                            Divider()
+                            notesSection(notes)
+                        }
 
                         Divider()
 
@@ -186,6 +192,21 @@ struct RecipeDetailView: View {
 
     private func isIngredientAvailable(_ ingredient: RecipeIngredient) -> Bool {
         inventory.contains { $0.normalizedName == ingredient.normalizedName }
+    }
+
+    @ViewBuilder
+    private func notesSection(_ notes: String) -> some View {
+        DisclosureGroup(isExpanded: $notesExpanded) {
+            Text(notes)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 6)
+        } label: {
+            Label("Chef's Notes", systemImage: "note.text")
+                .font(.title3)
+                .fontWeight(.semibold)
+        }
     }
 
     // MARK: - Steps Section

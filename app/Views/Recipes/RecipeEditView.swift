@@ -9,6 +9,7 @@ struct RecipeEditView: View {
 
     @State private var name = ""
     @State private var description = ""
+    @State private var notes = ""
     @State private var cookingTemperature = ""
     @State private var ingredients: [RecipeIngredient] = []
     @State private var steps: [RecipeStep] = []
@@ -103,6 +104,24 @@ struct RecipeEditView: View {
 
             TextField("Description (optional)", text: $description, axis: .vertical)
                 .lineLimit(2...4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Chef's Notes (optional)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                ZStack(alignment: .topLeading) {
+                    if notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Add variations, tips, wine pairings...")
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                    }
+
+                    TextEditor(text: $notes)
+                        .frame(minHeight: 100)
+                }
+            }
         }
     }
 
@@ -320,6 +339,7 @@ struct RecipeEditView: View {
 
         name = recipe.name
         description = recipe.descriptionText ?? ""
+        notes = recipe.notes ?? ""
         cookingTemperature = recipe.cookingTemperature ?? ""
         ingredients = recipe.ingredients
         steps = recipe.steps
@@ -346,6 +366,9 @@ struct RecipeEditView: View {
             recipe.name = trimmedName
             recipe.normalizedName = Recipe.normalize(trimmedName)
             recipe.descriptionText = description.isEmpty ? nil : description
+            recipe.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil
+                : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             recipe.cookingTemperature = cookingTemperature.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil
                 : cookingTemperature.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -362,6 +385,7 @@ struct RecipeEditView: View {
             let newRecipe = Recipe(
                 name: trimmedName,
                 description: description.isEmpty ? nil : description,
+                notes: notes,
                 cookingTemperature: cookingTemperature,
                 ingredients: ingredients,
                 steps: filteredSteps,
