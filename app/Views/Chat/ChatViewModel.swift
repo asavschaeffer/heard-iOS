@@ -31,11 +31,26 @@ class ChatViewModel: ObservableObject {
         case error(String)
     }
 
+    enum ToolCallStatus: Equatable {
+        case pending
+        case success
+        case error
+    }
+
+    struct ToolCallChip: Identifiable, Equatable {
+        let id: String
+        let functionName: String
+        var status: ToolCallStatus
+        var summary: String
+        var details: String?
+    }
+
     // MARK: - Published Properties
 
     @Published var connectionState: ConnectionState = .disconnected
     @Published var messages: [ChatMessage] = []
     @Published var isTyping = false
+    @Published var toolCallChips: [ToolCallChip] = []
     @Published var callState = CallSessionState()
     @Published var callDuration: TimeInterval = 0
     @Published var callKitEnabled = true
@@ -711,6 +726,92 @@ class ChatViewModel: ObservableObject {
         print("[Chat] Marked latest user message as Failed")
     }
 
+    private func startToolCallChip(id: String, name: String) {
+        let pending = ToolCallChip(
+            id: id,
+            functionName: name,
+            status: .pending,
+            summary: "Heard, chef! Working...",
+            details: nil
+        )
+        if let index = toolCallChips.firstIndex(where: { $0.id == id }) {
+            toolCallChips[index] = pending
+        } else {
+            toolCallChips.append(pending)
+            if toolCallChips.count > 16 {
+                toolCallChips.removeFirst(toolCallChips.count - 16)
+            }
+        }
+    }
+
+    private func finishToolCallChip(name: String, result: FunctionResult) {
+        let isSuccess = (result.response["success"] as? Bool) == true
+        let summary = isSuccess
+            ? successSummary(functionName: name, response: result.response)
+            : errorSummary(response: result.response)
+        let details = prettyPrintedJSON(result.response)
+
+        if let index = toolCallChips.firstIndex(where: { $0.id == result.id }) {
+            toolCallChips[index].status = isSuccess ? .success : .error
+            toolCallChips[index].summary = summary
+            toolCallChips[index].details = details
+        } else {
+            toolCallChips.append(
+                ToolCallChip(
+                    id: result.id,
+                    functionName: name,
+                    status: isSuccess ? .success : .error,
+                    summary: summary,
+                    details: details
+                )
+            )
+        }
+    }
+
+    private func successSummary(functionName: String, response: [String: Any]) -> String {
+        switch functionName {
+        case "add_ingredient":
+            if let ingredient = response["ingredient"] as? [String: Any],
+               let name = ingredient["name"] as? String {
+                return "Added \(name)"
+            }
+            return "Added item"
+        case "remove_ingredient":
+            return "Removed item"
+        case "create_recipe":
+            if let name = response["name"] as? String {
+                return "Created '\(name)'"
+            }
+            return "Created recipe"
+        case "update_recipe":
+            return "Updated recipe"
+        case "delete_recipe":
+            return "Deleted recipe"
+        case "list_recipes":
+            return "Listed recipes"
+        case "search_recipes":
+            return "Searched recipes"
+        default:
+            return response["message"] as? String ?? "Completed \(functionName)"
+        }
+    }
+
+    private func errorSummary(response: [String: Any]) -> String {
+        if let error = response["error"] as? String, !error.isEmpty {
+            return error
+        }
+        return "Tool call failed"
+    }
+
+    private func prettyPrintedJSON(_ object: [String: Any]) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted]),
+              let json = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return json
+    }
+
     // MARK: - Transcript Handling
 
     private func updateDraftMessage(text: String, isFinal: Bool) {
@@ -884,7 +985,12 @@ extension ChatViewModel: GeminiServiceDelegate {
         geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
     }
 
+    func geminiService(_ service: GeminiService, didStartFunctionCall id: String, name: String) {
+        startToolCallChip(id: id, name: name)
+    }
+
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult) {
+        finishToolCallChip(name: name, result: result)
         geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
     }
 

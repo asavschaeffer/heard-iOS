@@ -117,6 +117,7 @@ struct ChatView: View {
             ChatThreadView(
                 messages: viewModel.messages,
                 isTyping: viewModel.isTyping,
+                toolCallChips: viewModel.toolCallChips,
                 showReadReceipts: settings.showReadReceipts,
                 linkStore: linkStore,
                 onRetry: { message in
