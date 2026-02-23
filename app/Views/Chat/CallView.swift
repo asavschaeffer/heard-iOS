@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct CallView: View {
     @ObservedObject var viewModel: ChatViewModel
@@ -30,7 +29,11 @@ struct CallView: View {
                     if style == .translucentOverlay {
                         onMinimize?()
                     } else {
-                        dismiss()
+                        if let onMinimize {
+                            onMinimize()
+                        } else {
+                            dismiss()
+                        }
                     }
                 } label: {
                     Image(systemName: "chevron.down")
@@ -81,16 +84,9 @@ struct CallView: View {
                     .scaleEffect(viewModel.callState.isSpeaking ? 1.06 : 1.0)
                     .animation(.easeInOut(duration: 0.3).repeatForever(), value: viewModel.callState.isSpeaking)
 
-                if UIImage(named: "app-icon-template") != nil {
-                    Image("app-icon-template")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 90)
-                } else {
-                    Image(systemName: "fork.knife.circle.fill")
-                        .font(.system(size: 90))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
+                Image(systemName: "fork.knife.circle.fill")
+                    .font(.system(size: 90))
+                    .foregroundStyle(.white.opacity(0.9))
             }
 
             Spacer()
@@ -110,9 +106,6 @@ struct CallView: View {
         .background(backgroundView)
         .onAppear {
             viewModel.startVoiceSession()
-        }
-        .onDisappear {
-            viewModel.stopVoiceSession()
         }
     }
 

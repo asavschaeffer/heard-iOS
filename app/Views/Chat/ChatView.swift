@@ -190,6 +190,7 @@ struct ChatView: View {
         CallView(
             viewModel: viewModel,
             style: .fullScreen,
+            onMinimize: { callPresentationStyle = .translucentOverlay },
             onToggleVideo: { toggleVideoMode() },
             onAddAttachment: { showAttachmentMenu = true }
         )
@@ -202,7 +203,11 @@ struct ChatView: View {
             },
             set: { newValue in
                 if !newValue {
-                    viewModel.stopVoiceSession()
+                    if viewModel.callState.isPresented {
+                        callPresentationStyle = .translucentOverlay
+                    } else {
+                        viewModel.stopVoiceSession()
+                    }
                 }
             }
         )
@@ -312,4 +317,3 @@ private struct AttachmentPreview: View {
 #Preview {
     ChatView()
 }
-

@@ -11,8 +11,8 @@ struct CallControlsView: View {
         VStack(spacing: 20) {
             HStack(spacing: 28) {
                 CallControlButton(
-                    title: viewModel.callState.isListening ? "Mute" : "Unmute",
-                    systemImage: viewModel.callState.isListening ? "mic.slash.fill" : "mic.fill",
+                    title: viewModel.isMicrophoneMuted ? "Unmute" : "Mute",
+                    systemImage: viewModel.isMicrophoneMuted ? "mic.fill" : "mic.slash.fill",
                     background: .white.opacity(0.18),
                     foreground: .white,
                     isEnabled: viewModel.connectionState == .connected
@@ -20,15 +20,15 @@ struct CallControlsView: View {
                     viewModel.toggleMute()
                 }
 
-                VStack(spacing: 8) {
-                    AudioRoutePickerView()
-                        .frame(width: 56, height: 56)
-                        .background(Color.white.opacity(0.18), in: Circle())
-                    Text("Audio")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.9))
+                CallControlButton(
+                    title: viewModel.isSpeakerPreferred ? "Speaker" : "Route",
+                    systemImage: viewModel.isSpeakerPreferred ? "speaker.wave.3.fill" : "speaker.slash.fill",
+                    background: .white.opacity(0.18),
+                    foreground: .white,
+                    isEnabled: viewModel.connectionState == .connected
+                ) {
+                    viewModel.toggleSpeaker()
                 }
-                .opacity(viewModel.connectionState == .connected ? 1.0 : 0.6)
 
                 CallControlButton(
                     title: isVideoActive ? "Stop Video" : "Video",
@@ -42,6 +42,16 @@ struct CallControlsView: View {
             }
 
             HStack(spacing: 36) {
+                VStack(spacing: 8) {
+                    AudioRoutePickerView()
+                        .frame(width: 56, height: 56)
+                        .background(Color.white.opacity(0.18), in: Circle())
+                    Text("Route")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .opacity(viewModel.connectionState == .connected ? 1.0 : 0.6)
+
                 CallControlButton(
                     title: "Add",
                     systemImage: "plus",

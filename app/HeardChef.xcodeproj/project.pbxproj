@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		EC06F6842F4CEF8500A6A1F9 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		EC06F6ED2F4D06C400A6A1F9 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC0D25632F38F1C70028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB97B2F36AF4900904A9F /* heard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = heard.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -52,6 +53,11 @@
 
 /* Begin PBXGroup section */
 		EC06F6882F4CEF8500A6A1F9 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EC06F6F12F4D06C400A6A1F9 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -158,8 +164,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
-					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
+					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = EC0D25672F38F1C70028674C /* Products */;
@@ -178,12 +184,16 @@
 					ProjectRef = EC5CBAD72F37DDAD00904A9F /* HeardChef.xcodeproj */;
 				},
 				{
+					ProductGroup = EC06F6F12F4D06C400A6A1F9 /* Products */;
+					ProjectRef = EC06F6ED2F4D06C400A6A1F9 /* HeardChef.xcodeproj */;
+				},
+				{
 					ProductGroup = EC06F6882F4CEF8500A6A1F9 /* Products */;
 					ProjectRef = EC06F6842F4CEF8500A6A1F9 /* HeardChef.xcodeproj */;
 				},
 				{
-					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
-					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
+					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -348,6 +358,10 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "heard-Info.plist";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Heard, Chef uses the camera to let you take photos of ingredients and recipes to add to your collection.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Heard, Chef needs access to your microphone for voice calls and speech recognition features.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Heard, Chef needs access to your photo library so you can attach photos of ingredients and recipes.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Heard, Chef uses speech recognition to transcribe your voice messages and enable voice commands for recipe and inventory management.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -394,6 +408,10 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "heard-Info.plist";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Heard, Chef uses the camera to let you take photos of ingredients and recipes to add to your collection.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Heard, Chef needs access to your microphone for voice calls and speech recognition features.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Heard, Chef needs access to your photo library so you can attach photos of ingredients and recipes.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Heard, Chef uses speech recognition to transcribe your voice messages and enable voice commands for recipe and inventory management.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

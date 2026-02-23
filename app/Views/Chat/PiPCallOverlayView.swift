@@ -106,7 +106,7 @@ private struct CallBarView: View {
                     viewModel.toggleMute()
                 }
             } label: {
-                Image(systemName: viewModel.callState.isListening ? "mic.slash.fill" : "mic.fill")
+                Image(systemName: viewModel.isMicrophoneMuted ? "mic.fill" : "mic.slash.fill")
                     .font(.caption)
                     .foregroundStyle(.white)
                     .frame(width: 28, height: 28)
