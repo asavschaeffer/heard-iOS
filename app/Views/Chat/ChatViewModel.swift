@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
-import AVFoundation
+@preconcurrency import AVFoundation
 import UniformTypeIdentifiers
 import UIKit
 import Combine
@@ -11,6 +11,9 @@ class ChatViewModel: ObservableObject {
 
     enum ChatConfig {
         static let transcriptDebounceInterval: TimeInterval = 0.9
+        static let captureSampleRate: Double = 16_000
+        static let playbackSampleRate: Double = 24_000
+        static let audioLevelReportingRate: Double = 25
     }
 
     struct CallSessionState {
@@ -67,11 +70,23 @@ class ChatViewModel: ObservableObject {
     private var playbackInputFormat: AVAudioFormat?
     private var playbackConverter: AVAudioConverter?
     private var playbackFormat: AVAudioFormat?
-    private var pendingAudioChunks: [Data] = []
     private var pendingMessages: [PendingMessage] = []
-    private var isPlayingAudio = false
+    private var playbackEnqueuedBufferCount = 0
     private var isMicrophoneMuted = false
+    private var capturedAudioChunkCount = 0
+    private var capturedAudioByteCount = 0
+    private var captureTapCallbackCount = 0
+    private var consecutiveSilentCaptureStops = 0
+    private var useVoiceProcessingInput = true
+    private var captureStartedFromCallKit = false
+    private var isAdaptingToRouteChange = false
+    private var lastRouteAdaptationAt: Date?
     private var draftMessageId: UUID?
+    private var assistantTranscriptMessageId: UUID?
+    private var assistantTranscriptBuffer: String = ""
+    private var assistantTextMessageId: UUID?
+    private var assistantTextBuffer: String = ""
+    private var inputTranscriptBuffer: String = ""
     private var lastTranscriptText: String?
     private var transcriptDebounceWorkItem: DispatchWorkItem?
     private var pendingVoiceStart = false
@@ -155,6 +170,7 @@ class ChatViewModel: ObservableObject {
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
         } catch {
             print("Audio Session Error: \(error)")
@@ -165,6 +181,8 @@ class ChatViewModel: ObservableObject {
         let manager = CallKitManager(appName: "Heard, Chef")
         manager.onStartAudio = { [weak self] in
             guard let self else { return }
+            print("[Audio] CallKit activated audio session")
+            self.captureStartedFromCallKit = true
             self.configureAudioSessionForCall()
             if !self.isMicrophoneMuted {
                 self.startAudioCapture()
@@ -172,15 +190,43 @@ class ChatViewModel: ObservableObject {
             self.callState.isListening = !self.isMicrophoneMuted
         }
         manager.onStopAudio = { [weak self] in
+            print("[Audio] CallKit deactivated audio session")
             self?.stopAudioCapture()
             self?.callState.isListening = false
         }
         manager.onMuteChanged = { [weak self] isMuted in
             guard let self else { return }
+            print("[Audio] CallKit mute changed: \(isMuted)")
             self.isMicrophoneMuted = isMuted
             self.callState.isListening = !isMuted
             if !isMuted && self.callState.isPresented && self.audioEngine == nil {
                 self.startAudioCapture()
+            }
+        }
+        manager.onTransactionError = { [weak self] error in
+            guard let self else { return }
+            print("[Audio] CallKit transaction failed, falling back to direct audio path: \(error.localizedDescription)")
+            self.callKitEnabled = false
+            self.useVoiceProcessingInput = false
+            self.callKitManager?.onStartAudio = nil
+            self.callKitManager?.onStopAudio = nil
+            self.callKitManager?.onMuteChanged = nil
+            self.callKitManager?.onTransactionError = nil
+            self.callKitManager = nil
+            self.configureAudioSessionForCall()
+            self.preferSpeaker()
+            if self.callState.isPresented && !self.isMicrophoneMuted {
+                if self.connectionState == .connected {
+                    if self.audioEngine == nil {
+                        self.startAudioCapture()
+                    }
+                    self.callState.isListening = self.audioEngine?.isRunning == true
+                    self.pendingVoiceStart = false
+                } else {
+                    self.pendingVoiceStart = true
+                    self.callState.isListening = false
+                    print("[Audio] Waiting for Gemini connection before starting fallback capture")
+                }
             }
         }
         callKitManager = manager
@@ -189,8 +235,11 @@ class ChatViewModel: ObservableObject {
     private func configureAudioSessionForCall() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            let mode: AVAudioSession.Mode = useVoiceProcessingInput ? .voiceChat : .default
+            try session.setCategory(.playAndRecord, mode: mode, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
+            print("[Audio] Session configured. mode=\(mode.rawValue)")
         } catch {
             print("Audio Session Error: \(error)")
         }
@@ -298,9 +347,34 @@ class ChatViewModel: ObservableObject {
     private func handleRouteChange(_ notification: Notification) {
         let session = AVAudioSession.sharedInstance()
         let outputs = session.currentRoute.outputs
-        if !callKitEnabled {
-            callState.isListening = !isMicrophoneMuted && audioEngine?.isRunning == true && !outputs.isEmpty
+        callState.isListening = !isMicrophoneMuted && audioEngine?.isRunning == true && !outputs.isEmpty
+
+        guard callState.isPresented else { return }
+        let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+        let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) ?? .unknown
+        let reasonDescription: String
+        switch reason {
+        case .newDeviceAvailable: reasonDescription = "newDeviceAvailable"
+        case .oldDeviceUnavailable: reasonDescription = "oldDeviceUnavailable"
+        case .categoryChange: reasonDescription = "categoryChange"
+        case .override: reasonDescription = "override"
+        case .wakeFromSleep: reasonDescription = "wakeFromSleep"
+        case .noSuitableRouteForCategory: reasonDescription = "noSuitableRouteForCategory"
+        case .routeConfigurationChange: reasonDescription = "routeConfigurationChange"
+        case .unknown: reasonDescription = "unknown"
+        @unknown default: reasonDescription = "unhandled(\(reasonValue))"
         }
+        print("[Audio] Route change: \(reasonDescription)")
+
+        let shouldAdapt: Bool
+        switch reason {
+        case .newDeviceAvailable, .oldDeviceUnavailable, .routeConfigurationChange:
+            shouldAdapt = true
+        default:
+            shouldAdapt = false
+        }
+        guard shouldAdapt else { return }
+        adaptToDeviceChange()
     }
 
     private func handleInterruption(_ notification: Notification) {
@@ -376,7 +450,10 @@ class ChatViewModel: ObservableObject {
     // MARK: - Voice Session Management
 
     func startVoiceSession() {
+        print("[UI] Voice session start requested")
         let wasPresented = callState.isPresented
+        if wasPresented { return }
+        captureStartedFromCallKit = false
         callState.isPresented = true
         isMicrophoneMuted = false
         callState.isListening = true
@@ -409,8 +486,10 @@ class ChatViewModel: ObservableObject {
     }
 
     func stopVoiceSession() {
+        print("[UI] Voice session stop requested")
         let wasPresented = callState.isPresented
         callState.isPresented = false
+        captureStartedFromCallKit = false
         // TODO: End Live Activity when Dynamic Island is implemented.
         liveActivityManager.endCallActivity()
         if callKitEnabled {
@@ -425,6 +504,8 @@ class ChatViewModel: ObservableObject {
         stopVideoStreaming()
         cancelTranscriptDebounce()
         finalizeDraftIfNeeded()
+        finalizeAssistantStreamingMessages()
+        inputTranscriptBuffer = ""
         resetCallTimer()
         // Disconnect the audio session; next text send will lazy-reconnect in text mode
         geminiService?.disconnect()
@@ -436,6 +517,7 @@ class ChatViewModel: ObservableObject {
     
     func toggleMute() {
         isMicrophoneMuted.toggle()
+        print("[UI] Microphone \(isMicrophoneMuted ? "muted" : "unmuted")")
         callState.isListening = !isMicrophoneMuted
         if !isMicrophoneMuted && callState.isPresented && audioEngine == nil {
             startAudioCapture()
@@ -451,16 +533,23 @@ class ChatViewModel: ObservableObject {
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
 
-        do {
-            try inputNode.setVoiceProcessingEnabled(true)
-        } catch {
-            print("Audio voice processing enable error: \(error)")
+        if useVoiceProcessingInput {
+            do {
+                try inputNode.setVoiceProcessingEnabled(true)
+                print("[Audio] Voice processing input enabled")
+            } catch {
+                print("[Audio] Voice processing enable failed, using fallback input path: \(error)")
+                useVoiceProcessingInput = false
+            }
+        } else {
+            print("[Audio] Voice processing input disabled (fallback mode)")
         }
 
         let inputFormat = inputNode.inputFormat(forBus: 0)
+        print("[Audio] Starting capture. inputRate=\(Int(inputFormat.sampleRate))Hz channels=\(inputFormat.channelCount)")
         guard let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
-            sampleRate: 16_000,
+            sampleRate: ChatConfig.captureSampleRate,
             channels: 1,
             interleaved: false
         ),
@@ -473,13 +562,17 @@ class ChatViewModel: ObservableObject {
         captureTargetFormat = targetFormat
         audioEngine = engine
 
-        let bufferSize = AVAudioFrameCount(max(512.0, inputFormat.sampleRate / 10.0))
+        let bufferSize = AVAudioFrameCount(max(256.0, inputFormat.sampleRate / ChatConfig.audioLevelReportingRate))
         inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: inputFormat) { [weak self] buffer, _ in
             self?.processAudioBuffer(buffer)
         }
 
         do {
             try engine.start()
+            captureTapCallbackCount = 0
+            capturedAudioChunkCount = 0
+            capturedAudioByteCount = 0
+            print("[Audio] Capture started. targetRate=\(Int(ChatConfig.captureSampleRate))Hz")
         } catch {
             print("Audio Engine Start Error: \(error)")
             inputNode.removeTap(onBus: 0)
@@ -490,6 +583,17 @@ class ChatViewModel: ObservableObject {
     }
 
     private func stopAudioCapture() {
+        if capturedAudioChunkCount > 0 {
+            consecutiveSilentCaptureStops = 0
+            print("[Audio] Capture stopped. callbacks=\(captureTapCallbackCount) chunks=\(capturedAudioChunkCount) bytes=\(capturedAudioByteCount)")
+        } else {
+            consecutiveSilentCaptureStops += 1
+            print("[Audio] Capture stopped with no outgoing chunks (callbacks=\(captureTapCallbackCount))")
+            if callState.isPresented && useVoiceProcessingInput && consecutiveSilentCaptureStops >= 3 {
+                print("[Audio] Switching to non-voice-processing input after repeated zero-chunk stops")
+                useVoiceProcessingInput = false
+            }
+        }
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine?.stop()
         audioEngine = nil
@@ -499,6 +603,11 @@ class ChatViewModel: ObservableObject {
     }
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+        captureTapCallbackCount += 1
+        if captureTapCallbackCount == 1 || captureTapCallbackCount % 50 == 0 {
+            print("[Audio] Tap callback #\(captureTapCallbackCount), frames=\(buffer.frameLength)")
+        }
+
         let frameLength = Int(buffer.frameLength)
         guard frameLength > 0 else { return }
 
@@ -513,8 +622,15 @@ class ChatViewModel: ObservableObject {
         }
 
         guard !isMicrophoneMuted else { return }
+        guard connectionState == .connected else { return }
         guard let pcmData = convertCapturedBufferToPCM16(buffer), !pcmData.isEmpty else {
             return
+        }
+
+        capturedAudioChunkCount += 1
+        capturedAudioByteCount += pcmData.count
+        if capturedAudioChunkCount == 1 || capturedAudioChunkCount % 200 == 0 {
+            print("[Audio] Captured chunk #\(capturedAudioChunkCount), bytes=\(pcmData.count), totalBytes=\(capturedAudioByteCount)")
         }
 
         geminiService?.sendAudio(data: pcmData)
@@ -568,33 +684,13 @@ class ChatViewModel: ObservableObject {
     private func playAudio(data: Data) {
         guard !data.isEmpty else { return }
         setupPlaybackEngineIfNeeded()
-        pendingAudioChunks.append(data)
-
-        if !isPlayingAudio {
-            isPlayingAudio = true
-            playNextAudioChunk()
-        }
-    }
-
-    private func playNextAudioChunk() {
-        guard let next = pendingAudioChunks.first else {
-            isPlayingAudio = false
-            callState.isSpeaking = false
-            return
-        }
-
-        pendingAudioChunks.removeFirst()
-        guard let buffer = makePCMBuffer(from: next) else {
-            playNextAudioChunk()
-            return
-        }
+        guard let buffer = makePCMBuffer(from: data) else { return }
 
         if let engine = playbackEngine, !engine.isRunning {
             do {
                 try engine.start()
             } catch {
                 print("Audio Playback restart error: \(error)")
-                playNextAudioChunk()
                 return
             }
         }
@@ -603,10 +699,10 @@ class ChatViewModel: ObservableObject {
             playbackNode?.play()
         }
 
-        callState.isSpeaking = true
-        playbackNode?.scheduleBuffer(buffer, completionHandler: {
-            Task { @MainActor in
-                self.playNextAudioChunk()
+        incrementPlaybackBufferCount()
+        playbackNode?.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack, completionHandler: { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.decrementPlaybackBufferCount()
             }
         })
     }
@@ -620,7 +716,7 @@ class ChatViewModel: ObservableObject {
 
         guard let inputFormat = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
-            sampleRate: 24_000,
+            sampleRate: ChatConfig.playbackSampleRate,
             channels: 1,
             interleaved: false
         ),
@@ -685,9 +781,9 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    private func stopPlayback() {
-        pendingAudioChunks.removeAll()
-        isPlayingAudio = false
+    private func stopPlayback(clearQueue: Bool = true) {
+        _ = clearQueue
+        playbackEnqueuedBufferCount = 0
         callState.isSpeaking = false
         playbackNode?.stop()
         playbackEngine?.stop()
@@ -696,6 +792,55 @@ class ChatViewModel: ObservableObject {
         playbackInputFormat = nil
         playbackConverter = nil
         playbackFormat = nil
+    }
+
+    private func adaptToDeviceChange() {
+        if isAdaptingToRouteChange {
+            return
+        }
+        if let last = lastRouteAdaptationAt,
+           Date().timeIntervalSince(last) < 1.0 {
+            return
+        }
+        isAdaptingToRouteChange = true
+        defer {
+            isAdaptingToRouteChange = false
+            lastRouteAdaptationAt = Date()
+        }
+
+        let shouldResumeCapture = callState.isPresented &&
+            connectionState == .connected &&
+            !isMicrophoneMuted &&
+            audioEngine != nil
+        let shouldResumePlayback = playbackEngine != nil || playbackEnqueuedBufferCount > 0 || playbackNode?.isPlaying == true
+
+        guard shouldResumeCapture || shouldResumePlayback else { return }
+
+        stopAudioCapture()
+        stopPlayback(clearQueue: false)
+
+        if shouldResumeCapture {
+            startAudioCapture()
+            callState.isListening = !isMicrophoneMuted && audioEngine?.isRunning == true
+        }
+
+        if shouldResumePlayback {
+            setupPlaybackEngineIfNeeded()
+        }
+    }
+
+    private func incrementPlaybackBufferCount() {
+        playbackEnqueuedBufferCount += 1
+        if playbackEnqueuedBufferCount == 1 {
+            callState.isSpeaking = true
+        }
+    }
+
+    private func decrementPlaybackBufferCount() {
+        playbackEnqueuedBufferCount = max(0, playbackEnqueuedBufferCount - 1)
+        if playbackEnqueuedBufferCount == 0 {
+            callState.isSpeaking = false
+        }
     }
 
     // MARK: - Queueing
@@ -996,6 +1141,89 @@ class ChatViewModel: ObservableObject {
 
         updateDraftMessage(text: trimmed, isFinal: true)
         lastTranscriptText = nil
+        inputTranscriptBuffer = ""
+    }
+
+    private func mergeStreamingText(existing: String, incoming: String) -> String {
+        guard !incoming.isEmpty else { return existing }
+        if existing.isEmpty { return incoming }
+        if incoming.hasPrefix(existing) { return incoming }
+        if existing.hasSuffix(incoming) { return existing }
+        return existing + incoming
+    }
+
+    private func updateAssistantTranscriptMessage(chunk: String, isFinal: Bool) {
+        guard !chunk.isEmpty else { return }
+
+        assistantTranscriptBuffer = mergeStreamingText(existing: assistantTranscriptBuffer, incoming: chunk)
+        let text = assistantTranscriptBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        if let messageId = assistantTranscriptMessageId,
+           let index = messages.firstIndex(where: { $0.id == messageId }) {
+            messages[index].updateText(text, isDraft: !isFinal)
+        } else {
+            let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
+            insertMessage(message)
+            messages.append(message)
+            assistantTranscriptMessageId = message.id
+        }
+
+        if isFinal {
+            assistantTranscriptMessageId = nil
+            assistantTranscriptBuffer = ""
+        }
+    }
+
+    private func updateAssistantTextMessage(chunk: String, isFinal: Bool) {
+        guard !chunk.isEmpty else { return }
+
+        assistantTextBuffer = mergeStreamingText(existing: assistantTextBuffer, incoming: chunk)
+        let text = assistantTextBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        if let messageId = assistantTextMessageId,
+           let index = messages.firstIndex(where: { $0.id == messageId }) {
+            messages[index].updateText(text, isDraft: !isFinal)
+        } else {
+            let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
+            insertMessage(message)
+            messages.append(message)
+            assistantTextMessageId = message.id
+        }
+
+        if isFinal {
+            assistantTextMessageId = nil
+            assistantTextBuffer = ""
+        }
+    }
+
+    private func finalizeAssistantStreamingMessages() {
+        if let messageId = assistantTranscriptMessageId,
+           let index = messages.firstIndex(where: { $0.id == messageId }) {
+            let finalText = assistantTranscriptBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if finalText.isEmpty {
+                let message = messages.remove(at: index)
+                modelContext?.delete(message)
+            } else {
+                messages[index].updateText(finalText, isDraft: false)
+            }
+        }
+        assistantTranscriptMessageId = nil
+        assistantTranscriptBuffer = ""
+
+        if let messageId = assistantTextMessageId,
+           let index = messages.firstIndex(where: { $0.id == messageId }) {
+            let finalText = assistantTextBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if finalText.isEmpty {
+                let message = messages.remove(at: index)
+                modelContext?.delete(message)
+            } else {
+                messages[index].updateText(finalText, isDraft: false)
+            }
+        }
+        assistantTextMessageId = nil
+        assistantTextBuffer = ""
     }
 
     private func scheduleTranscriptFinalize() {
@@ -1039,6 +1267,7 @@ class ChatViewModel: ObservableObject {
 extension ChatViewModel: GeminiServiceDelegate {
     func geminiServiceDidConnect(_ service: GeminiService) {
         connectionState = .connected
+        print("[Gemini] Connected. callKitEnabled=\(callKitEnabled) pendingVoiceStart=\(pendingVoiceStart)")
         flushPendingMessages()
         if callState.isPresented {
             startCallTimer()
@@ -1048,7 +1277,7 @@ extension ChatViewModel: GeminiServiceDelegate {
             }
         }
         if pendingVoiceStart, geminiService?.currentMode == .audio {
-            if !callKitEnabled && !isMicrophoneMuted {
+            if (!callKitEnabled || !captureStartedFromCallKit) && !isMicrophoneMuted {
                 startAudioCapture()
             }
             callState.isListening = !isMicrophoneMuted
@@ -1057,19 +1286,27 @@ extension ChatViewModel: GeminiServiceDelegate {
     }
 
     func geminiServiceDidDisconnect(_ service: GeminiService) {
+        let shouldAutoReconnect: Bool = {
+            if case .error = connectionState { return false }
+            return true
+        }()
+        finalizeAssistantStreamingMessages()
         connectionState = .disconnected
         callState.isListening = false
         isTyping = false
         if callState.isPresented {
             pauseCallTimer()
             pendingVoiceStart = true
-            connect(mode: .audio)
+            if shouldAutoReconnect {
+                connect(mode: .audio)
+            }
         }
     }
 
     func geminiService(_ service: GeminiService, didReceiveError error: Error) {
         connectionState = .error(error.localizedDescription)
         isTyping = false
+        finalizeAssistantStreamingMessages()
         markPendingMessagesFailed()
         markLatestUserMessageFailedIfSending()
         if callState.isPresented {
@@ -1078,30 +1315,34 @@ extension ChatViewModel: GeminiServiceDelegate {
     }
 
     func geminiService(_ service: GeminiService, didReceiveTranscript transcript: String, isFinal: Bool) {
+        if isFinal {
+            print("[Gemini] Output transcript final: \(transcript)")
+        }
         // Output transcript: what the AI said (speech-to-text of AI audio)
         // In audio mode, show as assistant message so user can read it
         guard geminiService?.currentMode == .audio else { return }
-        let response = ChatMessage(role: .assistant, text: transcript, status: .sent)
-        insertMessage(response)
-        messages.append(response)
+        updateAssistantTranscriptMessage(chunk: transcript, isFinal: isFinal)
         markLatestUserMessageRead()
     }
 
     func geminiService(_ service: GeminiService, didReceiveInputTranscript transcript: String, isFinal: Bool) {
+        if isFinal {
+            print("[Gemini] Input transcript final: \(transcript)")
+        }
         // Input transcript: what the user said (speech-to-text of user audio)
-        lastTranscriptText = transcript
-        updateDraftMessage(text: transcript, isFinal: isFinal)
+        inputTranscriptBuffer = mergeStreamingText(existing: inputTranscriptBuffer, incoming: transcript)
+        lastTranscriptText = inputTranscriptBuffer
+        updateDraftMessage(text: inputTranscriptBuffer, isFinal: isFinal)
         if isFinal {
             cancelTranscriptDebounce()
+            inputTranscriptBuffer = ""
         } else {
             scheduleTranscriptFinalize()
         }
     }
 
     func geminiService(_ service: GeminiService, didReceiveResponse text: String) {
-        let response = ChatMessage(role: .assistant, text: text, status: .sent)
-        insertMessage(response)
-        messages.append(response)
+        updateAssistantTextMessage(chunk: text, isFinal: false)
         markLatestUserMessageRead()
         geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
     }
@@ -1124,12 +1365,17 @@ extension ChatViewModel: GeminiServiceDelegate {
 
     func geminiServiceDidStartResponse(_ service: GeminiService) {
         isTyping = true
+        finalizeAssistantStreamingMessages()
+        assistantTranscriptMessageId = nil
+        assistantTranscriptBuffer = ""
+        assistantTextMessageId = nil
+        assistantTextBuffer = ""
         markLatestUserMessageSent()
     }
 
     func geminiServiceDidEndResponse(_ service: GeminiService) {
         isTyping = false
+        finalizeAssistantStreamingMessages()
         markLatestUserMessageRead()
     }
 }
-

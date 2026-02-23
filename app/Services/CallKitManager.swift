@@ -16,6 +16,7 @@ final class CallKitManager: NSObject {
     var onStartAudio: (() -> Void)?
     var onStopAudio: (() -> Void)?
     var onMuteChanged: ((Bool) -> Void)?
+    var onTransactionError: ((Error) -> Void)?
 
     init(appName: String) {
         let config = CXProviderConfiguration()
@@ -56,6 +57,9 @@ final class CallKitManager: NSObject {
         callController.request(transaction) { error in
             if let error {
                 print("CallKit transaction error: \(error)")
+                Task { @MainActor in
+                    self.onTransactionError?(error)
+                }
             }
         }
     }

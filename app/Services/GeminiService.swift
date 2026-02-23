@@ -59,6 +59,10 @@ class GeminiService: NSObject {
     private var isConnected = false
     private var isStreamingResponse = false
     private let supportsFileAttachments = false
+    private var sentAudioChunkCount = 0
+    private var sentAudioByteCount = 0
+    private var receivedAudioChunkCount = 0
+    private var receivedAudioByteCount = 0
 
     // Pending requests tracking with timeout
     private var pendingMessageID: UUID?
@@ -67,7 +71,7 @@ class GeminiService: NSObject {
     private var heartbeatTask: Task<Void, Never>?
 
     private let requestTimeout: TimeInterval = 30.0
-    private let acceptanceTimeout: TimeInterval = 6.0
+    private let acceptanceTimeout: TimeInterval = 12.0
     private let streamHeartbeatTimeout: TimeInterval = 20.0
 
     private var hasAccepted = false
@@ -125,7 +129,6 @@ class GeminiService: NSObject {
         webSocketTask = urlSession?.webSocketTask(with: url)
         webSocketTask?.resume()
 
-        sendSetupMessage()
         receiveMessage()
 
         acceptanceTask?.cancel()
@@ -133,7 +136,7 @@ class GeminiService: NSObject {
             guard let self else { return }
             do {
                 try await Task.sleep(nanoseconds: UInt64(self.acceptanceTimeout * 1_000_000_000))
-                if !self.hasAccepted {
+                if !self.hasAccepted && !self.isConnected {
                     print("[Gemini] Acceptance timeout")
                     await MainActor.run {
                         self.delegate?.geminiService(self, didReceiveError: GeminiError.connectionFailed)
@@ -189,30 +192,36 @@ class GeminiService: NSObject {
 
         // WebSocket is only used for audio mode now
         let generationConfig: [String: Any] = [
-            "response_modalities": ["AUDIO"],
-            "speech_config": [
-                "voice_config": [
-                    "prebuilt_voice_config": [
-                        "voice_name": "Aoede"
+            "responseModalities": ["AUDIO"],
+            "speechConfig": [
+                "voiceConfig": [
+                    "prebuiltVoiceConfig": [
+                        "voiceName": "Aoede"
                     ]
                 ]
             ]
         ]
         let setup: [String: Any] = [
             "model": "models/\(model)",
-            "generation_config": generationConfig,
-            "system_instruction": [
+            "generationConfig": generationConfig,
+            "systemInstruction": [
                 "parts": [
                     ["text": systemPrompt]
                 ]
             ],
             "tools": [
-                ["function_declarations": GeminiTools.toAPIFormat()]
+                ["functionDeclarations": GeminiTools.toAPIFormat()]
             ],
-            "output_audio_transcription": [String: Any]()
+            "outputAudioTranscription": [String: Any](),
+            "inputAudioTranscription": [String: Any]()
         ]
 
-        sendJSON(["setup": setup])
+        let payload: [String: Any] = ["setup": setup]
+        print("[Gemini] Sending setup for model=\(model)")
+        if case let .failure(error) = sendJSON(payload) {
+            print("[Gemini] Setup send failed before dispatch: \(error.localizedDescription)")
+            delegate?.geminiService(self, didReceiveError: error)
+        }
     }
 
     private var systemPrompt: String {
@@ -281,15 +290,24 @@ class GeminiService: NSObject {
     // MARK: - Audio Streaming
 
     func sendAudio(data: Data) {
-        guard isConnected else { return }
+        guard isConnected else {
+            print("[Gemini] Dropping audio chunk while disconnected, bytes=\(data.count)")
+            return
+        }
+
+        sentAudioChunkCount += 1
+        sentAudioByteCount += data.count
+        if sentAudioChunkCount == 1 || sentAudioChunkCount % 200 == 0 {
+            print("[Gemini] Sent audio chunk #\(sentAudioChunkCount), bytes=\(data.count), totalBytes=\(sentAudioByteCount)")
+        }
 
         let base64Audio = data.base64EncodedString()
 
         let message: [String: Any] = [
-            "realtime_input": [
-                "media_chunks": [
+            "realtimeInput": [
+                "mediaChunks": [
                     [
-                        "mime_type": "audio/pcm;rate=16000",
+                        "mimeType": "audio/pcm;rate=16000",
                         "data": base64Audio
                     ]
                 ]
@@ -306,7 +324,7 @@ class GeminiService: NSObject {
         // During a call with active WebSocket, send via WebSocket
         if isConnected {
             let message: [String: Any] = [
-                "client_content": [
+                "clientContent": [
                     "turns": [
                         [
                             "role": "user",
@@ -315,7 +333,7 @@ class GeminiService: NSObject {
                             ]
                         ]
                     ],
-                    "turn_complete": true
+                    "turnComplete": true
                 ]
             ]
 
@@ -336,21 +354,21 @@ class GeminiService: NSObject {
         if isConnected {
             let base64Image = imageData.base64EncodedString()
             let message: [String: Any] = [
-                "client_content": [
+                "clientContent": [
                     "turns": [
                         [
                             "role": "user",
                             "parts": [
                                 [
-                                    "inline_data": [
-                                        "mime_type": "image/jpeg",
+                                    "inlineData": [
+                                        "mimeType": "image/jpeg",
                                         "data": base64Image
                                     ]
                                 ]
                             ]
                         ]
                     ],
-                    "turn_complete": true
+                    "turnComplete": true
                 ]
             ]
 
@@ -370,22 +388,22 @@ class GeminiService: NSObject {
         if isConnected {
             let base64Image = imageData.base64EncodedString()
             let message: [String: Any] = [
-                "client_content": [
+                "clientContent": [
                     "turns": [
                         [
                             "role": "user",
                             "parts": [
                                 ["text": text],
                                 [
-                                    "inline_data": [
-                                        "mime_type": "image/jpeg",
+                                    "inlineData": [
+                                        "mimeType": "image/jpeg",
                                         "data": base64Image
                                     ]
                                 ]
                             ]
                         ]
                     ],
-                    "turn_complete": true
+                    "turnComplete": true
                 ]
             ]
 
@@ -595,10 +613,10 @@ class GeminiService: NSObject {
 
         let base64Image = imageData.base64EncodedString()
         let message: [String: Any] = [
-            "realtime_input": [
-                "media_chunks": [
+            "realtimeInput": [
+                "mediaChunks": [
                     [
-                        "mime_type": "image/jpeg",
+                        "mimeType": "image/jpeg",
                         "data": base64Image
                     ]
                 ]
@@ -656,6 +674,8 @@ class GeminiService: NSObject {
         case .data(let data):
             if let text = String(data: data, encoding: .utf8) {
                 handleTextMessage(text)
+            } else {
+                print("[Gemini] Received non-UTF8 binary frame (\(data.count) bytes)")
             }
         @unknown default:
             break
@@ -665,27 +685,53 @@ class GeminiService: NSObject {
     private func handleTextMessage(_ text: String) {
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let trimmed = text.count > 300 ? String(text.prefix(300)) + "..." : text
+            print("[Gemini] Received non-JSON text frame: \(trimmed)")
+            return
+        }
+
+        if !hasAccepted {
+            print("[Gemini] Pre-accept message: \(json)")
+        }
+
+        if let serverError = parseServerError(json) {
+            print("[Gemini] Server error: \(serverError)")
+            delegate?.geminiService(self, didReceiveError: GeminiError.serverError(serverError))
             return
         }
 
         // Handle setup complete
-        if json["setupComplete"] != nil {
+        if json["setupComplete"] != nil || json["setup_complete"] != nil {
+            hasAccepted = true
+            acceptanceTask?.cancel()
+            acceptanceTask = nil
             isConnected = true
+            sentAudioChunkCount = 0
+            sentAudioByteCount = 0
+            receivedAudioChunkCount = 0
+            receivedAudioByteCount = 0
             delegate?.geminiServiceDidConnect(self)
             return
         }
 
         // Handle server content
-        if let serverContent = json["serverContent"] as? [String: Any] {
+        if let serverContent = (json["serverContent"] as? [String: Any]) ?? (json["server_content"] as? [String: Any]) {
             handleServerContent(serverContent)
             return
         }
 
         // Handle tool call
-        if let toolCall = json["toolCall"] as? [String: Any] {
+        if let toolCall = (json["toolCall"] as? [String: Any]) ?? (json["tool_call"] as? [String: Any]) {
             handleToolCall(toolCall)
             return
         }
+
+        if let goAway = json["goAway"] as? [String: Any] {
+            let timeLeft = goAway["timeLeft"] as? String ?? "unknown"
+            print("[Gemini] Server goAway received (timeLeft=\(timeLeft))")
+            return
+        }
+
     }
 
     private func handleServerContent(_ content: [String: Any]) {
@@ -698,13 +744,22 @@ class GeminiService: NSObject {
         }
 
         // Handle input transcript (user speech-to-text in audio mode)
-        if let inputTranscript = content["inputTranscript"] as? String {
-            let isFinal = content["turnComplete"] as? Bool ?? false
-            delegate?.geminiService(self, didReceiveInputTranscript: inputTranscript, isFinal: isFinal)
+        let turnComplete = (content["turnComplete"] as? Bool) ?? (content["turn_complete"] as? Bool) ?? false
+
+        if let inputTranscript = (content["inputTranscript"] as? String) ?? (content["input_transcript"] as? String) {
+            delegate?.geminiService(self, didReceiveInputTranscript: inputTranscript, isFinal: turnComplete)
+        }
+        if let inputTranscription = content["inputTranscription"] as? [String: Any],
+           let transcript = inputTranscription["text"] as? String {
+            delegate?.geminiService(self, didReceiveInputTranscript: transcript, isFinal: turnComplete)
+        }
+        if let inputTranscription = content["input_audio_transcription"] as? [String: Any],
+           let transcript = inputTranscription["text"] as? String {
+            delegate?.geminiService(self, didReceiveInputTranscript: transcript, isFinal: turnComplete)
         }
 
         // Handle model turn (text, audio, output transcript)
-        if let modelTurn = content["modelTurn"] as? [String: Any],
+        if let modelTurn = (content["modelTurn"] as? [String: Any]) ?? (content["model_turn"] as? [String: Any]),
            let parts = modelTurn["parts"] as? [[String: Any]] {
 
             lastStreamChunkAt = Date()
@@ -742,16 +797,20 @@ class GeminiService: NSObject {
                 }
 
                 // Audio response
-                if let inlineData = part["inlineData"] as? [String: Any],
+                if let inlineData = (part["inlineData"] as? [String: Any]) ?? (part["inline_data"] as? [String: Any]),
                    let base64Data = inlineData["data"] as? String,
                    let audioData = Data(base64Encoded: base64Data) {
+                    receivedAudioChunkCount += 1
+                    receivedAudioByteCount += audioData.count
+                    if receivedAudioChunkCount == 1 || receivedAudioChunkCount % 200 == 0 {
+                        print("[Gemini] Received audio chunk #\(receivedAudioChunkCount), bytes=\(audioData.count), totalBytes=\(receivedAudioByteCount)")
+                    }
                     delegate?.geminiService(self, didReceiveAudio: audioData)
                 }
 
                 // Output transcript (AI speech-to-text)
                 if let transcript = part["transcript"] as? String {
-                    let isFinal = content["turnComplete"] as? Bool ?? false
-                    delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: isFinal)
+                    delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: turnComplete)
                 }
             }
 
@@ -760,13 +819,22 @@ class GeminiService: NSObject {
             }
         }
 
-        let isComplete = content["turnComplete"] as? Bool ?? false
+        let isComplete = turnComplete
         if isComplete {
             isStreamingResponse = false
             heartbeatTask?.cancel()
             heartbeatTask = nil
             lastStreamChunkAt = nil
             delegate?.geminiServiceDidEndResponse(self)
+        }
+
+        if let outputTranscription = content["outputTranscription"] as? [String: Any],
+           let transcript = outputTranscription["text"] as? String {
+            delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: turnComplete)
+        }
+        if let outputTranscription = content["output_audio_transcription"] as? [String: Any],
+           let transcript = outputTranscription["text"] as? String {
+            delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: turnComplete)
         }
     }
 
@@ -1492,8 +1560,10 @@ class GeminiService: NSObject {
 
     @discardableResult
     private func sendJSON(_ json: [String: Any]) -> Result<Void, Error> {
-        guard let data = try? JSONSerialization.data(withJSONObject: json),
+        guard JSONSerialization.isValidJSONObject(json),
+              let data = try? JSONSerialization.data(withJSONObject: json),
               let string = String(data: data, encoding: .utf8) else {
+            print("[Gemini] Invalid JSON payload: \(json)")
             return .failure(GeminiError.invalidJSON)
         }
 
@@ -1513,6 +1583,15 @@ class GeminiService: NSObject {
 
         return .success(())
     }
+
+    private func parseServerError(_ json: [String: Any]) -> String? {
+        guard let error = json["error"] as? [String: Any] else { return nil }
+        let message = error["message"] as? String ?? "Unknown server error"
+        if let code = error["code"] as? Int {
+            return "\(message) (code \(code))"
+        }
+        return message
+    }
 }
 
 // MARK: - URLSessionWebSocketDelegate
@@ -1524,6 +1603,9 @@ extension GeminiService: URLSessionWebSocketDelegate {
         didOpenWithProtocol protocol: String?
     ) {
         print("[Gemini] WebSocket opened")
+        Task { @MainActor in
+            self.sendSetupMessage()
+        }
     }
 
     nonisolated func urlSession(
@@ -1562,6 +1644,7 @@ enum GeminiError: LocalizedError {
     case serviceUnavailable
     case cancelled
     case invalidJSON
+    case serverError(String)
 
     var errorDescription: String? {
         switch self {
@@ -1579,6 +1662,8 @@ enum GeminiError: LocalizedError {
             return "Request was cancelled"
         case .invalidJSON:
             return "Failed to encode message"
+        case .serverError(let message):
+            return "Server error: \(message)"
         }
     }
 }

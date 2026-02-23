@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CallView: View {
     @ObservedObject var viewModel: ChatViewModel
@@ -80,10 +81,16 @@ struct CallView: View {
                     .scaleEffect(viewModel.callState.isSpeaking ? 1.06 : 1.0)
                     .animation(.easeInOut(duration: 0.3).repeatForever(), value: viewModel.callState.isSpeaking)
 
-                Image("app-icon-template")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 90)
+                if UIImage(named: "app-icon-template") != nil {
+                    Image("app-icon-template")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 90)
+                } else {
+                    Image(systemName: "fork.knife.circle.fill")
+                        .font(.system(size: 90))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
             }
 
             Spacer()
