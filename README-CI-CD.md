@@ -17,6 +17,7 @@ This repo is configured for automatic iOS builds and TestFlight deployment!
 Go to your GitHub repo → Settings → Secrets and variables → Actions → Add these:
 
 ```
+GEMINI_API_KEY=your_google_gemini_api_key
 APPSTORE_ISSUER_ID=your_issuer_id_from_app_store_connect
 APPSTORE_API_KEY_ID=your_api_key_id_from_app_store_connect  
 APPSTORE_API_KEY=-----BEGIN PRIVATE KEY-----
@@ -41,7 +42,7 @@ APPSTORE_API_KEY=-----BEGIN PRIVATE KEY-----
 ```bash
 git add .
 git commit -m "New feature"
-git push origin main
+git push origin master
 ```
 
 #### Manual (from GitHub):
@@ -97,7 +98,7 @@ Write Swift on PC → Push to GitHub → Auto-build → TestFlight → Install o
 
 ### 🎯 Branch Strategy
 
-- **`main`** → Production builds → TestFlight
+- **`master`** → Production builds → TestFlight
 - **`develop`** → Development builds → TestFlight
 - **feature branches** → No auto-deploy (manual trigger only)
 

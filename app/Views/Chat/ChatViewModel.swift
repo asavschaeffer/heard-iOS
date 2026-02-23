@@ -60,12 +60,17 @@ class ChatViewModel: ObservableObject {
     private var geminiService: GeminiService?
     private var modelContext: ModelContext?
     private var audioEngine: AVAudioEngine?
+    private var captureConverter: AVAudioConverter?
+    private var captureTargetFormat: AVAudioFormat?
     private var playbackEngine: AVAudioEngine?
     private var playbackNode: AVAudioPlayerNode?
+    private var playbackInputFormat: AVAudioFormat?
+    private var playbackConverter: AVAudioConverter?
     private var playbackFormat: AVAudioFormat?
     private var pendingAudioChunks: [Data] = []
     private var pendingMessages: [PendingMessage] = []
     private var isPlayingAudio = false
+    private var isMicrophoneMuted = false
     private var draftMessageId: UUID?
     private var lastTranscriptText: String?
     private var transcriptDebounceWorkItem: DispatchWorkItem?
@@ -159,9 +164,12 @@ class ChatViewModel: ObservableObject {
     private func setupCallKit() {
         let manager = CallKitManager(appName: "Heard, Chef")
         manager.onStartAudio = { [weak self] in
-            self?.configureAudioSessionForCall()
-            self?.startAudioCapture()
-            self?.callState.isListening = true
+            guard let self else { return }
+            self.configureAudioSessionForCall()
+            if !self.isMicrophoneMuted {
+                self.startAudioCapture()
+            }
+            self.callState.isListening = !self.isMicrophoneMuted
         }
         manager.onStopAudio = { [weak self] in
             self?.stopAudioCapture()
@@ -169,10 +177,9 @@ class ChatViewModel: ObservableObject {
         }
         manager.onMuteChanged = { [weak self] isMuted in
             guard let self else { return }
+            self.isMicrophoneMuted = isMuted
             self.callState.isListening = !isMuted
-            if isMuted {
-                self.stopAudioCapture()
-            } else {
+            if !isMuted && self.callState.isPresented && self.audioEngine == nil {
                 self.startAudioCapture()
             }
         }
@@ -292,7 +299,7 @@ class ChatViewModel: ObservableObject {
         let session = AVAudioSession.sharedInstance()
         let outputs = session.currentRoute.outputs
         if !callKitEnabled {
-            callState.isListening = audioEngine?.isRunning == true && !outputs.isEmpty
+            callState.isListening = !isMicrophoneMuted && audioEngine?.isRunning == true && !outputs.isEmpty
         }
     }
 
@@ -312,10 +319,10 @@ class ChatViewModel: ObservableObject {
             let optionsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue ?? 0)
             if options.contains(.shouldResume) && callState.isPresented {
-                if !callKitEnabled {
+                if !callKitEnabled && !isMicrophoneMuted {
                     startAudioCapture()
-                    callState.isListening = true
                 }
+                callState.isListening = !isMicrophoneMuted
             }
         @unknown default:
             break
@@ -371,6 +378,8 @@ class ChatViewModel: ObservableObject {
     func startVoiceSession() {
         let wasPresented = callState.isPresented
         callState.isPresented = true
+        isMicrophoneMuted = false
+        callState.isListening = true
         // TODO: Start Live Activity when Dynamic Island is implemented.
         liveActivityManager.startCallActivity(displayName: "Heard, Chef")
         if callKitEnabled {
@@ -384,8 +393,10 @@ class ChatViewModel: ObservableObject {
         if connectionState == .connected {
             if !callKitEnabled {
                 preferSpeaker()
-                startAudioCapture()
-                callState.isListening = true
+                if !isMicrophoneMuted {
+                    startAudioCapture()
+                }
+                callState.isListening = !isMicrophoneMuted
             }
             pendingVoiceStart = false
         } else {
@@ -408,6 +419,8 @@ class ChatViewModel: ObservableObject {
             stopAudioCapture()
             callState.isListening = false
         }
+        stopPlayback()
+        isMicrophoneMuted = false
         pendingVoiceStart = false
         stopVideoStreaming()
         cancelTranscriptDebounce()
@@ -422,11 +435,10 @@ class ChatViewModel: ObservableObject {
     }
     
     func toggleMute() {
-        callState.isListening.toggle()
-        if callState.isListening {
+        isMicrophoneMuted.toggle()
+        callState.isListening = !isMicrophoneMuted
+        if !isMicrophoneMuted && callState.isPresented && audioEngine == nil {
             startAudioCapture()
-        } else {
-            stopAudioCapture()
         }
     }
 
@@ -436,20 +448,44 @@ class ChatViewModel: ObservableObject {
         // Prevent double start
         if audioEngine?.isRunning == true { return }
         
-        audioEngine = AVAudioEngine()
-        guard let audioEngine = audioEngine else { return }
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
 
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
+        do {
+            try inputNode.setVoiceProcessingEnabled(true)
+        } catch {
+            print("Audio voice processing enable error: \(error)")
+        }
 
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        let inputFormat = inputNode.inputFormat(forBus: 0)
+        guard let targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: false
+        ),
+              let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
+            print("Audio conversion setup error")
+            return
+        }
+
+        captureConverter = converter
+        captureTargetFormat = targetFormat
+        audioEngine = engine
+
+        let bufferSize = AVAudioFrameCount(max(512.0, inputFormat.sampleRate / 10.0))
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: inputFormat) { [weak self] buffer, _ in
             self?.processAudioBuffer(buffer)
         }
 
         do {
-            try audioEngine.start()
+            try engine.start()
         } catch {
             print("Audio Engine Start Error: \(error)")
+            inputNode.removeTap(onBus: 0)
+            audioEngine = nil
+            captureConverter = nil
+            captureTargetFormat = nil
         }
     }
 
@@ -457,37 +493,74 @@ class ChatViewModel: ObservableObject {
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine?.stop()
         audioEngine = nil
+        captureConverter = nil
+        captureTargetFormat = nil
         callState.audioLevel = 0
     }
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        // 1. Visuals
-        guard let channelData = buffer.floatChannelData?[0] else { return }
         let frameLength = Int(buffer.frameLength)
         guard frameLength > 0 else { return }
-        var sum: Float = 0
-        for i in 0..<frameLength { sum += abs(channelData[i]) }
-        let average = sum / Float(frameLength)
-        
-        Task { @MainActor in
-            self.callState.audioLevel = min(1.0, average * 10)
+
+        if let channelData = buffer.floatChannelData?[0] {
+            var sum: Float = 0
+            for i in 0..<frameLength { sum += abs(channelData[i]) }
+            let average = sum / Float(frameLength)
+
+            Task { @MainActor in
+                self.callState.audioLevel = min(1.0, average * 10)
+            }
         }
 
-        // 2. Stream to Gemini
-        let pcmData = convertToPCM16(buffer: buffer)
+        guard !isMicrophoneMuted else { return }
+        guard let pcmData = convertCapturedBufferToPCM16(buffer), !pcmData.isEmpty else {
+            return
+        }
+
         geminiService?.sendAudio(data: pcmData)
     }
 
-    private func convertToPCM16(buffer: AVAudioPCMBuffer) -> Data {
-        guard let channelData = buffer.floatChannelData?[0] else { return Data() }
-        let frameLength = Int(buffer.frameLength)
-        var pcmData = Data(capacity: frameLength * 2)
-        
-        for i in 0..<frameLength {
-            let sample = Int16(max(-1, min(1, channelData[i])) * Float(Int16.max))
-            withUnsafeBytes(of: sample.littleEndian) { pcmData.append(contentsOf: $0) }
+    private func convertCapturedBufferToPCM16(_ buffer: AVAudioPCMBuffer) -> Data? {
+        guard let converter = captureConverter, let targetFormat = captureTargetFormat else { return nil }
+
+        let sampleRateRatio = targetFormat.sampleRate / max(buffer.format.sampleRate, 1)
+        let outputFrameCapacity = AVAudioFrameCount(max(1, ceil(Double(buffer.frameLength) * sampleRateRatio)))
+
+        guard let convertedBuffer = AVAudioPCMBuffer(
+            pcmFormat: targetFormat,
+            frameCapacity: outputFrameCapacity
+        ) else {
+            return nil
         }
-        return pcmData
+
+        var error: NSError?
+        var inputConsumed = false
+        let status = converter.convert(to: convertedBuffer, error: &error) { _, outStatus in
+            if inputConsumed {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+
+            inputConsumed = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+
+        if status == .error || error != nil {
+            if let error {
+                print("Audio conversion error: \(error)")
+            }
+            return nil
+        }
+
+        let frameLength = Int(convertedBuffer.frameLength)
+        guard frameLength > 0,
+              let channelData = convertedBuffer.int16ChannelData?[0] else {
+            return nil
+        }
+
+        let byteCount = frameLength * MemoryLayout<Int16>.size
+        return Data(bytes: channelData, count: byteCount)
     }
 
     // MARK: - Audio Playback
@@ -516,6 +589,16 @@ class ChatViewModel: ObservableObject {
             return
         }
 
+        if let engine = playbackEngine, !engine.isRunning {
+            do {
+                try engine.start()
+            } catch {
+                print("Audio Playback restart error: \(error)")
+                playNextAudioChunk()
+                return
+            }
+        }
+
         if playbackNode?.isPlaying == false {
             playbackNode?.play()
         }
@@ -535,8 +618,22 @@ class ChatViewModel: ObservableObject {
         let player = AVAudioPlayerNode()
         engine.attach(player)
 
-        let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: false)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
+        guard let inputFormat = AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: 24_000,
+            channels: 1,
+            interleaved: false
+        ),
+              let outputFormat = AVAudioFormat(
+                standardFormatWithSampleRate: inputFormat.sampleRate,
+                channels: inputFormat.channelCount
+              ),
+              let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
+            print("Audio Playback format setup error")
+            return
+        }
+
+        engine.connect(player, to: engine.mainMixerNode, format: outputFormat)
 
         do {
             try engine.start()
@@ -547,27 +644,58 @@ class ChatViewModel: ObservableObject {
 
         playbackEngine = engine
         playbackNode = player
-        playbackFormat = format
+        playbackInputFormat = inputFormat
+        playbackConverter = converter
+        playbackFormat = outputFormat
     }
 
     private func makePCMBuffer(from data: Data) -> AVAudioPCMBuffer? {
-        guard let format = playbackFormat else { return nil }
-        let frameCount = UInt32(data.count / 2)
+        guard let inputFormat = playbackInputFormat,
+              let outputFormat = playbackFormat,
+              let converter = playbackConverter else { return nil }
+
+        let bytesPerFrame = Int(inputFormat.streamDescription.pointee.mBytesPerFrame)
+        guard bytesPerFrame > 0 else { return nil }
+
+        let frameCount = AVAudioFrameCount(data.count / bytesPerFrame)
         guard frameCount > 0,
-              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+              let inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: frameCount) else {
             return nil
         }
 
-        buffer.frameLength = frameCount
+        inputBuffer.frameLength = frameCount
         data.withUnsafeBytes { rawBuffer in
             guard let src = rawBuffer.bindMemory(to: Int16.self).baseAddress,
-                  let dst = buffer.int16ChannelData?[0] else {
+                  let dst = inputBuffer.int16ChannelData?[0] else {
                 return
             }
             dst.update(from: src, count: Int(frameCount))
         }
 
-        return buffer
+        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: frameCount) else {
+            return nil
+        }
+
+        do {
+            try converter.convert(to: outputBuffer, from: inputBuffer)
+            return outputBuffer.frameLength > 0 ? outputBuffer : nil
+        } catch {
+            print("Audio Playback conversion error: \(error)")
+            return nil
+        }
+    }
+
+    private func stopPlayback() {
+        pendingAudioChunks.removeAll()
+        isPlayingAudio = false
+        callState.isSpeaking = false
+        playbackNode?.stop()
+        playbackEngine?.stop()
+        playbackNode = nil
+        playbackEngine = nil
+        playbackInputFormat = nil
+        playbackConverter = nil
+        playbackFormat = nil
     }
 
     // MARK: - Queueing
@@ -920,10 +1048,10 @@ extension ChatViewModel: GeminiServiceDelegate {
             }
         }
         if pendingVoiceStart, geminiService?.currentMode == .audio {
-            if !callKitEnabled {
+            if !callKitEnabled && !isMicrophoneMuted {
                 startAudioCapture()
-                callState.isListening = true
             }
+            callState.isListening = !isMicrophoneMuted
             pendingVoiceStart = false
         }
     }
