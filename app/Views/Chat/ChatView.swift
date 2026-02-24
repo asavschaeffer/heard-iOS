@@ -85,9 +85,28 @@ struct ChatView: View {
     }
     
     private func handleSelectedItemChange() {
-        guard selectedItem != nil else { return }
+        guard let item = selectedItem else { return }
+        selectedItem = nil
+        let contentTypes = item.supportedContentTypes
+        let startedAt = Date()
+        let typeList = contentTypes.map(\.identifier).joined(separator: ",")
+        print("[UI] Photos picker selection received. types=[\(typeList)]")
         Task {
-            selectedItem = nil
+            do {
+                let attachment = try await ChatAttachmentService.loadFromPhotos(
+                    contentTypes: contentTypes,
+                    loadData: { try await item.loadTransferable(type: Data.self) },
+                    loadURL: { try await item.loadTransferable(type: URL.self) }
+                )
+                let loadedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                await MainActor.run {
+                    selectedAttachment = attachment
+                }
+                let totalMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                print("[UI] Loaded attachment from Photos picker: kind=\(attachment.kind) loadMs=\(loadedMs) totalMs=\(totalMs)")
+            } catch {
+                print("[UI] Failed to load attachment from Photos picker: \(error)")
+            }
         }
     }
     
@@ -142,6 +161,12 @@ struct ChatView: View {
                 onAddAttachment: { showAttachmentMenu = true },
                 onToggleDictation: handleDictationToggle,
                 onSend: { text in
+                    if let attachment = selectedAttachment {
+                        let imageBytes = attachment.imageData?.count ?? 0
+                        print("[UI] Send tapped with attachment. kind=\(attachment.kind) imageBytes=\(imageBytes)")
+                    } else {
+                        print("[UI] Send tapped with text-only message")
+                    }
                     viewModel.sendMessage(text, attachment: selectedAttachment)
                     inputText = ""
                     selectedAttachment = nil

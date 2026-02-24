@@ -26,21 +26,39 @@ enum ChatAttachmentError: Error {
 }
 
 final class ChatAttachmentService {
-    private static let attachmentsFolder = "ChatAttachments"
+    nonisolated private static let attachmentsFolder = "ChatAttachments"
 
-    /* static func loadFromPhotos(item: PhotosPickerItem) async throws -> ChatAttachment {
-        let contentTypes = item.supportedContentTypes
+    static func loadFromPhotos(
+        contentTypes: [UTType],
+        loadData: @escaping () async throws -> Data?,
+        loadURL: @escaping () async throws -> URL?
+    ) async throws -> ChatAttachment {
+        let startedAt = Date()
+        let typeList = contentTypes.map(\.identifier).joined(separator: ",")
+        print("[Attachment] Photos load started. types=[\(typeList)]")
+
         if contentTypes.contains(where: { $0.conforms(to: .image) }) {
-            if let data = try await item.loadTransferable(type: Data.self) {
+            if let data = try await loadData() {
+                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                print("[Attachment] Photos image loaded. bytes=\(data.count) elapsedMs=\(elapsedMs)")
                 return ChatAttachment(kind: .image, imageData: data, fileURL: nil, filename: "photo.jpg", utType: UTType.jpeg.identifier)
             }
             throw ChatAttachmentError.loadFailed
         }
 
         if contentTypes.contains(where: { $0.conforms(to: .movie) }) {
-            if let url = try await item.loadTransferable(type: URL.self) {
-                let copiedURL = try copyToDocuments(url: url)
-                let thumbnail = videoThumbnailData(from: copiedURL)
+            if let url = try await loadURL() {
+                let prepared = try await Task.detached(priority: .userInitiated) { () -> (URL, Data?) in
+                    let copiedURL = try copyToDocuments(url: url)
+                    let thumbnail = videoThumbnailData(from: copiedURL)
+                    return (copiedURL, thumbnail)
+                }.value
+
+                let copiedURL = prepared.0
+                let thumbnail = prepared.1
+                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                let fileSize = (try? FileManager.default.attributesOfItem(atPath: copiedURL.path)[.size] as? NSNumber)?.int64Value ?? -1
+                print("[Attachment] Photos video loaded. bytes=\(fileSize) thumbBytes=\(thumbnail?.count ?? 0) elapsedMs=\(elapsedMs)")
                 return ChatAttachment(
                     kind: .video,
                     imageData: thumbnail,
@@ -53,7 +71,7 @@ final class ChatAttachmentService {
         }
 
         throw ChatAttachmentError.unsupported
-    } */
+    }
 
     static func loadFromDocument(url: URL) throws -> ChatAttachment {
         let copiedURL = try copyToDocuments(url: url)
@@ -85,7 +103,7 @@ final class ChatAttachmentService {
         )
     }
 
-    private static func copyToDocuments(url: URL) throws -> URL {
+    nonisolated private static func copyToDocuments(url: URL) throws -> URL {
         let manager = FileManager.default
         let docs = try manager.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         let folder = docs.appendingPathComponent(attachmentsFolder, isDirectory: true)
@@ -107,7 +125,7 @@ final class ChatAttachmentService {
         }
     }
 
-    private static func videoThumbnailData(from url: URL) -> Data? {
+    nonisolated private static func videoThumbnailData(from url: URL) -> Data? {
         let asset = AVAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
