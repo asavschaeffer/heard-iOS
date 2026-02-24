@@ -1,25 +1,51 @@
 import SwiftUI
 
+enum CornerPlacement {
+    case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+    func position(in size: CGSize, barWidth: CGFloat, barHeight: CGFloat, padding: CGFloat) -> CGPoint {
+        let halfW = barWidth / 2
+        let halfH = barHeight / 2
+        switch self {
+        case .topLeading:
+            return CGPoint(x: padding + halfW, y: padding + halfH)
+        case .topTrailing:
+            return CGPoint(x: size.width - padding - halfW, y: padding + halfH)
+        case .bottomLeading:
+            return CGPoint(x: padding + halfW, y: size.height - padding - halfH)
+        case .bottomTrailing:
+            return CGPoint(x: size.width - padding - halfW, y: size.height - padding - halfH)
+        }
+    }
+
+    static func nearest(to point: CGPoint, in size: CGSize, barWidth: CGFloat, barHeight: CGFloat, padding: CGFloat) -> CornerPlacement {
+        let corners: [CornerPlacement] = [.topLeading, .topTrailing, .bottomLeading, .bottomTrailing]
+        return corners.min(by: { a, b in
+            let posA = a.position(in: size, barWidth: barWidth, barHeight: barHeight, padding: padding)
+            let posB = b.position(in: size, barWidth: barWidth, barHeight: barHeight, padding: padding)
+            let distA = hypot(point.x - posA.x, point.y - posA.y)
+            let distB = hypot(point.x - posB.x, point.y - posB.y)
+            return distA < distB
+        }) ?? .topTrailing
+    }
+}
+
 struct PiPCallOverlayView: View {
     @ObservedObject var viewModel: ChatViewModel
-    @Binding var pipCenter: CGPoint
-    @Binding var pipDragStart: CGPoint?
-    @Binding var pipInitialized: Bool
     let onExpand: () -> Void
     let onToggleVideo: () -> Void
-    
+
+    @State private var placement: CornerPlacement = .topTrailing
+    @State private var dragOffset: CGSize = .zero
+    @GestureState private var isDragging = false
+
     var body: some View {
         GeometryReader { proxy in
             let bounds = proxy.size
             let barWidth = min(bounds.width - 24, 420)
             let barHeight: CGFloat = 56
             let padding: CGFloat = 12
-            let topY = padding + barHeight / 2
-            let minX = padding + barWidth / 2
-            let maxX = bounds.width - padding - barWidth / 2
-            let minY = topY
-            let maxY = topY + 120
-            let snapX = [minX, bounds.width / 2, maxX]
+            let cornerPos = placement.position(in: bounds, barWidth: barWidth, barHeight: barHeight, padding: padding)
 
             CallBarView(
                 viewModel: viewModel,
@@ -27,39 +53,35 @@ struct PiPCallOverlayView: View {
                 onToggleVideo: onToggleVideo
             )
             .frame(width: barWidth)
-            .position(pipInitialized ? pipCenter : CGPoint(x: bounds.width / 2, y: topY))
-            .onAppear {
-                if !pipInitialized {
-                    pipCenter = CGPoint(x: bounds.width / 2, y: topY)
-                    pipInitialized = true
-                }
-            }
+            .position(
+                x: cornerPos.x + dragOffset.width,
+                y: cornerPos.y + dragOffset.height
+            )
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        if pipDragStart == nil { pipDragStart = pipCenter }
-                        let start = pipDragStart ?? pipCenter
-                        let proposed = CGPoint(
-                            x: start.x + value.translation.width,
-                            y: start.y + value.translation.height
-                        )
-                        pipCenter = clamp(proposed, minX: minX, maxX: maxX, minY: minY, maxY: maxY)
+                        dragOffset = value.translation
                     }
-                    .onEnded { _ in
-                        pipDragStart = nil
-                        let closestX = snapX.min(by: { abs($0 - pipCenter.x) < abs($1 - pipCenter.x) }) ?? bounds.width / 2
-                        pipCenter = CGPoint(x: closestX, y: topY)
+                    .onEnded { value in
+                        let finalPoint = CGPoint(
+                            x: cornerPos.x + value.translation.width,
+                            y: cornerPos.y + value.translation.height
+                        )
+                        let nearest = CornerPlacement.nearest(
+                            to: finalPoint,
+                            in: bounds,
+                            barWidth: barWidth,
+                            barHeight: barHeight,
+                            padding: padding
+                        )
+                        withAnimation(.spring()) {
+                            placement = nearest
+                            dragOffset = .zero
+                        }
                     }
             )
         }
         .ignoresSafeArea()
-    }
-
-    private func clamp(_ point: CGPoint, minX: CGFloat, maxX: CGFloat, minY: CGFloat, maxY: CGFloat) -> CGPoint {
-        CGPoint(
-            x: min(max(point.x, minX), maxX),
-            y: min(max(point.y, minY), maxY)
-        )
     }
 }
 
@@ -67,7 +89,7 @@ private struct CallBarView: View {
     @ObservedObject var viewModel: ChatViewModel
     let onExpand: () -> Void
     let onToggleVideo: () -> Void
-    
+
     var body: some View {
         HStack(spacing: 14) {
             Button {
@@ -142,7 +164,7 @@ private struct CallBarView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+        .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 6)
         .foregroundStyle(.white)
     }
 }

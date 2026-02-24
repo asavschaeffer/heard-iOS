@@ -13,7 +13,7 @@ struct ChatThreadView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: 2) {
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         messageView(for: message, at: index)
                     }
@@ -75,7 +75,7 @@ struct ChatThreadView: View {
             linkStore: linkStore
         )
         .id(message.id)
-        .padding(.bottom, isGroupEnd ? 8 : 2)
+        .padding(.bottom, isGroupEnd ? 10 : 0)
         .onAppear {
             prefetchLinks(for: message)
         }

@@ -28,10 +28,9 @@ struct ChatMessageBubble: View {
                         if let text = message.text {
                             Text(text)
                                 .padding(.horizontal, 12)
-                                .padding(.top, 11)
-                                .padding(.bottom, isGroupEnd ? 13 : 11)
+                                .padding(.vertical, 8)
                                 .background(bubbleBackground)
-                                .foregroundStyle(message.role.isUser ? .white : .primary)
+                                .foregroundStyle(.white)
                                 .opacity(message.isDraft ? 0.6 : 1.0)
                         }
                         
@@ -117,13 +116,13 @@ struct ChatMessageBubble: View {
     }
     
     private var bubbleBackground: some View {
-        let fillColor = message.role.isUser ? Color.blue : Color(.systemGray5)
+        let fillColor = message.role.isUser ? Color(red: 0.039, green: 0.518, blue: 1.0) : Color(red: 0.149, green: 0.149, blue: 0.161)
         return Group {
             if isGroupEnd {
                 BubbleTailShape(isUser: message.role.isUser)
                     .fill(fillColor)
             } else {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 18)
                     .fill(fillColor)
             }
         }
@@ -251,31 +250,88 @@ private struct DocumentAttachmentView: View {
 
 struct BubbleTailShape: Shape {
     let isUser: Bool
-    
+
     func path(in rect: CGRect) -> Path {
-        let tailWidth: CGFloat = 7
-        let tailHeight: CGFloat = 8
-        let cornerRadius: CGFloat = 16
-        let tailOffset: CGFloat = 10
-        
-        var bubbleRect = rect
-        bubbleRect.size.height -= tailHeight
-        
-        var path = Path(roundedRect: bubbleRect, cornerRadius: cornerRadius)
+        let cornerRadius: CGFloat = 18
+        let tailRadius: CGFloat = 6.0
+        let w = rect.width
+        let h = rect.height
 
-        let baseStartX = isUser
-            ? bubbleRect.maxX - tailOffset - tailWidth
-            : bubbleRect.minX + tailOffset
-        let baseEndX = isUser
-            ? bubbleRect.maxX - tailOffset
-            : bubbleRect.minX + tailOffset + tailWidth
-        let tipX = isUser ? baseEndX + tailWidth : baseStartX - tailWidth
+        var path = Path()
 
-        path.move(to: CGPoint(x: baseStartX, y: bubbleRect.maxY))
-        path.addLine(to: CGPoint(x: tipX, y: bubbleRect.maxY + tailHeight))
-        path.addLine(to: CGPoint(x: baseEndX, y: bubbleRect.maxY))
+        if isUser {
+            // Start at top-left + cornerRadius
+            path.move(to: CGPoint(x: cornerRadius, y: 0))
+            // Top edge
+            path.addLine(to: CGPoint(x: w - cornerRadius, y: 0))
+            // Top-right corner
+            path.addQuadCurve(
+                to: CGPoint(x: w, y: cornerRadius),
+                control: CGPoint(x: w, y: 0)
+            )
+            // Right edge down to tail start (no bottom-right corner radius — sharp into tail)
+            path.addLine(to: CGPoint(x: w, y: h - tailRadius))
+            // Tail: curves outward and swoops back
+            path.addQuadCurve(
+                to: CGPoint(x: w + 4, y: h),
+                control: CGPoint(x: w, y: h)
+            )
+            path.addQuadCurve(
+                to: CGPoint(x: w - 8, y: h - tailRadius),
+                control: CGPoint(x: w - 2, y: h)
+            )
+            // Bottom edge
+            path.addLine(to: CGPoint(x: cornerRadius, y: h - tailRadius))
+            // Bottom-left corner
+            path.addQuadCurve(
+                to: CGPoint(x: 0, y: h - tailRadius - cornerRadius),
+                control: CGPoint(x: 0, y: h - tailRadius)
+            )
+            // Left edge
+            path.addLine(to: CGPoint(x: 0, y: cornerRadius))
+            // Top-left corner
+            path.addQuadCurve(
+                to: CGPoint(x: cornerRadius, y: 0),
+                control: CGPoint(x: 0, y: 0)
+            )
+        } else {
+            // Start at top-left + cornerRadius
+            path.move(to: CGPoint(x: cornerRadius, y: 0))
+            // Top edge
+            path.addLine(to: CGPoint(x: w - cornerRadius, y: 0))
+            // Top-right corner
+            path.addQuadCurve(
+                to: CGPoint(x: w, y: cornerRadius),
+                control: CGPoint(x: w, y: 0)
+            )
+            // Right edge
+            path.addLine(to: CGPoint(x: w, y: h - tailRadius - cornerRadius))
+            // Bottom-right corner
+            path.addQuadCurve(
+                to: CGPoint(x: w - cornerRadius, y: h - tailRadius),
+                control: CGPoint(x: w, y: h - tailRadius)
+            )
+            // Bottom edge
+            path.addLine(to: CGPoint(x: 8, y: h - tailRadius))
+            // Tail: curves outward to the left and swoops back
+            path.addQuadCurve(
+                to: CGPoint(x: -4, y: h),
+                control: CGPoint(x: 2, y: h)
+            )
+            path.addQuadCurve(
+                to: CGPoint(x: 0, y: h - tailRadius),
+                control: CGPoint(x: 0, y: h)
+            )
+            // Left edge (no bottom-left corner radius — sharp from tail)
+            path.addLine(to: CGPoint(x: 0, y: cornerRadius))
+            // Top-left corner
+            path.addQuadCurve(
+                to: CGPoint(x: cornerRadius, y: 0),
+                control: CGPoint(x: 0, y: 0)
+            )
+        }
+
         path.closeSubpath()
-        
         return path
     }
 }

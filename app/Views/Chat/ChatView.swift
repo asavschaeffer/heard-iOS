@@ -16,16 +16,12 @@ struct ChatView: View {
     @State private var dictationBaseText = ""
     @State private var selectedItem: PhotosPickerItem?
     @State private var selectedAttachment: ChatAttachment?
-    @State private var showAttachmentMenu = false
+    @State private var showAttachmentRow = false
     @State private var showPhotosPicker = false
     @State private var showDocumentPicker = false
     @State private var showCameraPhotoPicker = false
-    @State private var showCameraVideoPicker = false
     @State private var attachmentErrorMessage: String?
     @State private var callPresentationStyle: CallPresentationStyle = .fullScreen
-    @State private var pipCenter: CGPoint = .zero
-    @State private var pipDragStart: CGPoint?
-    @State private var pipInitialized = false
 
     var body: some View {
         NavigationStack {
@@ -42,13 +38,9 @@ struct ChatView: View {
             .onAppear {
                 viewModel.setModelContext(modelContext)
             }
-            .confirmationDialog("Add attachment", isPresented: $showAttachmentMenu, titleVisibility: .visible) {
-                attachmentDialogButtons
-            }
             .photosPicker(isPresented: $showPhotosPicker, selection: $selectedItem, matching: .any(of: [.images, .videos]))
             .sheet(isPresented: $showDocumentPicker) { documentPicker }
             .sheet(isPresented: $showCameraPhotoPicker) { cameraPhotoPicker }
-            .sheet(isPresented: $showCameraVideoPicker) { cameraVideoPicker }
             .alert("Attachment Error", isPresented: attachmentErrorPresented) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -69,14 +61,6 @@ struct ChatView: View {
         )
     }
     
-    @ViewBuilder
-    private var attachmentDialogButtons: some View {
-        Button("Camera Photo") { showCameraPhotoPicker = true }
-        Button("Camera Video") { showCameraVideoPicker = true }
-        Button("Photos") { showPhotosPicker = true }
-        Button("Files") { showDocumentPicker = true }
-    }
-    
     private var documentPicker: some View {
         DocumentPicker(allowedTypes: [.item]) { url in
             handleDocumentSelection(url)
@@ -84,22 +68,15 @@ struct ChatView: View {
     }
     
     private var cameraPhotoPicker: some View {
-        CameraCapturePicker(mode: .photo) { image, videoURL in
-            if let image {
+        CameraCapturePicker { image, videoURL in
+            if let videoURL, let attachment = try? ChatAttachmentService.loadFromCameraVideo(videoURL) {
+                selectedAttachment = attachment
+                print("[UI] Attachment selected from camera: kind=video file=\(attachment.filename ?? "unknown")")
+            } else if let image {
                 selectedAttachment = ChatAttachmentService.loadFromCameraImage(image)
                 print("[UI] Attachment selected from camera: kind=image")
             }
             showCameraPhotoPicker = false
-        }
-    }
-    
-    private var cameraVideoPicker: some View {
-        CameraCapturePicker(mode: .video) { image, videoURL in
-            if let videoURL, let attachment = try? ChatAttachmentService.loadFromCameraVideo(videoURL) {
-                selectedAttachment = attachment
-                print("[UI] Attachment selected from camera: kind=video file=\(attachment.filename ?? "unknown")")
-            }
-            showCameraVideoPicker = false
         }
     }
     
@@ -180,9 +157,22 @@ struct ChatView: View {
                 inputText: $inputText,
                 hasAttachment: selectedAttachment != nil,
                 isDictating: dictationController.isRecording,
-                onAddAttachment: { showAttachmentMenu = true },
+                showAttachmentMenu: $showAttachmentRow,
+                onCamera: {
+                    showAttachmentRow = false
+                    showCameraPhotoPicker = true
+                },
+                onPhotos: {
+                    showAttachmentRow = false
+                    showPhotosPicker = true
+                },
+                onFiles: {
+                    showAttachmentRow = false
+                    showDocumentPicker = true
+                },
                 onToggleDictation: handleDictationToggle,
                 onSend: { text in
+                    showAttachmentRow = false
                     if let attachment = selectedAttachment {
                         let imageBytes = attachment.imageData?.count ?? 0
                         print("[UI] Send tapped with attachment. kind=\(attachment.kind) imageBytes=\(imageBytes)")
@@ -203,8 +193,7 @@ struct ChatView: View {
             CallOverlayView(
                 viewModel: viewModel,
                 onMinimize: { callPresentationStyle = .pictureInPicture },
-                onToggleVideo: { toggleVideoMode() },
-                onAddAttachment: { showAttachmentMenu = true }
+                onToggleVideo: { toggleVideoMode() }
             )
             .transition(.opacity)
         }
@@ -212,9 +201,6 @@ struct ChatView: View {
         if viewModel.callState.isPresented && callPresentationStyle == .pictureInPicture {
             PiPCallOverlayView(
                 viewModel: viewModel,
-                pipCenter: $pipCenter,
-                pipDragStart: $pipDragStart,
-                pipInitialized: $pipInitialized,
                 onExpand: { callPresentationStyle = .translucentOverlay },
                 onToggleVideo: { toggleVideoMode() }
             )
@@ -238,8 +224,7 @@ struct ChatView: View {
             viewModel: viewModel,
             style: .fullScreen,
             onMinimize: { callPresentationStyle = .translucentOverlay },
-            onToggleVideo: { toggleVideoMode() },
-            onAddAttachment: { showAttachmentMenu = true }
+            onToggleVideo: { toggleVideoMode() }
         )
     }
     

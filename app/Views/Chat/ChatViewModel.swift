@@ -98,6 +98,9 @@ class ChatViewModel: ObservableObject {
     private var callDurationAccumulated: TimeInterval = 0
     private var callKitManager: CallKitManager?
     private let liveActivityManager = LiveActivityManager()
+    private var reconnectTask: Task<Void, Never>?
+    private var reconnectDelay: TimeInterval = 1.0
+    private let maxReconnectDelay: TimeInterval = 30.0
 
     private struct PendingMessage {
         let message: ChatMessage
@@ -120,6 +123,7 @@ class ChatViewModel: ObservableObject {
         audioObservers.forEach { NotificationCenter.default.removeObserver($0) }
         audioObservers.removeAll()
         callTimer?.invalidate()
+        reconnectTask?.cancel()
     }
 
     func setModelContext(_ context: ModelContext) {
@@ -346,6 +350,30 @@ class ChatViewModel: ObservableObject {
         generator.notificationOccurred(style)
     }
 
+    private func resetReconnectBackoff() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectDelay = 1.0
+    }
+
+    private func scheduleAudioReconnect() {
+        guard callState.isPresented else { return }
+
+        reconnectTask?.cancel()
+        let delay = reconnectDelay
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self, self.callState.isPresented else { return }
+                self.connect(mode: .audio)
+            }
+        }
+
+        reconnectDelay = min(reconnectDelay * 2.0, maxReconnectDelay)
+        print("[Gemini] Scheduled reconnect in \(String(format: "%.1f", delay))s")
+    }
+
     private func observeAudioSession() {
         let center = NotificationCenter.default
         audioObservers.append(center.addObserver(
@@ -438,11 +466,19 @@ class ChatViewModel: ObservableObject {
 
     // MARK: - Actions
 
-    /// Connect WebSocket for audio mode (voice calls only). Text uses REST.
+    /// Connect Gemini Live WebSocket with the requested session mode.
     func connect(mode: SessionMode = .audio) {
         guard connectionState != .connecting else { return }
         connectionState = .connecting
-        geminiService?.connect(config: .audio())
+        let config: SessionConfig = {
+            switch mode {
+            case .audio:
+                return .audio()
+            case .text:
+                return .text()
+            }
+        }()
+        geminiService?.connect(config: config)
     }
     
     func disconnect() {
@@ -534,6 +570,7 @@ class ChatViewModel: ObservableObject {
         stopPlayback()
         isMicrophoneMuted = false
         pendingVoiceStart = false
+        resetReconnectBackoff()
         stopVideoStreaming()
         cancelTranscriptDebounce()
         finalizeDraftIfNeeded()
@@ -1057,14 +1094,12 @@ class ChatViewModel: ObservableObject {
         }
     }
 
-    // New helper to mark latest user message with status .sent if currently .sending
     private func markLatestUserMessageSent() {
         guard let latest = messages.last(where: { $0.role.isUser && $0.status == .sending }) else { return }
         latest.markStatus(.sent)
         print("[Chat] Marked latest user message as Sent")
     }
     
-    // New helper to mark latest user message with status .failed if currently .sending
     private func markLatestUserMessageFailedIfSending() {
         guard let latest = messages.last(where: { $0.role.isUser && $0.status == .sending }) else { return }
         latest.markStatus(.failed)
@@ -1339,6 +1374,7 @@ class ChatViewModel: ObservableObject {
 extension ChatViewModel: GeminiServiceDelegate {
     func geminiServiceDidConnect(_ service: GeminiService) {
         connectionState = .connected
+        resetReconnectBackoff()
         print("[Gemini] Connected. callKitEnabled=\(callKitEnabled) pendingVoiceStart=\(pendingVoiceStart)")
         flushPendingMessages()
         if callState.isPresented {
@@ -1370,7 +1406,7 @@ extension ChatViewModel: GeminiServiceDelegate {
             pauseCallTimer()
             pendingVoiceStart = true
             if shouldAutoReconnect {
-                connect(mode: .audio)
+                scheduleAudioReconnect()
             }
         }
     }
@@ -1418,7 +1454,7 @@ extension ChatViewModel: GeminiServiceDelegate {
         print("[Gemini] Response text received chars=\(text.count) preview=\(preview)")
         updateAssistantTextMessage(chunk: text, isFinal: false)
         markLatestUserMessageRead()
-        geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
+        service.notifyCurrentSendResult()
     }
 
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data) {
@@ -1426,7 +1462,7 @@ extension ChatViewModel: GeminiServiceDelegate {
         finalizeDraftIfNeeded()
         playAudio(data: data)
         markLatestUserMessageRead()
-        geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
+        service.notifyCurrentSendResult()
     }
 
     func geminiService(_ service: GeminiService, didStartFunctionCall id: String, name: String) {
@@ -1435,7 +1471,7 @@ extension ChatViewModel: GeminiServiceDelegate {
 
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult) {
         finishToolCallChip(name: name, result: result)
-        geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
+        service.notifyCurrentSendResult()
     }
 
     func geminiServiceDidStartResponse(_ service: GeminiService) {

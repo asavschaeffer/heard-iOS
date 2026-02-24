@@ -6,22 +6,19 @@ struct CallView: View {
     @Environment(\.dismiss) private var dismiss
     let onMinimize: (() -> Void)?
     let onToggleVideo: (() -> Void)?
-    let onAddAttachment: (() -> Void)?
-    
+
     init(
         viewModel: ChatViewModel,
         style: CallPresentationStyle,
         onMinimize: (() -> Void)? = nil,
-        onToggleVideo: (() -> Void)? = nil,
-        onAddAttachment: (() -> Void)? = nil
+        onToggleVideo: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self.style = style
         self.onMinimize = onMinimize
         self.onToggleVideo = onToggleVideo
-        self.onAddAttachment = onAddAttachment
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -80,8 +77,9 @@ struct CallView: View {
             ZStack {
                 Circle()
                     .fill(Color.white.opacity(0.08))
-                    .frame(width: 180, height: 180)
-                    .scaleEffect(viewModel.callState.isSpeaking ? 1.06 : 1.0)
+                    .frame(width: 200, height: 200)
+                    .shadow(color: viewModel.callState.isSpeaking ? .white.opacity(0.15) : .clear, radius: 20)
+                    .scaleEffect(viewModel.callState.isSpeaking ? 1.04 : 1.0)
                     .animation(.easeInOut(duration: 0.3).repeatForever(), value: viewModel.callState.isSpeaking)
 
                 Image(systemName: "fork.knife.circle.fill")
@@ -90,20 +88,21 @@ struct CallView: View {
             }
 
             Spacer()
-
-            CallControlsView(
-                viewModel: viewModel,
-                isVideoActive: viewModel.callState.isVideoStreaming,
-                onToggleVideo: { onToggleVideo?() },
-                onAddAttachment: { onAddAttachment?() }
-            ) {
-                viewModel.stopVoiceSession()
-            }
-            .padding(.bottom, 28)
         }
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(backgroundView)
+        .safeAreaInset(edge: .bottom) {
+            CallControlsView(
+                viewModel: viewModel,
+                isVideoActive: viewModel.callState.isVideoStreaming,
+                onToggleVideo: { onToggleVideo?() }
+            ) {
+                viewModel.stopVoiceSession()
+            }
+            .padding(.bottom, 12)
+            .padding(.horizontal)
+        }
         .onAppear {
             viewModel.startVoiceSession()
         }
@@ -134,13 +133,13 @@ struct CallView: View {
             return false
         }
     }
-    
+
     private var backgroundView: some View {
         Group {
             switch style {
             case .fullScreen:
                 LinearGradient(
-                    colors: [Color.black, Color.black.opacity(0.85)],
+                    colors: [Color(red: 0.11, green: 0.11, blue: 0.118), .black],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -182,15 +181,13 @@ struct CallOverlayView: View {
     @ObservedObject var viewModel: ChatViewModel
     let onMinimize: () -> Void
     let onToggleVideo: (() -> Void)?
-    let onAddAttachment: (() -> Void)?
-    
+
     var body: some View {
         CallView(
             viewModel: viewModel,
             style: .translucentOverlay,
             onMinimize: onMinimize,
-            onToggleVideo: onToggleVideo,
-            onAddAttachment: onAddAttachment
+            onToggleVideo: onToggleVideo
         )
     }
 }

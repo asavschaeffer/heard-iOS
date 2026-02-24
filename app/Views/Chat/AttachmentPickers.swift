@@ -36,23 +36,15 @@ struct DocumentPicker: UIViewControllerRepresentable {
     }
 }
 
-enum CameraCaptureMode {
-    case photo
-    case video
-}
-
 struct CameraCapturePicker: UIViewControllerRepresentable {
-    let mode: CameraCaptureMode
     let onPick: (UIImage?, URL?) -> Void
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
+        picker.mediaTypes = [UTType.image.identifier, UTType.movie.identifier]
+        picker.videoQuality = .typeHigh
         picker.delegate = context.coordinator
-        if mode == .video {
-            picker.mediaTypes = [UTType.movie.identifier]
-            picker.videoQuality = .typeHigh
-        }
         return picker
     }
 

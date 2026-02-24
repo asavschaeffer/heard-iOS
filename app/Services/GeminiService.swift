@@ -201,20 +201,8 @@ class GeminiService: NSObject {
         let config = activeConfig ?? .audio()
         let model = config.model
 
-        // WebSocket is only used for audio mode now
-        let generationConfig: [String: Any] = [
-            "responseModalities": ["AUDIO"],
-            "speechConfig": [
-                "voiceConfig": [
-                    "prebuiltVoiceConfig": [
-                        "voiceName": "Aoede"
-                    ]
-                ]
-            ]
-        ]
-        let setup: [String: Any] = [
+        var setup: [String: Any] = [
             "model": "models/\(model)",
-            "generationConfig": generationConfig,
             "systemInstruction": [
                 "parts": [
                     ["text": systemPrompt]
@@ -222,13 +210,31 @@ class GeminiService: NSObject {
             ],
             "tools": [
                 ["functionDeclarations": GeminiTools.toAPIFormat()]
-            ],
-            "outputAudioTranscription": [String: Any](),
-            "inputAudioTranscription": [String: Any]()
+            ]
         ]
 
+        switch config.mode {
+        case .audio:
+            setup["generationConfig"] = [
+                "responseModalities": ["AUDIO"],
+                "speechConfig": [
+                    "voiceConfig": [
+                        "prebuiltVoiceConfig": [
+                            "voiceName": "Aoede"
+                        ]
+                    ]
+                ]
+            ]
+            setup["outputAudioTranscription"] = [String: Any]()
+            setup["inputAudioTranscription"] = [String: Any]()
+        case .text:
+            setup["generationConfig"] = [
+                "responseModalities": ["TEXT"]
+            ]
+        }
+
         let payload: [String: Any] = ["setup": setup]
-        print("[Gemini] Sending setup for model=\(model)")
+        print("[Gemini] Sending setup for model=\(model) mode=\(config.mode)")
         if case let .failure(error) = sendJSON(payload) {
             print("[Gemini] Setup send failed before dispatch: \(error.localizedDescription)")
             delegate?.geminiService(self, didReceiveError: error)
@@ -297,6 +303,11 @@ class GeminiService: NSObject {
 
     func notifySendResult(messageID: UUID) {
         cancelRequestTracking(messageID: messageID)
+    }
+
+    func notifyCurrentSendResult() {
+        guard let pendingMessageID else { return }
+        cancelRequestTracking(messageID: pendingMessageID)
     }
 
     // MARK: - Audio Streaming
