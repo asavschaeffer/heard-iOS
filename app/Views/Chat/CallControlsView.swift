@@ -6,6 +6,8 @@ struct CallControlsView: View {
     let onToggleVideo: () -> Void
     let onEnd: () -> Void
 
+    @State private var endCallTrigger = false
+
     private var isConnected: Bool { viewModel.connectionState == .connected }
 
     var body: some View {
@@ -34,6 +36,7 @@ struct CallControlsView: View {
                 style: .destructive,
                 isEnabled: true
             ) {
+                endCallTrigger.toggle()
                 onEnd()
             }
 
@@ -56,6 +59,10 @@ struct CallControlsView: View {
             }
             .opacity(isConnected ? 1.0 : 0.6)
         }
+        .sensoryFeedback(.selection, trigger: viewModel.isMicrophoneMuted)
+        .sensoryFeedback(.selection, trigger: isVideoActive)
+        .sensoryFeedback(.selection, trigger: viewModel.isSpeakerPreferred)
+        .sensoryFeedback(.impact, trigger: endCallTrigger)
     }
 }
 

@@ -86,6 +86,7 @@ struct ChatInputBar: View {
             .padding()
         }
         .background(.bar)
+        .sensoryFeedback(.selection, trigger: showAttachmentMenu)
     }
 }
 

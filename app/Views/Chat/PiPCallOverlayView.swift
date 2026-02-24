@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum CornerPlacement {
+enum CornerPlacement: Equatable {
     case topLeading, topTrailing, bottomLeading, bottomTrailing
 
     func position(in size: CGSize, barWidth: CGFloat, barHeight: CGFloat, padding: CGFloat) -> CGPoint {
@@ -82,6 +82,7 @@ struct PiPCallOverlayView: View {
             )
         }
         .ignoresSafeArea()
+        .sensoryFeedback(.impact, trigger: placement)
     }
 }
 
