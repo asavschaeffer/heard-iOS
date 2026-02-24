@@ -63,6 +63,17 @@ class GeminiService: NSObject {
     private var sentAudioByteCount = 0
     private var receivedAudioChunkCount = 0
     private var receivedAudioByteCount = 0
+    private var outboundTurnSequence = 0
+    private var inboundTurnSequence = 0
+    private var outboundTurnByMessageID: [UUID: String] = [:]
+    private var inboundTurnID: String?
+    private var inboundTurnStartedAt: Date?
+    private var inboundTurnFirstEventLogged = false
+    private var inboundTurnTextParts = 0
+    private var inboundTurnAudioChunks = 0
+    private var inboundTurnAudioBytes = 0
+    private var inboundTurnTranscriptParts = 0
+    private var inboundRESTTurnSequence = 0
 
     // Pending requests tracking with timeout
     private var pendingMessageID: UUID?
@@ -279,6 +290,7 @@ class GeminiService: NSObject {
     private func cancelRequestTracking(messageID: UUID) {
         guard pendingMessageID == messageID else { return }
         pendingMessageID = nil
+        outboundTurnByMessageID.removeValue(forKey: messageID)
         timeoutTask?.cancel()
         timeoutTask = nil
     }
@@ -321,8 +333,10 @@ class GeminiService: NSObject {
 
     /// Send a text message. Routes through REST API unless WebSocket is connected (during a call).
     func sendText(_ text: String, messageID: UUID? = nil) -> Result<Void, Error> {
+        let turnID = nextOutboundTurnID(messageID: messageID)
         // During a call with active WebSocket, send via WebSocket
         if isConnected {
+            print("[Gemini] Outbound turn \(turnID) sendText(ws) chars=\(text.count) messageID=\(messageID?.uuidString ?? "none")")
             let message: [String: Any] = [
                 "clientContent": [
                     "turns": [
@@ -345,13 +359,16 @@ class GeminiService: NSObject {
         }
 
         // Otherwise use REST API
+        print("[Gemini] Outbound turn \(turnID) sendText(rest) chars=\(text.count) messageID=\(messageID?.uuidString ?? "none")")
         sendTextREST(text, messageID: messageID)
         return .success(())
     }
 
     /// Send an image. Routes through REST API unless WebSocket is connected (during a call).
     func sendPhoto(_ imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
+        let turnID = nextOutboundTurnID(messageID: messageID)
         if isConnected {
+            print("[Gemini] Outbound turn \(turnID) sendPhoto(ws) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
             let base64Image = imageData.base64EncodedString()
             let message: [String: Any] = [
                 "clientContent": [
@@ -379,13 +396,16 @@ class GeminiService: NSObject {
             return result
         }
 
+        print("[Gemini] Outbound turn \(turnID) sendPhoto(rest) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
         sendPhotoREST(imageData, messageID: messageID)
         return .success(())
     }
 
     /// Send text + image together. Routes through REST API unless WebSocket is connected.
     func sendTextWithPhoto(_ text: String, imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
+        let turnID = nextOutboundTurnID(messageID: messageID)
         if isConnected {
+            print("[Gemini] Outbound turn \(turnID) sendTextWithPhoto(ws) chars=\(text.count) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
             let base64Image = imageData.base64EncodedString()
             let message: [String: Any] = [
                 "clientContent": [
@@ -414,6 +434,7 @@ class GeminiService: NSObject {
             return result
         }
 
+        print("[Gemini] Outbound turn \(turnID) sendTextWithPhoto(rest) chars=\(text.count) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
         sendTextWithPhotoREST(text, imageData: imageData, messageID: messageID)
         return .success(())
     }
@@ -421,12 +442,16 @@ class GeminiService: NSObject {
     // MARK: - REST API Methods
 
     func sendTextREST(_ text: String, messageID: UUID? = nil) {
+        let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
+        print("[Gemini] Outbound turn \(turnID) compose REST text parts=1 chars=\(text.count)")
         let userParts: [[String: Any]] = [["text": text]]
         let userTurn: [String: Any] = ["role": "user", "parts": userParts]
         sendRESTRequest(userTurn: userTurn, messageID: messageID)
     }
 
     func sendPhotoREST(_ imageData: Data, messageID: UUID? = nil) {
+        let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
+        print("[Gemini] Outbound turn \(turnID) compose REST image parts=1 imageBytes=\(imageData.count)")
         let base64Image = imageData.base64EncodedString()
         let userParts: [[String: Any]] = [
             ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]]
@@ -436,6 +461,8 @@ class GeminiService: NSObject {
     }
 
     func sendTextWithPhotoREST(_ text: String, imageData: Data, messageID: UUID? = nil) {
+        let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
+        print("[Gemini] Outbound turn \(turnID) compose REST text+image parts=2 chars=\(text.count) imageBytes=\(imageData.count)")
         let base64Image = imageData.base64EncodedString()
         let userParts: [[String: Any]] = [
             ["text": text],
@@ -451,6 +478,10 @@ class GeminiService: NSObject {
             return
         }
 
+        let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
+        let restInboundID = "in-rest-\(inboundRESTTurnSequence + 1)"
+        let startedAt = Date()
+        print("[Gemini] Inbound turn \(restInboundID) started linkedOutbound=\(turnID) mode=rest")
         delegate?.geminiServiceDidStartResponse(self)
 
         // Append user turn to history
@@ -464,14 +495,22 @@ class GeminiService: NSObject {
                 let responseText = try await self.executeRESTRequest(messageID: messageID)
                 await MainActor.run {
                     if !responseText.isEmpty {
+                        let preview = responseText.count > 160 ? String(responseText.prefix(160)) + "..." : responseText
+                        print("[Gemini] Inbound turn \(restInboundID) restText chars=\(responseText.count) preview=\(preview)")
                         self.delegate?.geminiService(self, didReceiveResponse: responseText)
                     }
+                    let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    print("[Gemini] Inbound turn \(restInboundID) complete elapsedMs=\(elapsedMs) textParts=\(responseText.isEmpty ? 0 : 1) audioChunks=0 audioBytes=0 transcriptParts=0")
+                    self.inboundRESTTurnSequence += 1
                     self.delegate?.geminiServiceDidEndResponse(self)
                 }
             } catch is CancellationError {
                 // Task cancelled, no action
             } catch {
                 await MainActor.run {
+                    let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+                    print("[Gemini] Inbound turn \(restInboundID) failed elapsedMs=\(elapsedMs) error=\(error.localizedDescription)")
+                    self.inboundRESTTurnSequence += 1
                     self.delegate?.geminiService(self, didReceiveError: error)
                     self.delegate?.geminiServiceDidEndResponse(self)
                 }
@@ -610,6 +649,7 @@ class GeminiService: NSObject {
     /// Uses image/jpeg per Google Live API examples.
     func sendVideoFrame(_ imageData: Data) {
         guard isConnected else { return }
+        print("[Gemini] Outbound realtime video frame send bytes=\(imageData.count)")
 
         let base64Image = imageData.base64EncodedString()
         let message: [String: Any] = [
@@ -629,15 +669,27 @@ class GeminiService: NSObject {
     // MARK: - File Attachments (Stub)
 
     func sendVideoAttachment(url: URL, utType: String?) {
-        guard isConnected else { return }
-        guard supportsFileAttachments else { return }
+        guard isConnected else {
+            print("[Gemini] Video attachment skipped (not connected). url=\(url.lastPathComponent)")
+            return
+        }
+        guard supportsFileAttachments else {
+            print("[Gemini] Video attachment reached stub boundary. file=\(url.lastPathComponent) utType=\(utType ?? "unknown") reason=file-attachment-upload-not-implemented")
+            return
+        }
         // TODO: Upload video attachment when Gemini supports it.
         _ = (url, utType)
     }
 
     func sendDocumentAttachment(url: URL, utType: String?) {
-        guard isConnected else { return }
-        guard supportsFileAttachments else { return }
+        guard isConnected else {
+            print("[Gemini] Document attachment skipped (not connected). url=\(url.lastPathComponent)")
+            return
+        }
+        guard supportsFileAttachments else {
+            print("[Gemini] Document attachment reached stub boundary. file=\(url.lastPathComponent) utType=\(utType ?? "unknown") reason=file-attachment-upload-not-implemented")
+            return
+        }
         // TODO: Upload document attachment when Gemini supports it.
         _ = (url, utType)
     }
@@ -766,6 +818,20 @@ class GeminiService: NSObject {
 
             if !isStreamingResponse {
                 isStreamingResponse = true
+                inboundTurnSequence += 1
+                let turnID = "in-\(inboundTurnSequence)"
+                inboundTurnID = turnID
+                inboundTurnStartedAt = Date()
+                inboundTurnFirstEventLogged = false
+                inboundTurnTextParts = 0
+                inboundTurnAudioChunks = 0
+                inboundTurnAudioBytes = 0
+                inboundTurnTranscriptParts = 0
+                let linkedOutbound: String = {
+                    guard let pending = pendingMessageID else { return "none" }
+                    return outboundTurnByMessageID[pending] ?? "msg-\(pending.uuidString.prefix(8))"
+                }()
+                print("[Gemini] Inbound turn \(turnID) started linkedOutbound=\(linkedOutbound)")
                 delegate?.geminiServiceDidStartResponse(self)
 
                 // Start heartbeat monitor
@@ -793,6 +859,11 @@ class GeminiService: NSObject {
             for part in parts {
                 // Text response
                 if let text = part["text"] as? String {
+                    inboundTurnTextParts += 1
+                    if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
+                        inboundTurnFirstEventLogged = true
+                        print("[Gemini] Inbound turn \(turnID) firstEvent=text chars=\(text.count)")
+                    }
                     delegate?.geminiService(self, didReceiveResponse: text)
                 }
 
@@ -802,6 +873,12 @@ class GeminiService: NSObject {
                    let audioData = Data(base64Encoded: base64Data) {
                     receivedAudioChunkCount += 1
                     receivedAudioByteCount += audioData.count
+                    inboundTurnAudioChunks += 1
+                    inboundTurnAudioBytes += audioData.count
+                    if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
+                        inboundTurnFirstEventLogged = true
+                        print("[Gemini] Inbound turn \(turnID) firstEvent=audio bytes=\(audioData.count)")
+                    }
                     if receivedAudioChunkCount == 1 || receivedAudioChunkCount % 200 == 0 {
                         print("[Gemini] Received audio chunk #\(receivedAudioChunkCount), bytes=\(audioData.count), totalBytes=\(receivedAudioByteCount)")
                     }
@@ -810,6 +887,11 @@ class GeminiService: NSObject {
 
                 // Output transcript (AI speech-to-text)
                 if let transcript = part["transcript"] as? String {
+                    inboundTurnTranscriptParts += 1
+                    if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
+                        inboundTurnFirstEventLogged = true
+                        print("[Gemini] Inbound turn \(turnID) firstEvent=transcript chars=\(transcript.count)")
+                    }
                     delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: turnComplete)
                 }
             }
@@ -821,10 +903,21 @@ class GeminiService: NSObject {
 
         let isComplete = turnComplete
         if isComplete {
+            if let turnID = inboundTurnID {
+                let elapsedMs = Int((Date().timeIntervalSince(inboundTurnStartedAt ?? Date())) * 1000)
+                print("[Gemini] Inbound turn \(turnID) complete elapsedMs=\(elapsedMs) textParts=\(inboundTurnTextParts) audioChunks=\(inboundTurnAudioChunks) audioBytes=\(inboundTurnAudioBytes) transcriptParts=\(inboundTurnTranscriptParts)")
+            }
             isStreamingResponse = false
             heartbeatTask?.cancel()
             heartbeatTask = nil
             lastStreamChunkAt = nil
+            inboundTurnID = nil
+            inboundTurnStartedAt = nil
+            inboundTurnFirstEventLogged = false
+            inboundTurnTextParts = 0
+            inboundTurnAudioChunks = 0
+            inboundTurnAudioBytes = 0
+            inboundTurnTranscriptParts = 0
             delegate?.geminiServiceDidEndResponse(self)
         }
 
@@ -842,6 +935,7 @@ class GeminiService: NSObject {
 
     private func handleToolCall(_ toolCall: [String: Any]) {
         guard let functionCalls = toolCall["functionCalls"] as? [[String: Any]] else { return }
+        print("[Gemini] Tool call batch received count=\(functionCalls.count)")
 
         for rawCall in functionCalls {
             guard let id = rawCall["id"] as? String,
@@ -1591,6 +1685,15 @@ class GeminiService: NSObject {
             return "\(message) (code \(code))"
         }
         return message
+    }
+
+    private func nextOutboundTurnID(messageID: UUID?) -> String {
+        outboundTurnSequence += 1
+        let turnID = "out-\(outboundTurnSequence)"
+        if let messageID {
+            outboundTurnByMessageID[messageID] = turnID
+        }
+        return turnID
     }
 }
 

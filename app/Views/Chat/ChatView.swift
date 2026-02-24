@@ -21,6 +21,7 @@ struct ChatView: View {
     @State private var showDocumentPicker = false
     @State private var showCameraPhotoPicker = false
     @State private var showCameraVideoPicker = false
+    @State private var attachmentErrorMessage: String?
     @State private var callPresentationStyle: CallPresentationStyle = .fullScreen
     @State private var pipCenter: CGPoint = .zero
     @State private var pipDragStart: CGPoint?
@@ -48,8 +49,24 @@ struct ChatView: View {
             .sheet(isPresented: $showDocumentPicker) { documentPicker }
             .sheet(isPresented: $showCameraPhotoPicker) { cameraPhotoPicker }
             .sheet(isPresented: $showCameraVideoPicker) { cameraVideoPicker }
+            .alert("Attachment Error", isPresented: attachmentErrorPresented) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(attachmentErrorMessage ?? "Unable to prepare attachment.")
+            }
             .onChange(of: selectedItem) { handleSelectedItemChange() }
             .onChange(of: dictationController.transcript) { handleTranscriptChange() }
+    }
+
+    private var attachmentErrorPresented: Binding<Bool> {
+        Binding(
+            get: { attachmentErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    attachmentErrorMessage = nil
+                }
+            }
+        )
     }
     
     @ViewBuilder
@@ -70,6 +87,7 @@ struct ChatView: View {
         CameraCapturePicker(mode: .photo) { image, videoURL in
             if let image {
                 selectedAttachment = ChatAttachmentService.loadFromCameraImage(image)
+                print("[UI] Attachment selected from camera: kind=image")
             }
             showCameraPhotoPicker = false
         }
@@ -79,6 +97,7 @@ struct ChatView: View {
         CameraCapturePicker(mode: .video) { image, videoURL in
             if let videoURL, let attachment = try? ChatAttachmentService.loadFromCameraVideo(videoURL) {
                 selectedAttachment = attachment
+                print("[UI] Attachment selected from camera: kind=video file=\(attachment.filename ?? "unknown")")
             }
             showCameraVideoPicker = false
         }
@@ -106,6 +125,9 @@ struct ChatView: View {
                 print("[UI] Loaded attachment from Photos picker: kind=\(attachment.kind) loadMs=\(loadedMs) totalMs=\(totalMs)")
             } catch {
                 print("[UI] Failed to load attachment from Photos picker: \(error)")
+                await MainActor.run {
+                    attachmentErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Unable to load selected attachment."
+                }
             }
         }
     }
@@ -257,6 +279,10 @@ struct ChatView: View {
         guard let url else { return }
         if let attachment = try? ChatAttachmentService.loadFromDocument(url: url) {
             selectedAttachment = attachment
+            print("[UI] Attachment selected from files: kind=\(attachment.kind) file=\(attachment.filename ?? "unknown")")
+        } else {
+            attachmentErrorMessage = "Unable to load selected file."
+            print("[UI] Failed to load attachment from files: url=\(url.lastPathComponent)")
         }
     }
     
@@ -268,6 +294,7 @@ struct ChatView: View {
 private struct AttachmentPreview: View {
     let attachment: ChatAttachment
     let onClear: () -> Void
+    @State private var previewImage: UIImage?
     
     var body: some View {
         HStack(spacing: 12) {
@@ -290,13 +317,32 @@ private struct AttachmentPreview: View {
         }
         .padding(.horizontal)
         .padding(.top, 8)
+        .onAppear { preparePreviewImage() }
+        .onChange(of: attachment.imageData) { _, _ in
+            preparePreviewImage()
+        }
+    }
+
+    private func preparePreviewImage() {
+        guard let data = attachment.imageData else {
+            previewImage = nil
+            return
+        }
+        Task {
+            let decoded = await Task.detached(priority: .userInitiated) {
+                UIImage(data: data)
+            }.value
+            await MainActor.run {
+                previewImage = decoded
+            }
+        }
     }
     
     private var previewContent: some View {
         Group {
             switch attachment.kind {
             case .image:
-                if let data = attachment.imageData, let image = UIImage(data: data) {
+                if let image = previewImage {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
@@ -305,7 +351,7 @@ private struct AttachmentPreview: View {
                 }
             case .video:
                 ZStack {
-                    if let data = attachment.imageData, let image = UIImage(data: data) {
+                    if let image = previewImage {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()

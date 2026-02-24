@@ -23,6 +23,7 @@ enum ChatAttachmentError: Error {
     case unsupported
     case loadFailed
     case fileCopyFailed
+    case fileTooLarge(actualBytes: Int64, maxBytes: Int64, kind: ChatAttachmentKind)
 }
 
 final class ChatAttachmentService {
@@ -30,6 +31,8 @@ final class ChatAttachmentService {
     nonisolated private static let photoMaxDimension: CGFloat = 1280
     nonisolated private static let photoJPEGQuality: CGFloat = 0.82
     nonisolated private static let photoReencodeThresholdBytes = 1_500_000
+    nonisolated private static let maxImageAttachmentBytes: Int64 = 12_000_000
+    nonisolated private static let maxVideoAttachmentBytes: Int64 = 60_000_000
 
     static func loadFromPhotos(
         contentTypes: [UTType],
@@ -50,6 +53,13 @@ final class ChatAttachmentService {
                 let outputData = normalizedData ?? data
                 let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 print("[Attachment] Photos image loaded. originalBytes=\(data.count) normalizedBytes=\(outputData.count) transformMs=\(transformMs) elapsedMs=\(elapsedMs)")
+                if Int64(outputData.count) > maxImageAttachmentBytes {
+                    throw ChatAttachmentError.fileTooLarge(
+                        actualBytes: Int64(outputData.count),
+                        maxBytes: maxImageAttachmentBytes,
+                        kind: .image
+                    )
+                }
                 return ChatAttachment(kind: .image, imageData: outputData, fileURL: nil, filename: "photo.jpg", utType: UTType.jpeg.identifier)
             }
             throw ChatAttachmentError.loadFailed
@@ -68,6 +78,13 @@ final class ChatAttachmentService {
                 let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
                 let fileSize = (try? FileManager.default.attributesOfItem(atPath: copiedURL.path)[.size] as? NSNumber)?.int64Value ?? -1
                 print("[Attachment] Photos video loaded. bytes=\(fileSize) thumbBytes=\(thumbnail?.count ?? 0) elapsedMs=\(elapsedMs)")
+                if fileSize > maxVideoAttachmentBytes {
+                    throw ChatAttachmentError.fileTooLarge(
+                        actualBytes: fileSize,
+                        maxBytes: maxVideoAttachmentBytes,
+                        kind: .video
+                    )
+                }
                 return ChatAttachment(
                     kind: .video,
                     imageData: thumbnail,
@@ -86,6 +103,8 @@ final class ChatAttachmentService {
         let copiedURL = try copyToDocuments(url: url)
         let utType = UTType(filenameExtension: copiedURL.pathExtension) ?? .data
         let kind: ChatAttachmentKind = utType.conforms(to: .pdf) ? .pdf : .document
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: copiedURL.path)[.size] as? NSNumber)?.int64Value ?? -1
+        print("[Attachment] Document prepared. file=\(copiedURL.lastPathComponent) bytes=\(fileSize) kind=\(kind)")
         return ChatAttachment(
             kind: kind,
             imageData: nil,
@@ -97,12 +116,15 @@ final class ChatAttachmentService {
 
     static func loadFromCameraImage(_ image: UIImage) -> ChatAttachment {
         let data = image.jpegData(compressionQuality: 0.85)
+        print("[Attachment] Camera image prepared. bytes=\(data?.count ?? 0)")
         return ChatAttachment(kind: .image, imageData: data, fileURL: nil, filename: "camera.jpg", utType: UTType.jpeg.identifier)
     }
 
     static func loadFromCameraVideo(_ url: URL) throws -> ChatAttachment {
         let copiedURL = try copyToDocuments(url: url)
         let thumbnail = videoThumbnailData(from: copiedURL)
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: copiedURL.path)[.size] as? NSNumber)?.int64Value ?? -1
+        print("[Attachment] Camera video prepared. file=\(copiedURL.lastPathComponent) bytes=\(fileSize) thumbBytes=\(thumbnail?.count ?? 0)")
         return ChatAttachment(
             kind: .video,
             imageData: thumbnail,
@@ -180,5 +202,29 @@ final class ChatAttachmentService {
         }
 
         return jpeg
+    }
+}
+
+extension ChatAttachmentError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .unsupported:
+            return "Attachment type is not supported."
+        case .loadFailed:
+            return "Failed to load selected attachment."
+        case .fileCopyFailed:
+            return "Failed to prepare selected file."
+        case let .fileTooLarge(actualBytes, maxBytes, kind):
+            let actualMB = Double(actualBytes) / 1_000_000
+            let maxMB = Double(maxBytes) / 1_000_000
+            let kindLabel: String
+            switch kind {
+            case .image: kindLabel = "Image"
+            case .video: kindLabel = "Video"
+            case .pdf: kindLabel = "PDF"
+            case .document: kindLabel = "Document"
+            }
+            return "\(kindLabel) is too large (\(String(format: "%.1f", actualMB)) MB). Maximum allowed is \(String(format: "%.1f", maxMB)) MB."
+        }
     }
 }

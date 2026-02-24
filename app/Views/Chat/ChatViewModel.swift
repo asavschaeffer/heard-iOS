@@ -913,6 +913,11 @@ class ChatViewModel: ObservableObject {
     }
 
     private func enqueueOrSend(text: String?, imageData: Data?, message: ChatMessage) {
+        if let mediaType = message.mediaType {
+            print("[Chat] enqueueOrSend media message id=\(message.id.uuidString.prefix(8)) type=\(mediaType.rawValue) file=\(message.mediaFilename ?? "none") imageBytes=\(message.imageData?.count ?? 0)")
+        } else {
+            print("[Chat] enqueueOrSend text message id=\(message.id.uuidString.prefix(8)) chars=\(text?.count ?? 0)")
+        }
         // During a call, route through WebSocket (may need to queue if connecting)
         if callState.isPresented {
             if connectionState == .connected {
@@ -920,6 +925,7 @@ class ChatViewModel: ObservableObject {
             } else {
                 // Queue for when WebSocket connects
                 pendingMessages.append(PendingMessage(message: message, text: text, imageData: imageData))
+                print("[Chat] queued pending message id=\(message.id.uuidString.prefix(8)) pendingCount=\(pendingMessages.count)")
                 if connectionState == .disconnected {
                     connect(mode: .audio)
                 }
@@ -935,6 +941,7 @@ class ChatViewModel: ObservableObject {
         guard connectionState == .connected else { return }
         let queued = pendingMessages
         pendingMessages.removeAll()
+        print("[Chat] flushing pending messages count=\(queued.count)")
         for item in queued {
             sendToGemini(text: item.text, imageData: item.imageData, message: item.message)
         }
@@ -943,6 +950,8 @@ class ChatViewModel: ObservableObject {
     private func sendToGemini(text: String?, imageData: Data?, message: ChatMessage) {
         // Keep message status as .sending initially (set on buildMessage)
         let result: Result<Void, Error>
+        let path = callState.isPresented ? "websocket-call" : "rest-chat"
+        print("[Chat] sendToGemini start id=\(message.id.uuidString.prefix(8)) path=\(path) textChars=\(text?.count ?? 0) imageBytes=\(imageData?.count ?? 0) mediaType=\(message.mediaType?.rawValue ?? "none")")
 
         if let text = text, let imageData = imageData, message.mediaType == .image {
             result = geminiService?.sendTextWithPhoto(text, imageData: imageData, messageID: message.id) ?? .failure(GeminiError.serviceUnavailable)
@@ -957,12 +966,17 @@ class ChatViewModel: ObservableObject {
         // Only mark failed if result is failure; leave .sending otherwise
         if case .failure = result {
             message.markStatus(.failed)
+            print("[Chat] sendToGemini failed id=\(message.id.uuidString.prefix(8))")
+        } else {
+            print("[Chat] sendToGemini dispatched id=\(message.id.uuidString.prefix(8))")
         }
 
         if let urlString = message.mediaURL, let url = URL(string: urlString) {
             if message.mediaType == .video {
+                print("[Chat] forwarding video attachment to Gemini service id=\(message.id.uuidString.prefix(8)) file=\(message.mediaFilename ?? url.lastPathComponent)")
                 geminiService?.sendVideoAttachment(url: url, utType: message.mediaUTType)
             } else if message.mediaType == .document {
+                print("[Chat] forwarding document attachment to Gemini service id=\(message.id.uuidString.prefix(8)) file=\(message.mediaFilename ?? url.lastPathComponent)")
                 geminiService?.sendDocumentAttachment(url: url, utType: message.mediaUTType)
             }
         }
@@ -1400,12 +1414,15 @@ extension ChatViewModel: GeminiServiceDelegate {
     }
 
     func geminiService(_ service: GeminiService, didReceiveResponse text: String) {
+        let preview = text.count > 160 ? String(text.prefix(160)) + "..." : text
+        print("[Gemini] Response text received chars=\(text.count) preview=\(preview)")
         updateAssistantTextMessage(chunk: text, isFinal: false)
         markLatestUserMessageRead()
         geminiService?.notifySendResult(messageID: messages.first(where: { $0.role.isUser })?.id ?? UUID())
     }
 
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data) {
+        print("[Gemini] Response audio received bytes=\(data.count)")
         finalizeDraftIfNeeded()
         playAudio(data: data)
         markLatestUserMessageRead()
