@@ -27,6 +27,9 @@ enum ChatAttachmentError: Error {
 
 final class ChatAttachmentService {
     nonisolated private static let attachmentsFolder = "ChatAttachments"
+    nonisolated private static let photoMaxDimension: CGFloat = 1280
+    nonisolated private static let photoJPEGQuality: CGFloat = 0.82
+    nonisolated private static let photoReencodeThresholdBytes = 1_500_000
 
     static func loadFromPhotos(
         contentTypes: [UTType],
@@ -39,9 +42,15 @@ final class ChatAttachmentService {
 
         if contentTypes.contains(where: { $0.conforms(to: .image) }) {
             if let data = try await loadData() {
+                let transformStart = Date()
+                let normalizedData = await Task.detached(priority: .userInitiated) {
+                    normalizePhotoDataIfNeeded(data)
+                }.value
+                let transformMs = Int(Date().timeIntervalSince(transformStart) * 1000)
+                let outputData = normalizedData ?? data
                 let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                print("[Attachment] Photos image loaded. bytes=\(data.count) elapsedMs=\(elapsedMs)")
-                return ChatAttachment(kind: .image, imageData: data, fileURL: nil, filename: "photo.jpg", utType: UTType.jpeg.identifier)
+                print("[Attachment] Photos image loaded. originalBytes=\(data.count) normalizedBytes=\(outputData.count) transformMs=\(transformMs) elapsedMs=\(elapsedMs)")
+                return ChatAttachment(kind: .image, imageData: outputData, fileURL: nil, filename: "photo.jpg", utType: UTType.jpeg.identifier)
             }
             throw ChatAttachmentError.loadFailed
         }
@@ -135,5 +144,41 @@ final class ChatAttachmentService {
         }
         let image = UIImage(cgImage: cgImage)
         return image.jpegData(compressionQuality: 0.8)
+    }
+
+    nonisolated private static func normalizePhotoDataIfNeeded(_ data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+
+        let originalSize = image.size
+        let maxEdge = max(originalSize.width, originalSize.height)
+        let needsResize = maxEdge > photoMaxDimension
+        let shouldReencode = needsResize || data.count >= photoReencodeThresholdBytes
+        guard shouldReencode else { return data }
+
+        let targetSize: CGSize
+        if needsResize {
+            let scale = photoMaxDimension / maxEdge
+            targetSize = CGSize(width: max(1, floor(originalSize.width * scale)),
+                                height: max(1, floor(originalSize.height * scale)))
+        } else {
+            targetSize = originalSize
+        }
+
+        let rendererFormat = UIGraphicsImageRendererFormat.default()
+        rendererFormat.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: rendererFormat)
+        let renderedImage = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+
+        guard let jpeg = renderedImage.jpegData(compressionQuality: photoJPEGQuality) else {
+            return data
+        }
+
+        if !needsResize && jpeg.count >= data.count {
+            return data
+        }
+
+        return jpeg
     }
 }
