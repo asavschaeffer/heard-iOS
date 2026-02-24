@@ -3,6 +3,7 @@ import SwiftUI
 struct FaceTimeCameraPreview: View {
     @ObservedObject var viewModel: ChatViewModel
     @StateObject private var cameraService = CameraService()
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ZStack {
@@ -29,7 +30,7 @@ struct FaceTimeCameraPreview: View {
 
                     Button("Open Settings") {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
+                            openURL(url)
                         }
                     }
                     .buttonStyle(.borderedProminent)
