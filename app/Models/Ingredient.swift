@@ -216,10 +216,10 @@ enum IngredientCategory: String, Codable, CaseIterable {
     var icon: String {
         switch self {
         case .produce: return "leaf.fill"
-        case .protein: return "fish.fill"
-        case .dairy: return "cup.and.saucer.fill"
-        case .grains: return "wheat"
-        case .spices: return "laurel.leading"
+        case .protein: return "fork.knife"
+        case .dairy: return "waterbottle.fill"
+        case .grains: return "laurel.leading"
+        case .spices: return "flame.fill"
         case .condiments: return "drop.fill"
         case .beverages: return "mug.fill"
         case .snacks: return "popcorn.fill"
