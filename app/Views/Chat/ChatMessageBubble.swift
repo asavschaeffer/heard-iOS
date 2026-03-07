@@ -158,15 +158,7 @@ struct ChatMessageBubble: View {
     }
 
     private var linkMetadata: LPLinkMetadata? {
-        if let url = firstURL(in: message.text ?? "") {
-            let key = url.absoluteString
-            if let cached = linkStore.metadata(for: key) {
-                return cached
-            }
-            linkStore.prefetch(url: url, key: key)
-        }
-
-        if let urlString = message.mediaURL, let url = URL(string: urlString) {
+        if let url = firstURL(in: message.text ?? ""), isPreviewableWebURL(url) {
             let key = url.absoluteString
             if let cached = linkStore.metadata(for: key) {
                 return cached
@@ -175,6 +167,11 @@ struct ChatMessageBubble: View {
         }
 
         return nil
+    }
+
+    private func isPreviewableWebURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
     }
 
     private func firstURL(in text: String) -> URL? {

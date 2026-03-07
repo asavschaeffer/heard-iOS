@@ -83,13 +83,15 @@ struct ChatThreadView: View {
     
     private func prefetchLinks(for message: ChatMessage) {
         var urls: [URL] = []
-        if let text = message.text, let url = firstURL(in: text) {
-            urls.append(url)
-        }
-        if let urlString = message.mediaURL, let url = URL(string: urlString) {
+        if let text = message.text, let url = firstURL(in: text), isPreviewableWebURL(url) {
             urls.append(url)
         }
         linkStore.prefetchMany(urls: urls)
+    }
+
+    private func isPreviewableWebURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
     }
     
     private func firstURL(in text: String) -> URL? {
