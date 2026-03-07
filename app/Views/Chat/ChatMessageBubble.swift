@@ -23,7 +23,8 @@ struct ChatMessageBubble: View {
                         if let text = message.text {
                             Text(text)
                                 .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
+                                .padding(.top, 6)
+                                .padding(.bottom, isGroupEnd ? 16 : 10)
                                 .background(bubbleBackground)
                                 .foregroundStyle(.white)
                                 .opacity(message.isDraft ? 0.6 : 1.0)
