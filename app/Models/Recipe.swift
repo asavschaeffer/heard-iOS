@@ -186,9 +186,9 @@ final class RecipeIngredient {
 
     /// Create from LLM function call arguments
     static func fromArguments(_ args: [String: Any]) -> RecipeIngredient? {
-        guard let name = args["name"] as? String, !name.isEmpty else {
-            return nil
-        }
+        guard let rawName = args["name"] as? String else { return nil }
+        let name = rawName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return nil }
 
         let quantity: Double? = {
             if let raw = args["quantity"] {

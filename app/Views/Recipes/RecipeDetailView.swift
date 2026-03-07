@@ -9,7 +9,6 @@ struct RecipeDetailView: View {
     let recipe: Recipe
 
     @State private var showingEditSheet = false
-    @State private var currentStep = 0
     @State private var showingCookingMode = false
     @State private var notesExpanded = true
 
