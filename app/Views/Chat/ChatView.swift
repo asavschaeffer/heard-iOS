@@ -62,7 +62,7 @@ struct ChatView: View {
     }
     
     private var documentPicker: some View {
-        DocumentPicker(allowedTypes: [.item]) { url in
+        DocumentPicker(allowedTypes: [.content]) { url in
             handleDocumentSelection(url)
         }
     }
