@@ -1008,7 +1008,10 @@ class ChatViewModel: ObservableObject {
             print("[Chat] sendToGemini dispatched id=\(message.id.uuidString.prefix(8))")
         }
 
-        if let urlString = message.mediaURL, let url = URL(string: urlString) {
+        if let url = ChatAttachmentPathResolver.resolveURL(
+            storedReference: message.mediaURL,
+            fallbackFilename: message.mediaFilename
+        ) {
             if message.mediaType == .video {
                 print("[Chat] forwarding video attachment to Gemini service id=\(message.id.uuidString.prefix(8)) file=\(message.mediaFilename ?? url.lastPathComponent)")
                 geminiService?.sendVideoAttachment(url: url, utType: message.mediaUTType)
@@ -1036,7 +1039,7 @@ class ChatViewModel: ObservableObject {
                 text: text,
                 imageData: attachment?.imageData,
                 mediaType: .video,
-                mediaURL: attachment?.fileURL?.absoluteString,
+                mediaURL: storedMediaReference(for: attachment),
                 mediaFilename: attachment?.filename,
                 mediaUTType: attachment?.utType,
                 status: .sending
@@ -1046,7 +1049,7 @@ class ChatViewModel: ObservableObject {
                 role: .user,
                 text: text,
                 mediaType: .document,
-                mediaURL: attachment?.fileURL?.absoluteString,
+                mediaURL: storedMediaReference(for: attachment),
                 mediaFilename: attachment?.filename,
                 mediaUTType: attachment?.utType,
                 status: .sending
@@ -1058,6 +1061,13 @@ class ChatViewModel: ObservableObject {
                 status: .sending
             )
         }
+    }
+
+    private func storedMediaReference(for attachment: ChatAttachment?) -> String? {
+        ChatAttachmentPathResolver.storedReference(
+            for: attachment?.fileURL,
+            filename: attachment?.filename
+        )
     }
 
     private func textPayload(for message: ChatMessage, originalText: String?) -> String? {

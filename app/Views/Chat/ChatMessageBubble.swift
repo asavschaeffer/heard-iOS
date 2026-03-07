@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 import LinkPresentation
+import AVKit
 
 struct ChatMessageBubble: View {
     let message: ChatMessage
@@ -9,6 +10,7 @@ struct ChatMessageBubble: View {
     let statusText: String?
     let onRetry: ((ChatMessage) -> Void)?
     @State private var quickLookItem: QuickLookItem?
+    @State private var fullScreenVideoItem: FullScreenVideoItem?
     @ObservedObject var linkStore: LinkMetadataStore
     @Environment(\.openURL) private var openURL
     
@@ -86,6 +88,9 @@ struct ChatMessageBubble: View {
         .sheet(item: $quickLookItem) { item in
             QuickLookPreview(url: item.url)
         }
+        .fullScreenCover(item: $fullScreenVideoItem) { item in
+            FullScreenVideoView(url: item.url)
+        }
         .contextMenu {
             Button("👍") { message.toggleReaction("👍") }
             Button("❤️") { message.toggleReaction("❤️") }
@@ -130,26 +135,71 @@ struct ChatMessageBubble: View {
                     .scaledToFit()
                     .frame(maxWidth: 200)
                     .cornerRadius(12)
+                    .onTapGesture {
+                        openImagePreview(data: imageData)
+                    }
             }
         } else if message.mediaType == .video {
             VideoAttachmentView(thumbnailData: message.imageData)
                 .onTapGesture {
-                    openQuickLook()
+                    openVideoPreview()
                 }
         } else if message.mediaType == .document {
             DocumentAttachmentView(filename: message.mediaFilename, utType: message.mediaUTType)
                 .onTapGesture {
-                    openQuickLook()
+                    openDocumentPreview()
                 }
         }
     }
 
-    private func openQuickLook() {
-        guard let urlString = message.mediaURL,
-              let url = URL(string: urlString) else {
+    private func openVideoPreview() {
+        guard let url = ChatAttachmentPathResolver.resolveURL(
+            storedReference: message.mediaURL,
+            fallbackFilename: message.mediaFilename
+        ) else { return }
+        fullScreenVideoItem = FullScreenVideoItem(url: url)
+    }
+
+    private func openImagePreview(data: Data) {
+        if let existing = ChatAttachmentPathResolver.resolveURL(
+            storedReference: message.mediaURL,
+            fallbackFilename: message.mediaFilename
+        ), existing.isFileURL {
+            quickLookItem = QuickLookItem(url: existing)
             return
         }
+
+        let fm = FileManager.default
+        let folder = fm.temporaryDirectory.appendingPathComponent("HeardImagePreview", isDirectory: true)
+        do {
+            if !fm.fileExists(atPath: folder.path) {
+                try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            }
+
+            let ext = preferredImageExtension()
+            let filename = "\(message.id.uuidString).\(ext)"
+            let url = folder.appendingPathComponent(filename)
+            try data.write(to: url, options: .atomic)
+            quickLookItem = QuickLookItem(url: url)
+        } catch {
+            print("[UI] Failed to prepare image preview file: \(error)")
+        }
+    }
+
+    private func openDocumentPreview() {
+        guard let url = ChatAttachmentPathResolver.resolveURL(
+            storedReference: message.mediaURL,
+            fallbackFilename: message.mediaFilename
+        ) else { return }
         quickLookItem = QuickLookItem(url: url)
+    }
+
+    private func preferredImageExtension() -> String {
+        if let ut = message.mediaUTType, let type = UTType(ut) {
+            if type.conforms(to: .png) { return "png" }
+            if type.conforms(to: .heic) { return "heic" }
+        }
+        return "jpg"
     }
 
     private func openLinkInSafari() {
@@ -180,6 +230,44 @@ struct ChatMessageBubble: View {
         }
         let range = NSRange(text.startIndex..., in: text)
         return detector.firstMatch(in: text, options: [], range: range)?.url
+    }
+}
+
+private struct FullScreenVideoItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct FullScreenVideoView: View {
+    let url: URL
+    @State private var player: AVPlayer
+    @Environment(\.dismiss) private var dismiss
+
+    init(url: URL) {
+        self.url = url
+        _player = State(initialValue: AVPlayer(url: url))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            VideoPlayer(player: player)
+                .ignoresSafeArea()
+                .onAppear {
+                    player.play()
+                }
+                .onDisappear {
+                    player.pause()
+                }
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(20)
+            }
+        }
     }
 }
 

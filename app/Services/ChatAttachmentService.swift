@@ -27,7 +27,7 @@ enum ChatAttachmentError: Error {
 }
 
 final class ChatAttachmentService {
-    nonisolated private static let attachmentsFolder = "ChatAttachments"
+    nonisolated static let attachmentsFolder = "ChatAttachments"
     nonisolated private static let photoMaxDimension: CGFloat = 1280
     nonisolated private static let photoJPEGQuality: CGFloat = 0.82
     nonisolated private static let photoReencodeThresholdBytes = 1_500_000
@@ -202,6 +202,71 @@ final class ChatAttachmentService {
         }
 
         return jpeg
+    }
+}
+
+enum ChatAttachmentPathResolver {
+    nonisolated private static let localReferencePrefix = "attachment:"
+
+    static func storedReference(for fileURL: URL?, filename: String?) -> String? {
+        guard let fileURL else { return nil }
+        if !fileURL.isFileURL {
+            return fileURL.absoluteString
+        }
+
+        let resolvedName = sanitizeFilename(filename ?? fileURL.lastPathComponent)
+        guard !resolvedName.isEmpty else { return nil }
+        return localReferencePrefix + resolvedName
+    }
+
+    static func resolveURL(storedReference: String?, fallbackFilename: String?) -> URL? {
+        if let storedReference {
+            if storedReference.hasPrefix(localReferencePrefix) {
+                let raw = String(storedReference.dropFirst(localReferencePrefix.count))
+                if let local = localURL(for: raw) {
+                    return local
+                }
+            }
+
+            if let parsed = URL(string: storedReference), parsed.scheme != nil {
+                if !parsed.isFileURL {
+                    return parsed
+                }
+
+                if FileManager.default.fileExists(atPath: parsed.path) {
+                    return parsed
+                }
+
+                if let recovered = localURL(for: parsed.lastPathComponent) {
+                    return recovered
+                }
+            } else if let local = localURL(for: storedReference) {
+                return local
+            }
+        }
+
+        if let fallbackFilename, let fallback = localURL(for: fallbackFilename) {
+            return fallback
+        }
+
+        return nil
+    }
+
+    nonisolated private static func sanitizeFilename(_ value: String) -> String {
+        (value as NSString).lastPathComponent
+    }
+
+    private static func localURL(for filename: String) -> URL? {
+        let cleaned = sanitizeFilename(filename)
+        guard !cleaned.isEmpty else { return nil }
+
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let candidate = docs
+            .appendingPathComponent(ChatAttachmentService.attachmentsFolder, isDirectory: true)
+            .appendingPathComponent(cleaned)
+        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
     }
 }
 
