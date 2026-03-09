@@ -13,6 +13,7 @@ struct ChatView: View {
     
     // Input State
     @State private var inputText = ""
+    @State private var composerResetToken = UUID()
     @State private var dictationBaseText = ""
     @State private var selectedItem: PhotosPickerItem?
     @State private var selectedAttachment: ChatAttachment?
@@ -155,6 +156,7 @@ struct ChatView: View {
             
             ChatInputBar(
                 inputText: $inputText,
+                composerResetToken: composerResetToken,
                 hasAttachment: selectedAttachment != nil,
                 isDictating: dictationController.isRecording,
                 showAttachmentMenu: $showAttachmentRow,
@@ -173,6 +175,9 @@ struct ChatView: View {
                 onToggleDictation: handleDictationToggle,
                 onSend: { text in
                     showAttachmentRow = false
+                    if dictationController.isRecording {
+                        dictationController.stop()
+                    }
                     if let attachment = selectedAttachment {
                         let imageBytes = attachment.imageData?.count ?? 0
                         print("[UI] Send tapped with attachment. kind=\(attachment.kind) imageBytes=\(imageBytes)")
@@ -181,6 +186,9 @@ struct ChatView: View {
                     }
                     viewModel.sendMessage(text, attachment: selectedAttachment)
                     inputText = ""
+                    dictationBaseText = ""
+                    dictationController.transcript = ""
+                    composerResetToken = UUID()
                     selectedAttachment = nil
                 }
             )

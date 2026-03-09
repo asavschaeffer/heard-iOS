@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChatInputBar: View {
     @Binding var inputText: String
+    let composerResetToken: UUID
     let hasAttachment: Bool
     let isDictating: Bool
     @Binding var showAttachmentMenu: Bool
@@ -60,6 +61,7 @@ struct ChatInputBar: View {
 
                 HStack(spacing: 0) {
                     TextField("Message Chef...", text: $inputText, axis: .vertical)
+                        .id(composerResetToken)
                         // Mitigates noisy iOS text-input framework warnings seen per keystroke in debug logs.
                         .autocorrectionDisabled(true)
                         .padding(.horizontal, 8)
