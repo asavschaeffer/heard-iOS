@@ -100,8 +100,8 @@ LLMs speak in approximations; databases need precision.
 ### 1. Clone & Project Creation
 
 ```bash
-git clone https://github.com/yourusername/heard-chef.git
-cd heard-chef
+git clone https://github.com/asavschaeffer/heard-iOS.git
+cd heard-iOS
 
 ```
 
@@ -119,7 +119,7 @@ GEMINI_API_KEY = your_actual_key_here
 
 ```
 
-_(For Gemini Live, ensure you are using a key with access to the `gemini-2.0-flash-exp` model)_
+_(REST uses `gemini-2.5-flash`; Live API uses `gemini-2.5-flash-native-audio-preview`)_
 
 ### 3. Configuration & Customization
 
@@ -128,20 +128,38 @@ _(For Gemini Live, ensure you are using a key with access to the `gemini-2.0-fla
 
 ## Roadmap
 
-- [x] **Phase 1: Foundation** - UX Prototypes, SwiftData Schema, "Brain Protocol" Definition.
-- [ ] **Phase 2: Core Intelligence (in progress)** - Implement Gemini Live streaming and Tool Definitions.
-- [ ] **Phase 3: Visual Polish** - Implement the Avatar animations and Modal transitions.
-- [ ] **Phase 4: Local Fallback** - Integrate on-device model for offline inventory checks.
+- [x] **Phase 1: Foundation** — UX prototypes, SwiftData schema, "Brain Protocol" definition
+- [x] **Phase 2: Core Intelligence** — Gemini Live streaming, REST + WebSocket dual API, full tool calling
+- [ ] **Phase 3: Visual Polish (in progress)** — iMessage/FaceTime rebuild, PiP calling, markdown bubbles
+- [ ] **Phase 4: Local Fallback** — On-device model for offline inventory checks
 
-## Short-Term Todo
+## Todo
 
-~~1. Data Models - Ingredient, Recipe (SwiftData schema, relationships, validation)~~
-~~2. [Gemini Tools](docs/gemini-tools.md) - Function declarations (schema accuracy, error handling)~~
-~~3. Gemini Service - WebSocket connection, audio streaming, function execution~~
-4. Voice UI - Waveform, transcript, states, accessibility
-5. Inventory UI - List, grouping, search, edit flow, expiry handling
-6. Recipe UI - Cards, detail view, cooking mode, edit form
-7. Camera - Capture flow, Gemini Vision integration, confirmation UI
+**Stability & Infrastructure**
+- [ ] Voice stack stabilization
+- [ ] Test infrastructure
+
+**UX Fixes**
+- [ ] Fix ingredients page camera (or redirect to chat with camera open)
+- [ ] First-action lag (phone button, long-hold message, share button)
+- [ ] Keyboard dismiss in add/edit ingredients and edit recipe modals
+- [ ] Nav order: Inventory → Chat → Recipes → Settings
+
+**Visual Polish**
+- [ ] Launch screen dark mode (backgroundless logo)
+- [ ] Chat bubble color dynamism on light mode
+- [ ] Chef avatar in chat view, calling, and FaceTime
+
+**New Tools**
+- [ ] Allergies
+- [ ] Timer tool
+- [ ] Conversion tool
+
+**Major Features**
+- [ ] Multiple chats
+- [ ] Auth
+- [ ] Onboarding
+- [ ] Memory manager (post-conversation topic extraction and context assembly)
 
 ## Specs
 
@@ -160,7 +178,6 @@ _(For Gemini Live, ensure you are using a key with access to the `gemini-2.0-fla
 
 - [ ] Cloud sync with iCloud or Supabase
 - [ ] Meal planning calendar
-- [ ] Shopping list generation
 - [ ] Nutritional information
 - [ ] Recipe import from URLs
 - [ ] Apple Watch companion (timer controls)
