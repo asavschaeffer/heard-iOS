@@ -31,11 +31,19 @@ struct HeardChefApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainTabView()
-                .onAppear {
-                    warmup.runAll()
+            ZStack {
+                MainTabView()
+
+                if !warmup.isFinished {
+                    LaunchLoadingView()
+                        .transition(.opacity)
                 }
-                .environmentObject(warmup)
+            }
+            .animation(.easeInOut(duration: 0.3), value: warmup.isFinished)
+            .task {
+                warmup.runAll()
+            }
+            .environmentObject(warmup)
         }
         .modelContainer(sharedModelContainer)
     }
