@@ -20,10 +20,6 @@ struct ChatThreadView: View {
                             messageView(for: message, at: index)
                         }
 
-                        if !toolCallChips.isEmpty {
-                            ToolCallChipsView(chips: toolCallChips)
-                        }
-
                         if isTyping {
                             TypingIndicatorBubble()
                                 .padding(.bottom, 8)
@@ -35,11 +31,18 @@ struct ChatThreadView: View {
                 .onChange(of: messages.count) {
                     if let lastId = messages.last?.id {
                         withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
+                    } else if let lastToolID = toolCallChips.last?.id {
+                        withAnimation { proxy.scrollTo(lastToolID, anchor: .bottom) }
                     }
                 }
                 .onChange(of: toolCallChips.count) {
                     if let last = toolCallChips.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        let anchorID = last.anchorMessageID
+                        if let anchor = anchorID, messages.contains(where: { $0.id == anchor }) {
+                            withAnimation { proxy.scrollTo(anchor, anchor: .bottom) }
+                        } else {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
                     }
                 }
             }
@@ -79,14 +82,22 @@ struct ChatThreadView: View {
             }
         }
 
-        ChatMessageBubble(
-            message: message,
-            isGroupEnd: isGroupEnd,
-            statusText: statusText,
-            onRetry: { onRetry($0) },
-            linkStore: linkStore,
-            activeReactionMessageID: $activeReactionMessageID
-        )
+        let attachedToolChips = toolCallChips.filter { $0.anchorMessageID == message.id }
+
+        VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
+            if message.role == .assistant && !attachedToolChips.isEmpty {
+                ToolCallChipsView(chips: attachedToolChips)
+            }
+
+            ChatMessageBubble(
+                message: message,
+                isGroupEnd: isGroupEnd,
+                statusText: statusText,
+                onRetry: { onRetry($0) },
+                linkStore: linkStore,
+                activeReactionMessageID: $activeReactionMessageID
+            )
+        }
         .id(message.id)
         .padding(.bottom, isGroupEnd ? 10 : 0)
         .onAppear {
@@ -164,16 +175,20 @@ private struct ToolCallChipsView: View {
                     chip: chip,
                     isExpanded: expandedIDs.contains(chip.id),
                     onToggleExpand: {
-                        if expandedIDs.contains(chip.id) {
-                            expandedIDs.remove(chip.id)
-                        } else {
-                            expandedIDs.insert(chip.id)
+                        guard !chip.details.isEmpty else { return }
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            if expandedIDs.contains(chip.id) {
+                                expandedIDs.remove(chip.id)
+                            } else {
+                                expandedIDs.insert(chip.id)
+                            }
                         }
                     }
                 )
                 .id(chip.id)
             }
         }
+        .frame(maxWidth: 320, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 4)
     }
@@ -188,23 +203,18 @@ private struct ToolCallChipRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
-                Image(systemName: statusIcon)
+                Image(systemName: chip.iconName)
                     .font(.caption)
-                    .foregroundStyle(statusColor)
+                    .foregroundStyle(.primary)
                     .frame(width: 14, height: 14, alignment: .center)
-                Text(chip.summary)
+                Text(chip.actionText)
                     .font(.caption)
                     .baselineOffset(0.8)
                     .foregroundStyle(.primary)
-                Spacer()
-                if chip.details != nil {
-                    Button(isExpanded ? "Hide" : "Details") {
-                        onToggleExpand()
-                    }
-                    .font(.caption2)
-                    .baselineOffset(0.8)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                if !chip.details.isEmpty {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 10)
@@ -212,6 +222,11 @@ private struct ToolCallChipRow: View {
             .background(statusColor.opacity(0.12))
             .clipShape(Capsule())
             .opacity(chip.status == .pending ? (pulse ? 0.55 : 1.0) : 1.0)
+            .fixedSize(horizontal: true, vertical: false)
+            .contentShape(Capsule())
+            .onTapGesture {
+                onToggleExpand()
+            }
             .onAppear {
                 guard chip.status == .pending else { return }
                 withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
@@ -219,26 +234,25 @@ private struct ToolCallChipRow: View {
                 }
             }
 
-            if isExpanded, let details = chip.details {
-                Text(details)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(.secondary)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            if isExpanded, !chip.details.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(chip.details.enumerated()), id: \.offset) { _, detail in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(detail.key)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text(detail.value)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-        }
-    }
-
-    private var statusIcon: String {
-        switch chip.status {
-        case .pending:
-            return "clock.fill"
-        case .success:
-            return "checkmark.circle.fill"
-        case .error:
-            return "exclamationmark.triangle.fill"
         }
     }
 

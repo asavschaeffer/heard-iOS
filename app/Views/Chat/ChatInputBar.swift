@@ -60,6 +60,8 @@ struct ChatInputBar: View {
 
                 HStack(spacing: 0) {
                     TextField("Message Chef...", text: $inputText, axis: .vertical)
+                        // Mitigates noisy iOS text-input framework warnings seen per keystroke in debug logs.
+                        .autocorrectionDisabled(true)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
                         .lineLimit(1...5)
