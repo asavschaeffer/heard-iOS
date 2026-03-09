@@ -9,9 +9,10 @@ struct ChatMessageBubble: View {
     let isGroupEnd: Bool
     let statusText: String?
     let onRetry: ((ChatMessage) -> Void)?
+    @ObservedObject var linkStore: LinkMetadataStore
+    @Binding var activeReactionMessageID: UUID?
     @State private var quickLookItem: QuickLookItem?
     @State private var fullScreenVideoItem: FullScreenVideoItem?
-    @ObservedObject var linkStore: LinkMetadataStore
     @Environment(\.openURL) private var openURL
     
     
@@ -91,13 +92,34 @@ struct ChatMessageBubble: View {
         .fullScreenCover(item: $fullScreenVideoItem) { item in
             FullScreenVideoView(url: item.url)
         }
-        .contextMenu {
-            Button("👍") { message.toggleReaction("👍") }
-            Button("❤️") { message.toggleReaction("❤️") }
-            Button("😂") { message.toggleReaction("😂") }
-            Button("😮") { message.toggleReaction("😮") }
-            Button("😢") { message.toggleReaction("😢") }
-            Button("😡") { message.toggleReaction("😡") }
+        .onLongPressGesture {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            withAnimation(.spring(duration: 0.25)) {
+                activeReactionMessageID = message.id
+            }
+        }
+        .overlay(alignment: .top) {
+            if activeReactionMessageID == message.id {
+                HStack(spacing: 4) {
+                    ForEach(["👍", "❤️", "😂", "😮", "😢", "😡"], id: \.self) { emoji in
+                        Button {
+                            message.toggleReaction(emoji)
+                            withAnimation { activeReactionMessageID = nil }
+                        } label: {
+                            Text(emoji)
+                                .font(.title2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+                .transition(.scale.combined(with: .opacity))
+                .offset(y: -50)
+                .zIndex(10)
+            }
         }
     }
     
