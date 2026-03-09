@@ -9,40 +9,52 @@ struct ChatThreadView: View {
     let showReadReceipts: Bool
     @ObservedObject var linkStore: LinkMetadataStore
     let onRetry: (ChatMessage) -> Void
-    
+    @State private var activeReactionMessageID: UUID?
+
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 2) {
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                        messageView(for: message, at: index)
-                    }
+        ZStack {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                            messageView(for: message, at: index)
+                        }
 
-                    if !toolCallChips.isEmpty {
-                        ToolCallChipsView(chips: toolCallChips)
-                    }
+                        if !toolCallChips.isEmpty {
+                            ToolCallChipsView(chips: toolCallChips)
+                        }
 
-                    if isTyping {
-                        TypingIndicatorBubble()
-                            .padding(.bottom, 8)
+                        if isTyping {
+                            TypingIndicatorBubble()
+                                .padding(.bottom, 8)
+                        }
+                    }
+                    .padding()
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: messages.count) {
+                    if let lastId = messages.last?.id {
+                        withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
                     }
                 }
-                .padding()
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .onChange(of: messages.count) {
-                if let lastId = messages.last?.id {
-                    withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
+                .onChange(of: toolCallChips.count) {
+                    if let last = toolCallChips.last {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
                 }
             }
-            .onChange(of: toolCallChips.count) {
-                if let last = toolCallChips.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
+
+            if activeReactionMessageID != nil {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation { activeReactionMessageID = nil }
+                    }
             }
         }
     }
-    
+
     @ViewBuilder
     private func messageView(for message: ChatMessage, at index: Int) -> some View {
         let nextMessage = index + 1 < messages.count ? messages[index + 1] : nil
@@ -72,7 +84,8 @@ struct ChatThreadView: View {
             isGroupEnd: isGroupEnd,
             statusText: statusText,
             onRetry: { onRetry($0) },
-            linkStore: linkStore
+            linkStore: linkStore,
+            activeReactionMessageID: $activeReactionMessageID
         )
         .id(message.id)
         .padding(.bottom, isGroupEnd ? 10 : 0)
