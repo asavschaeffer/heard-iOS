@@ -1477,7 +1477,6 @@ class ChatViewModel: ObservableObject {
     // MARK: - Video Streaming (Stub)
 
     func startVideoStreaming(with cameraService: CameraService) {
-        guard !callState.isVideoStreaming else { return }
         callState.isVideoStreaming = true
 
         cameraService.setVideoFrameHandler(frameInterval: callState.videoFrameInterval) { [weak self] data in
