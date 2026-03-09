@@ -267,26 +267,25 @@ enum CameraError: LocalizedError {
 struct CameraPreviewView: UIViewRepresentable {
     let cameraService: CameraService
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-
-        let previewLayer = cameraService.getPreviewLayer()
-        previewLayer.frame = view.bounds
-        view.layer.addSublayer(previewLayer)
-
+    func makeUIView(context: Context) -> CameraPreviewUIView {
+        let view = CameraPreviewUIView()
+        view.previewLayer = cameraService.getPreviewLayer()
+        view.layer.addSublayer(view.previewLayer!)
         cameraService.startSession()
-
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        if let previewLayer = uiView.layer.sublayers?.first as? AVCaptureVideoPreviewLayer {
-            previewLayer.frame = uiView.bounds
-        }
-    }
+    func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {}
 
-    static func dismantleUIView(_ uiView: UIView, coordinator: ()) {
-        // Session will be stopped when view is removed
+    static func dismantleUIView(_ uiView: CameraPreviewUIView, coordinator: ()) {}
+}
+
+class CameraPreviewUIView: UIView {
+    var previewLayer: AVCaptureVideoPreviewLayer?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        previewLayer?.frame = bounds
     }
 }
 

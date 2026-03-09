@@ -20,17 +20,31 @@ struct CallView: View {
     }
 
     var body: some View {
+        Group {
+            switch style {
+            case .translucentOverlay:
+                faceTimeLayout
+            case .fullScreen:
+                callingLayout
+            case .pictureInPicture:
+                callingLayout
+            }
+        }
+        .onAppear {
+            viewModel.startVoiceSession()
+        }
+    }
+
+    // MARK: - Calling Layout (audio-only fullscreen)
+
+    private var callingLayout: some View {
         VStack(spacing: 0) {
             HStack {
                 Button {
-                    if style == .translucentOverlay {
-                        onMinimize?()
+                    if let onMinimize {
+                        onMinimize()
                     } else {
-                        if let onMinimize {
-                            onMinimize()
-                        } else {
-                            dismiss()
-                        }
+                        dismiss()
                     }
                 } label: {
                     Image(systemName: "chevron.down")
@@ -47,28 +61,7 @@ struct CallView: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
 
-                if viewModel.connectionState == .connected {
-                    Text(viewModel.callDurationText)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.8))
-                } else {
-                    HStack(spacing: 6) {
-                        if showsProgress {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.white.opacity(0.8))
-                                .scaleEffect(0.8)
-                        }
-
-                        Text(statusText)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.8))
-
-                        if showsDots {
-                            CallStatusDots()
-                        }
-                    }
-                }
+                callStatusLabel
             }
             .padding(.top, 12)
 
@@ -91,7 +84,14 @@ struct CallView: View {
         }
         .padding(.top, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(backgroundView)
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.11, green: 0.11, blue: 0.118), .black],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
         .safeAreaInset(edge: .bottom) {
             CallControlsView(
                 viewModel: viewModel,
@@ -103,8 +103,83 @@ struct CallView: View {
             .padding(.bottom, 12)
             .padding(.horizontal)
         }
-        .onAppear {
-            viewModel.startVoiceSession()
+    }
+
+    // MARK: - FaceTime Layout (video call)
+
+    private var faceTimeLayout: some View {
+        ZStack {
+            // Opaque base so chat doesn't bleed through
+            Color.black.ignoresSafeArea()
+
+            // Full-screen camera feed
+            FaceTimeCameraPreview(viewModel: viewModel)
+                .ignoresSafeArea()
+
+            // Bottom-right vertical button stack
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        // FaceTime (video toggle)
+                        FaceTimeButton(
+                            systemImage: viewModel.callState.isVideoStreaming ? "video.fill" : "video.slash.fill",
+                            isActive: viewModel.callState.isVideoStreaming
+                        ) {
+                            onToggleVideo?()
+                        }
+
+                        // Mute
+                        FaceTimeButton(
+                            systemImage: viewModel.isMicrophoneMuted ? "mic.slash.fill" : "mic.fill",
+                            isActive: !viewModel.isMicrophoneMuted
+                        ) {
+                            viewModel.toggleMute()
+                        }
+
+                        // Hang up
+                        FaceTimeButton(
+                            systemImage: "phone.down.fill",
+                            isDestructive: true
+                        ) {
+                            viewModel.stopVoiceSession()
+                        }
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 48)
+                }
+            }
+        }
+    }
+
+    // MARK: - Shared Components
+
+    @ViewBuilder
+    private var callStatusLabel: some View {
+        if viewModel.connectionState == .connected {
+            Text(viewModel.callDurationText)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.8))
+                .shadow(color: .black.opacity(0.3), radius: 2)
+        } else {
+            HStack(spacing: 6) {
+                if showsProgress {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white.opacity(0.8))
+                        .scaleEffect(0.8)
+                }
+
+                Text(statusText)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .shadow(color: .black.opacity(0.3), radius: 2)
+
+                if showsDots {
+                    CallStatusDots()
+                }
+            }
         }
     }
 
@@ -133,28 +208,6 @@ struct CallView: View {
             return false
         }
     }
-
-    private var backgroundView: some View {
-        Group {
-            switch style {
-            case .fullScreen:
-                LinearGradient(
-                    colors: [Color(red: 0.11, green: 0.11, blue: 0.118), .black],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            case .translucentOverlay:
-                ZStack {
-                    FaceTimeCameraPreview(viewModel: viewModel)
-                    Color.black.opacity(0.35)
-                }
-                .ignoresSafeArea()
-            case .pictureInPicture:
-                Color.clear
-            }
-        }
-    }
 }
 
 private struct CallStatusDots: View {
@@ -174,6 +227,31 @@ private struct CallStatusDots: View {
             }
         }
         .onAppear { animate = true }
+    }
+}
+
+private struct FaceTimeButton: View {
+    let systemImage: String
+    var isActive: Bool = false
+    var isDestructive: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background {
+                    if isDestructive {
+                        Circle().fill(.red)
+                    } else if isActive {
+                        Circle().fill(.green)
+                    } else {
+                        Circle().fill(.ultraThinMaterial)
+                    }
+                }
+        }
     }
 }
 
