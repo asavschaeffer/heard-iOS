@@ -1491,6 +1491,10 @@ class ChatViewModel: ObservableObject {
     func stopVideoStreaming() {
         callState.isVideoStreaming = false
     }
+
+    func toggleVideoFromCallView() {
+        callState.isVideoStreaming.toggle()
+    }
 }
 
 // MARK: - Delegate

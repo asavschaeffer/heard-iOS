@@ -30,11 +30,15 @@ struct ChatView: View {
         }
     }
     
+    private var isPiP: Bool {
+        viewModel.callState.isPresented && callPresentationStyle == .pictureInPicture
+    }
+
     private var mainContentWithModifiers: some View {
         mainContent
-            .navigationTitle("Heard, Chef")
+            .navigationTitle(isPiP ? "" : "Heard, Chef")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { navigationToolbar }
+            .toolbar { if !isPiP { navigationToolbar } }
             .fullScreenCover(isPresented: fullScreenCallBinding) { callFullScreenCover }
             .onAppear {
                 viewModel.setModelContext(modelContext)
@@ -197,20 +201,11 @@ struct ChatView: View {
     
     @ViewBuilder
     private var callOverlayViews: some View {
-        if viewModel.callState.isPresented && callPresentationStyle == .translucentOverlay {
-            CallOverlayView(
-                viewModel: viewModel,
-                onMinimize: { callPresentationStyle = .pictureInPicture },
-                onToggleVideo: { toggleVideoMode() }
-            )
-            .transition(.opacity)
-        }
-        
         if viewModel.callState.isPresented && callPresentationStyle == .pictureInPicture {
             PiPCallOverlayView(
                 viewModel: viewModel,
-                onExpand: { callPresentationStyle = .translucentOverlay },
-                onToggleVideo: { toggleVideoMode() }
+                onExpand: { callPresentationStyle = .fullScreen },
+                onToggleVideo: { viewModel.toggleVideoFromCallView() }
             )
             .transition(.opacity)
         }
@@ -230,12 +225,10 @@ struct ChatView: View {
     private var callFullScreenCover: some View {
         CallView(
             viewModel: viewModel,
-            style: .fullScreen,
-            onMinimize: { callPresentationStyle = .translucentOverlay },
-            onToggleVideo: { toggleVideoMode() }
+            onMinimize: { callPresentationStyle = .pictureInPicture }
         )
     }
-    
+
     private var fullScreenCallBinding: Binding<Bool> {
         Binding(
             get: {
@@ -244,17 +237,13 @@ struct ChatView: View {
             set: { newValue in
                 if !newValue {
                     if viewModel.callState.isPresented {
-                        callPresentationStyle = .translucentOverlay
+                        callPresentationStyle = .pictureInPicture
                     } else {
                         viewModel.stopVoiceSession()
                     }
                 }
             }
         )
-    }
-
-    private func toggleVideoMode() {
-        callPresentationStyle = callPresentationStyle == .translucentOverlay ? .fullScreen : .translucentOverlay
     }
 
     private func handleDictationToggle() {

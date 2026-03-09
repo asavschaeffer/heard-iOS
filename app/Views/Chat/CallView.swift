@@ -2,51 +2,29 @@ import SwiftUI
 
 struct CallView: View {
     @ObservedObject var viewModel: ChatViewModel
-    let style: CallPresentationStyle
     @Environment(\.dismiss) private var dismiss
-    let onMinimize: (() -> Void)?
-    let onToggleVideo: (() -> Void)?
-
-    init(
-        viewModel: ChatViewModel,
-        style: CallPresentationStyle,
-        onMinimize: (() -> Void)? = nil,
-        onToggleVideo: (() -> Void)? = nil
-    ) {
-        self.viewModel = viewModel
-        self.style = style
-        self.onMinimize = onMinimize
-        self.onToggleVideo = onToggleVideo
-    }
+    let onMinimize: () -> Void
 
     var body: some View {
         Group {
-            switch style {
-            case .translucentOverlay:
+            if viewModel.callState.isVideoStreaming {
                 faceTimeLayout
-            case .fullScreen:
-                callingLayout
-            case .pictureInPicture:
+            } else {
                 callingLayout
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.callState.isVideoStreaming)
         .onAppear {
             viewModel.startVoiceSession()
         }
     }
 
-    // MARK: - Calling Layout (audio-only fullscreen)
+    // MARK: - Calling Layout (audio-only)
 
     private var callingLayout: some View {
         VStack(spacing: 0) {
             HStack {
-                Button {
-                    if let onMinimize {
-                        onMinimize()
-                    } else {
-                        dismiss()
-                    }
-                } label: {
+                Button { onMinimize() } label: {
                     Image(systemName: "chevron.down")
                         .font(.title2)
                         .foregroundStyle(.white.opacity(0.9))
@@ -96,7 +74,7 @@ struct CallView: View {
             CallControlsView(
                 viewModel: viewModel,
                 isVideoActive: viewModel.callState.isVideoStreaming,
-                onToggleVideo: { onToggleVideo?() }
+                onToggleVideo: { viewModel.toggleVideoFromCallView() }
             ) {
                 viewModel.stopVoiceSession()
             }
@@ -109,12 +87,26 @@ struct CallView: View {
 
     private var faceTimeLayout: some View {
         ZStack {
-            // Opaque base so chat doesn't bleed through
             Color.black.ignoresSafeArea()
 
-            // Full-screen camera feed
             FaceTimeCameraPreview(viewModel: viewModel)
                 .ignoresSafeArea()
+
+            // Top-left chevron
+            VStack {
+                HStack {
+                    Button { onMinimize() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.4), radius: 3)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 12)
+                Spacer()
+            }
 
             // Bottom-right vertical button stack
             VStack {
@@ -122,23 +114,18 @@ struct CallView: View {
                 HStack {
                     Spacer()
                     VStack(spacing: 16) {
-                        // FaceTime (video toggle)
                         FaceTimeButton(
-                            systemImage: viewModel.callState.isVideoStreaming ? "video.fill" : "video.slash.fill",
-                            isActive: viewModel.callState.isVideoStreaming
+                            systemImage: "phone.fill"
                         ) {
-                            onToggleVideo?()
+                            viewModel.toggleVideoFromCallView()
                         }
 
-                        // Mute
                         FaceTimeButton(
-                            systemImage: viewModel.isMicrophoneMuted ? "mic.slash.fill" : "mic.fill",
-                            isActive: !viewModel.isMicrophoneMuted
+                            systemImage: viewModel.isMicrophoneMuted ? "mic.slash.fill" : "mic.fill"
                         ) {
                             viewModel.toggleMute()
                         }
 
-                        // Hang up
                         FaceTimeButton(
                             systemImage: "phone.down.fill",
                             isDestructive: true
@@ -161,10 +148,9 @@ struct CallView: View {
             Text(viewModel.callDurationText)
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.8))
-                .shadow(color: .black.opacity(0.3), radius: 2)
         } else {
             HStack(spacing: 6) {
-                if showsProgress {
+                if viewModel.connectionState != .connected {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white.opacity(0.8))
@@ -174,7 +160,6 @@ struct CallView: View {
                 Text(statusText)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.8))
-                    .shadow(color: .black.opacity(0.3), radius: 2)
 
                 if showsDots {
                     CallStatusDots()
@@ -185,27 +170,17 @@ struct CallView: View {
 
     private var statusText: String {
         switch viewModel.connectionState {
-        case .connected:
-            return "Connected"
-        case .connecting:
-            return "Connecting…"
-        case .disconnected:
-            return "Reconnecting…"
-        case .error:
-            return "Connection issue"
+        case .connected: "Connected"
+        case .connecting: "Connecting…"
+        case .disconnected: "Reconnecting…"
+        case .error: "Connection issue"
         }
-    }
-
-    private var showsProgress: Bool {
-        viewModel.connectionState != .connected
     }
 
     private var showsDots: Bool {
         switch viewModel.connectionState {
-        case .connecting, .disconnected:
-            return true
-        case .connected, .error:
-            return false
+        case .connecting, .disconnected: true
+        case .connected, .error: false
         }
     }
 }
@@ -252,20 +227,5 @@ private struct FaceTimeButton: View {
                     }
                 }
         }
-    }
-}
-
-struct CallOverlayView: View {
-    @ObservedObject var viewModel: ChatViewModel
-    let onMinimize: () -> Void
-    let onToggleVideo: (() -> Void)?
-
-    var body: some View {
-        CallView(
-            viewModel: viewModel,
-            style: .translucentOverlay,
-            onMinimize: onMinimize,
-            onToggleVideo: onToggleVideo
-        )
     }
 }
