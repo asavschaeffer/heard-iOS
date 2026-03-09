@@ -3,6 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 import LinkPresentation
 import AVKit
+import Foundation
 
 struct ChatMessageBubble: View {
     let message: ChatMessage
@@ -24,12 +25,11 @@ struct ChatMessageBubble: View {
                 HStack(alignment: .top, spacing: 4) {
                     VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
                         if let text = message.text {
-                            Text(text)
+                            MarkdownBubbleText(text: text)
                                 .padding(.horizontal, 12)
                                 .padding(.top, 6)
                                 .padding(.bottom, isGroupEnd ? 16 : 10)
                                 .background(bubbleBackground)
-                                .foregroundStyle(.white)
                                 .opacity(message.isDraft ? 0.6 : 1.0)
                         }
                         
@@ -252,6 +252,46 @@ struct ChatMessageBubble: View {
         }
         let range = NSRange(text.startIndex..., in: text)
         return detector.firstMatch(in: text, options: [], range: range)?.url
+    }
+}
+
+private struct MarkdownBubbleText: View {
+    let text: String
+
+    var body: some View {
+        Group {
+            if let attributedText = attributedText {
+                Text(attributedText)
+            } else {
+                Text(text)
+            }
+        }
+        .font(.body)
+        .foregroundStyle(.white)
+        .lineSpacing(4)
+        .multilineTextAlignment(.leading)
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var attributedText: AttributedString? {
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
+
+        guard var attributed = try? AttributedString(markdown: normalizedMarkdown, options: options) else {
+            return nil
+        }
+
+        attributed.foregroundColor = .white
+        return attributed
+    }
+
+    private var normalizedMarkdown: String {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
     }
 }
 
