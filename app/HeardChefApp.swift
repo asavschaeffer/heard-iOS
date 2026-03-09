@@ -6,6 +6,8 @@ private let logger = Logger(subsystem: "com.heardchef", category: "App")
 
 @main
 struct HeardChefApp: App {
+    @StateObject private var warmup = AppWarmup()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Ingredient.self,
@@ -30,6 +32,10 @@ struct HeardChefApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                .onAppear {
+                    warmup.runAll()
+                }
+                .environmentObject(warmup)
         }
         .modelContainer(sharedModelContainer)
     }
