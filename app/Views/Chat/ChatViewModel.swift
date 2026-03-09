@@ -487,9 +487,8 @@ class ChatViewModel: ObservableObject {
     }
 
     private func sendCallHaptic(style: UINotificationFeedbackGenerator.FeedbackType) {
-        let generator = UINotificationFeedbackGenerator()
-        generator.prepare()
-        generator.notificationOccurred(style)
+        SharedHaptics.generator.prepare()
+        SharedHaptics.generator.notificationOccurred(style)
     }
 
     private func resetReconnectBackoff() {
