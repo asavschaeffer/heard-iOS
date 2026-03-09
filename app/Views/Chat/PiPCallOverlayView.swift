@@ -3,14 +3,15 @@ import SwiftUI
 enum CornerPlacement: Equatable {
     case topLeading, topTrailing, bottomLeading, bottomTrailing
 
-    func position(in size: CGSize, barWidth: CGFloat, barHeight: CGFloat, padding: CGFloat) -> CGPoint {
+    func position(in size: CGSize, barWidth: CGFloat, barHeight: CGFloat, padding: CGFloat, topInset: CGFloat = 0) -> CGPoint {
         let halfW = barWidth / 2
         let halfH = barHeight / 2
+        let topY = topInset + padding + halfH
         switch self {
         case .topLeading:
-            return CGPoint(x: padding + halfW, y: padding + halfH)
+            return CGPoint(x: padding + halfW, y: topY)
         case .topTrailing:
-            return CGPoint(x: size.width - padding - halfW, y: padding + halfH)
+            return CGPoint(x: size.width - padding - halfW, y: topY)
         case .bottomLeading:
             return CGPoint(x: padding + halfW, y: size.height - padding - halfH)
         case .bottomTrailing:
@@ -18,11 +19,11 @@ enum CornerPlacement: Equatable {
         }
     }
 
-    static func nearest(to point: CGPoint, in size: CGSize, barWidth: CGFloat, barHeight: CGFloat, padding: CGFloat) -> CornerPlacement {
+    static func nearest(to point: CGPoint, in size: CGSize, barWidth: CGFloat, barHeight: CGFloat, padding: CGFloat, topInset: CGFloat = 0) -> CornerPlacement {
         let corners: [CornerPlacement] = [.topLeading, .topTrailing, .bottomLeading, .bottomTrailing]
         return corners.min(by: { a, b in
-            let posA = a.position(in: size, barWidth: barWidth, barHeight: barHeight, padding: padding)
-            let posB = b.position(in: size, barWidth: barWidth, barHeight: barHeight, padding: padding)
+            let posA = a.position(in: size, barWidth: barWidth, barHeight: barHeight, padding: padding, topInset: topInset)
+            let posB = b.position(in: size, barWidth: barWidth, barHeight: barHeight, padding: padding, topInset: topInset)
             let distA = hypot(point.x - posA.x, point.y - posA.y)
             let distB = hypot(point.x - posB.x, point.y - posB.y)
             return distA < distB
@@ -45,7 +46,8 @@ struct PiPCallOverlayView: View {
             let barWidth = min(bounds.width - 24, 420)
             let barHeight: CGFloat = 56
             let padding: CGFloat = 12
-            let cornerPos = placement.position(in: bounds, barWidth: barWidth, barHeight: barHeight, padding: padding)
+            let topInset = proxy.safeAreaInsets.top + 44
+            let cornerPos = placement.position(in: bounds, barWidth: barWidth, barHeight: barHeight, padding: padding, topInset: topInset)
 
             CallBarView(
                 viewModel: viewModel,
@@ -72,7 +74,8 @@ struct PiPCallOverlayView: View {
                             in: bounds,
                             barWidth: barWidth,
                             barHeight: barHeight,
-                            padding: padding
+                            padding: padding,
+                            topInset: topInset
                         )
                         withAnimation(.spring()) {
                             placement = nearest
@@ -138,13 +141,15 @@ private struct CallBarView: View {
             .disabled(viewModel.connectionState != .connected)
 
             Button {
-                onToggleVideo()
+                if viewModel.connectionState == .connected {
+                    viewModel.toggleSpeaker()
+                }
             } label: {
-                Image(systemName: viewModel.callState.isVideoStreaming ? "video.slash.fill" : "video.fill")
+                Image(systemName: viewModel.isSpeakerPreferred ? "speaker.wave.3.fill" : "speaker.slash.fill")
                     .font(.caption)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(viewModel.isSpeakerPreferred ? .black : .white)
                     .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.2), in: Circle())
+                    .background(viewModel.isSpeakerPreferred ? Color.white : Color.white.opacity(0.2), in: Circle())
             }
             .disabled(viewModel.connectionState != .connected)
 
