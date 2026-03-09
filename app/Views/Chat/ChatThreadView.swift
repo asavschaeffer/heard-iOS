@@ -9,51 +9,39 @@ struct ChatThreadView: View {
     let showReadReceipts: Bool
     @ObservedObject var linkStore: LinkMetadataStore
     let onRetry: (ChatMessage) -> Void
-    @State private var activeReactionMessageID: UUID?
 
     var body: some View {
-        ZStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                            messageView(for: message, at: index)
-                        }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                        messageView(for: message, at: index)
+                    }
 
-                        if isTyping {
-                            TypingIndicatorBubble()
-                                .padding(.bottom, 8)
-                        }
-                    }
-                    .padding()
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: messages.count) {
-                    if let lastId = messages.last?.id {
-                        withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
-                    } else if let lastToolID = toolCallChips.last?.id {
-                        withAnimation { proxy.scrollTo(lastToolID, anchor: .bottom) }
+                    if isTyping {
+                        TypingIndicatorBubble()
+                            .padding(.bottom, 8)
                     }
                 }
-                .onChange(of: toolCallChips.count) {
-                    if let last = toolCallChips.last {
-                        let anchorID = last.anchorMessageID
-                        if let anchor = anchorID, messages.contains(where: { $0.id == anchor }) {
-                            withAnimation { proxy.scrollTo(anchor, anchor: .bottom) }
-                        } else {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                        }
-                    }
+                .padding()
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: messages.count) {
+                if let lastId = messages.last?.id {
+                    withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
+                } else if let lastToolID = toolCallChips.last?.id {
+                    withAnimation { proxy.scrollTo(lastToolID, anchor: .bottom) }
                 }
             }
-
-            if activeReactionMessageID != nil {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation { activeReactionMessageID = nil }
+            .onChange(of: toolCallChips.count) {
+                if let last = toolCallChips.last {
+                    let anchorID = last.anchorMessageID
+                    if let anchor = anchorID, messages.contains(where: { $0.id == anchor }) {
+                        withAnimation { proxy.scrollTo(anchor, anchor: .bottom) }
+                    } else {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
+                }
             }
         }
     }
@@ -94,8 +82,7 @@ struct ChatThreadView: View {
                 isGroupEnd: isGroupEnd,
                 statusText: statusText,
                 onRetry: { onRetry($0) },
-                linkStore: linkStore,
-                activeReactionMessageID: $activeReactionMessageID
+                linkStore: linkStore
             )
         }
         .id(message.id)

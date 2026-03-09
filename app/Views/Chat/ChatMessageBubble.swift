@@ -11,7 +11,6 @@ struct ChatMessageBubble: View {
     let statusText: String?
     let onRetry: ((ChatMessage) -> Void)?
     @ObservedObject var linkStore: LinkMetadataStore
-    @Binding var activeReactionMessageID: UUID?
     @State private var quickLookItem: QuickLookItem?
     @State private var fullScreenVideoItem: FullScreenVideoItem?
     @Environment(\.openURL) private var openURL
@@ -92,34 +91,32 @@ struct ChatMessageBubble: View {
         .fullScreenCover(item: $fullScreenVideoItem) { item in
             FullScreenVideoView(url: item.url)
         }
-        .onLongPressGesture {
-            let impact = UIImpactFeedbackGenerator(style: .medium)
-            impact.impactOccurred()
-            withAnimation(.spring(duration: 0.25)) {
-                activeReactionMessageID = message.id
-            }
-        }
-        .overlay(alignment: .top) {
-            if activeReactionMessageID == message.id {
-                HStack(spacing: 4) {
-                    ForEach(["👍", "❤️", "😂", "😮", "😢", "😡"], id: \.self) { emoji in
-                        Button {
-                            message.toggleReaction(emoji)
-                            withAnimation { activeReactionMessageID = nil }
-                        } label: {
-                            Text(emoji)
-                                .font(.title2)
-                        }
-                        .buttonStyle(.plain)
+        .contextMenu {
+            Section {
+                ForEach(["👍", "❤️", "😂", "😮", "😢", "😡"], id: \.self) { emoji in
+                    Button {
+                        message.toggleReaction(emoji)
+                    } label: {
+                        Text(emoji)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: Capsule())
-                .transition(.scale.combined(with: .opacity))
-                .offset(y: -50)
-                .zIndex(10)
             }
+
+            if let text = message.text {
+                Section {
+                    Button {
+                        UIPasteboard.general.string = text
+                    } label: {
+                        Label("Copy", systemImage: "doc.on.doc")
+                    }
+
+                    ShareLink(item: text) {
+                        Label("Share…", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+        } preview: {
+            MessageContextPreview(message: message)
         }
     }
     
@@ -255,7 +252,7 @@ struct ChatMessageBubble: View {
     }
 }
 
-private struct MarkdownBubbleText: View {
+struct MarkdownBubbleText: View {
     let text: String
 
     var body: some View {
@@ -270,7 +267,6 @@ private struct MarkdownBubbleText: View {
         .foregroundStyle(.white)
         .lineSpacing(4)
         .multilineTextAlignment(.leading)
-        .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -473,5 +469,28 @@ struct BubbleTailShape: Shape {
 
         path.closeSubpath()
         return path
+    }
+}
+
+// MARK: - Context Menu Preview
+
+private struct MessageContextPreview: View {
+    let message: ChatMessage
+
+    var body: some View {
+        ScrollView {
+            if let text = message.text {
+                MarkdownBubbleText(text: text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+            }
+        }
+        .frame(width: 300)
+        .frame(maxHeight: 400)
+        .background(
+            message.role.isUser
+                ? Color(red: 0.039, green: 0.518, blue: 1.0)
+                : Color(red: 0.149, green: 0.149, blue: 0.161)
+        )
     }
 }
