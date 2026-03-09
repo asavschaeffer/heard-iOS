@@ -186,6 +186,8 @@ class ChatViewModel: ObservableObject {
             try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
+            syncSpeakerRouteState()
+            logAudioSessionState("Audio session configured for non-CallKit path")
         } catch {
             print("Audio Session Error: \(error)")
         }
@@ -195,30 +197,30 @@ class ChatViewModel: ObservableObject {
         let manager = CallKitManager(appName: "Heard, Chef")
         manager.onStartAudio = { [weak self] in
             guard let self else { return }
-            print("[Audio] CallKit activated audio session")
             self.captureStartedFromCallKit = true
             // Avoid VPIO under CallKit-owned sessions; it can emit repeated render -1 logs
             // while CallKit already provides voice-optimized session behavior.
             self.useVoiceProcessingInput = false
-            let session = AVAudioSession.sharedInstance()
-            print("[Audio] CallKit session active. sampleRate=\(Int(session.sampleRate))Hz ioBuffer=\(session.ioBufferDuration)s")
-            print("[Audio] Voice processing input disabled for CallKit-managed session")
+            self.configureActiveCallKitSession()
             self.syncSpeakerRouteState()
+            self.logAudioSessionState("CallKit activated audio session")
             if !self.isMicrophoneMuted {
                 self.startAudioCapture()
             }
             self.callState.isListening = !self.isMicrophoneMuted
         }
         manager.onStopAudio = { [weak self] in
-            print("[Audio] CallKit deactivated audio session")
-            self?.stopAudioCapture()
-            self?.callState.isListening = false
+            guard let self else { return }
+            self.logAudioSessionState("CallKit deactivated audio session", extra: "phase=before-stop")
+            self.stopAudioCapture()
+            self.callState.isListening = false
+            self.logAudioSessionState("CallKit deactivated audio session", extra: "phase=after-stop")
         }
         manager.onMuteChanged = { [weak self] isMuted in
             guard let self else { return }
-            print("[Audio] CallKit mute changed: \(isMuted)")
             self.isMicrophoneMuted = isMuted
             self.callState.isListening = !isMuted
+            self.logAudioSessionState("CallKit mute changed", extra: "isMuted=\(isMuted)")
             if !isMuted && self.callState.isPresented && self.audioEngine == nil {
                 self.startAudioCapture()
             }
@@ -227,7 +229,10 @@ class ChatViewModel: ObservableObject {
             guard let self else { return }
             let details = CallKitManager.describeTransactionError(error)
             let shouldDisableCallKit = CallKitManager.shouldDisableCallKitAfterError(error)
-            print("[Audio] CallKit transaction failed (\(details)). fallbackMode=\(shouldDisableCallKit ? "session-disable" : "call-only")")
+            self.logAudioSessionState(
+                "CallKit transaction failed",
+                extra: "details=\(details) fallbackMode=\(shouldDisableCallKit ? "session-disable" : "call-only")"
+            )
             self.useVoiceProcessingInput = false
             self.captureStartedFromCallKit = false
             if shouldDisableCallKit {
@@ -246,6 +251,7 @@ class ChatViewModel: ObservableObject {
         callKitManager?.onMuteChanged = nil
         callKitManager?.onTransactionError = nil
         callKitManager = nil
+        logAudioSessionState("CallKit disabled for current session")
     }
 
     private func startDirectAudioFallbackPath() {
@@ -263,17 +269,45 @@ class ChatViewModel: ObservableObject {
             callState.isListening = false
             print("[Audio] Waiting for Gemini connection before starting fallback capture")
         }
+        logAudioSessionState("Started direct audio fallback path")
+    }
+
+    private func configureActiveCallKitSession(preferSpeaker: Bool? = nil) {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
+
+            if let preferSpeaker {
+                try session.setPreferredInput(nil)
+                try session.overrideOutputAudioPort(preferSpeaker ? .speaker : .none)
+                if !preferSpeaker,
+                   let builtInMic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+                    try session.setPreferredInput(builtInMic)
+                }
+            }
+
+            syncSpeakerRouteState()
+            logAudioSessionState(
+                "CallKit session configured",
+                extra: "mode=voiceChat speakerOverride=\(preferSpeaker.map { $0 ? "speaker" : "receiver/system" } ?? "preserve")"
+            )
+        } catch {
+            logAudioSessionState("CallKit session configuration failed", extra: "error=\(error.localizedDescription)")
+        }
     }
 
     private func configureAudioSessionForCall() {
         let session = AVAudioSession.sharedInstance()
         do {
-            let mode: AVAudioSession.Mode = useVoiceProcessingInput ? .voiceChat : .default
+            let mode: AVAudioSession.Mode = .voiceChat
             try session.setCategory(.playAndRecord, mode: mode, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
             syncSpeakerRouteState()
-            print("[Audio] Session configured. mode=\(mode.rawValue)")
+            logAudioSessionState(
+                "Session configured for call",
+                extra: "mode=\(mode.rawValue) useVPIO=\(useVoiceProcessingInput)"
+            )
         } catch {
             print("Audio Session Error: \(error)")
         }
@@ -289,6 +323,7 @@ class ChatViewModel: ObservableObject {
         do {
             try session.overrideOutputAudioPort(.speaker)
             isSpeakerPreferred = true
+            logAudioSessionState("Preferred speaker route applied")
         } catch {
             print("Audio Session override error: \(error)")
         }
@@ -353,6 +388,104 @@ class ChatViewModel: ObservableObject {
         }
     }
 
+    private var connectionStateDebugLabel: String {
+        switch connectionState {
+        case .connected:
+            return "connected"
+        case .connecting:
+            return "connecting"
+        case .disconnected:
+            return "disconnected"
+        case .error(let message):
+            return "error(\(message))"
+        }
+    }
+
+    private func describeAudioPorts(_ ports: [AVAudioSessionPortDescription]) -> String {
+        guard !ports.isEmpty else { return "[]" }
+        let summary = ports.map { port in
+            "\(port.portType.rawValue):\(port.portName)"
+        }.joined(separator: ", ")
+        return "[\(summary)]"
+    }
+
+    private func describeAudioRoute(_ route: AVAudioSessionRouteDescription?) -> String {
+        guard let route else { return "inputs=[] outputs=[]" }
+        return "inputs=\(describeAudioPorts(route.inputs)) outputs=\(describeAudioPorts(route.outputs))"
+    }
+
+    private func describeRouteChangeReason(_ reason: AVAudioSession.RouteChangeReason, rawValue: UInt) -> String {
+        switch reason {
+        case .newDeviceAvailable:
+            return "newDeviceAvailable"
+        case .oldDeviceUnavailable:
+            return "oldDeviceUnavailable"
+        case .categoryChange:
+            return "categoryChange"
+        case .override:
+            return "override"
+        case .wakeFromSleep:
+            return "wakeFromSleep"
+        case .noSuitableRouteForCategory:
+            return "noSuitableRouteForCategory"
+        case .routeConfigurationChange:
+            return "routeConfigurationChange"
+        case .unknown:
+            return "unknown"
+        @unknown default:
+            return "unhandled(\(rawValue))"
+        }
+    }
+
+    private func describeInterruptionType(_ type: AVAudioSession.InterruptionType) -> String {
+        switch type {
+        case .began:
+            return "began"
+        case .ended:
+            return "ended"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func describeInterruptionOptions(_ options: AVAudioSession.InterruptionOptions) -> String {
+        guard !options.isEmpty else { return "[]" }
+        var values: [String] = []
+        if options.contains(.shouldResume) {
+            values.append("shouldResume")
+        }
+        return "[\(values.joined(separator: ", "))]"
+    }
+
+    private func logAudioSessionState(_ event: String, extra: String = "") {
+        let session = AVAudioSession.sharedInstance()
+        let callFlags = [
+            "callPresented=\(callState.isPresented)",
+            "connection=\(connectionStateDebugLabel)",
+            "callKit=\(callKitEnabled)",
+            "muted=\(isMicrophoneMuted)",
+            "speakerPreferred=\(isSpeakerPreferred)",
+            "listening=\(callState.isListening)",
+            "speaking=\(callState.isSpeaking)",
+            "captureRunning=\(audioEngine?.isRunning == true)",
+            "playbackRunning=\(playbackEngine?.isRunning == true)",
+            "pendingVoiceStart=\(pendingVoiceStart)",
+            "captureFromCallKit=\(captureStartedFromCallKit)",
+            "useVPIO=\(useVoiceProcessingInput)"
+        ].joined(separator: " ")
+        let sessionFlags = [
+            "category=\(session.category.rawValue)",
+            "mode=\(session.mode.rawValue)",
+            "sampleRate=\(Int(session.sampleRate))Hz",
+            String(format: "ioBuffer=%.3fms", session.ioBufferDuration * 1000),
+            "preferredInput=\(session.preferredInput.map { "\($0.portType.rawValue):\($0.portName)" } ?? "none")",
+            "currentRoute=\(describeAudioRoute(session.currentRoute))",
+            "availableInputs=\(describeAudioPorts(session.availableInputs ?? []))"
+        ].joined(separator: " ")
+        let suffix = extra.isEmpty ? "" : " \(extra)"
+        print("[Audio] \(event)\(suffix) | \(callFlags) | \(sessionFlags)")
+    }
+
     private func sendCallHaptic(style: UINotificationFeedbackGenerator.FeedbackType) {
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
@@ -380,7 +513,7 @@ class ChatViewModel: ObservableObject {
         }
 
         reconnectDelay = min(reconnectDelay * 2.0, maxReconnectDelay)
-        print("[Gemini] Scheduled reconnect in \(String(format: "%.1f", delay))s")
+        logAudioSessionState("Scheduled Gemini reconnect", extra: String(format: "delay=%.1fs", delay))
     }
 
     private func observeAudioSession() {
@@ -417,23 +550,16 @@ class ChatViewModel: ObservableObject {
         guard callState.isPresented else { return }
         let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
         let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) ?? .unknown
-        let reasonDescription: String
-        switch reason {
-        case .newDeviceAvailable: reasonDescription = "newDeviceAvailable"
-        case .oldDeviceUnavailable: reasonDescription = "oldDeviceUnavailable"
-        case .categoryChange: reasonDescription = "categoryChange"
-        case .override: reasonDescription = "override"
-        case .wakeFromSleep: reasonDescription = "wakeFromSleep"
-        case .noSuitableRouteForCategory: reasonDescription = "noSuitableRouteForCategory"
-        case .routeConfigurationChange: reasonDescription = "routeConfigurationChange"
-        case .unknown: reasonDescription = "unknown"
-        @unknown default: reasonDescription = "unhandled(\(reasonValue))"
-        }
-        print("[Audio] Route change: \(reasonDescription)")
+        let reasonDescription = describeRouteChangeReason(reason, rawValue: reasonValue)
+        let previousRoute = notification.userInfo?[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription
+        logAudioSessionState(
+            "Route change observed",
+            extra: "reason=\(reasonDescription) previousRoute=\(describeAudioRoute(previousRoute))"
+        )
 
         let shouldAdapt: Bool
         switch reason {
-        case .newDeviceAvailable, .oldDeviceUnavailable, .routeConfigurationChange:
+        case .override, .newDeviceAvailable, .oldDeviceUnavailable, .routeConfigurationChange:
             shouldAdapt = true
         default:
             shouldAdapt = false
@@ -441,6 +567,15 @@ class ChatViewModel: ObservableObject {
         if callKitEnabled {
             // During CallKit-owned sessions, avoid local engine teardown/rebuild on route churn.
             // The system manages the route and rapid restarts can trigger VPIO render errors.
+            if shouldAdapt && !useVoiceProcessingInput {
+                logAudioSessionState("CallKit route change will reconfigure local audio graphs", extra: "reason=\(reasonDescription)")
+                adaptToDeviceChange()
+                return
+            }
+            if shouldAdapt || reason == .override {
+                resetIdlePlaybackGraphForRouteChange(reason: reasonDescription)
+            }
+            logAudioSessionState("Route change ignored because CallKit owns session", extra: "reason=\(reasonDescription)")
             return
         }
         guard shouldAdapt else { return }
@@ -456,12 +591,17 @@ class ChatViewModel: ObservableObject {
 
         switch type {
         case .began:
+            logAudioSessionState("Audio interruption", extra: "type=\(describeInterruptionType(type))")
             if !callKitEnabled {
                 stopAudioCapture()
             }
         case .ended:
             let optionsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue ?? 0)
+            logAudioSessionState(
+                "Audio interruption",
+                extra: "type=\(describeInterruptionType(type)) options=\(describeInterruptionOptions(options))"
+            )
             if options.contains(.shouldResume) && callState.isPresented {
                 if !callKitEnabled && !isMicrophoneMuted {
                     startAudioCapture()
@@ -492,7 +632,7 @@ class ChatViewModel: ObservableObject {
     
     func disconnect() {
         stopVoiceSession()
-        geminiService?.disconnect()
+        geminiService?.disconnect(reason: "ChatViewModel.disconnect")
         connectionState = .disconnected
     }
 
@@ -528,7 +668,7 @@ class ChatViewModel: ObservableObject {
     // MARK: - Voice Session Management
 
     func startVoiceSession() {
-        print("[UI] Voice session start requested")
+        logAudioSessionState("Voice session start requested")
         let wasPresented = callState.isPresented
         if wasPresented { return }
         captureStartedFromCallKit = false
@@ -561,10 +701,11 @@ class ChatViewModel: ObservableObject {
         if !wasPresented {
             updateCallDuration()
         }
+        logAudioSessionState("Voice session start finished")
     }
 
     func stopVoiceSession() {
-        print("[UI] Voice session stop requested")
+        logAudioSessionState("Voice session stop requested")
         let wasPresented = callState.isPresented
         callState.isPresented = false
         captureStartedFromCallKit = false
@@ -587,31 +728,50 @@ class ChatViewModel: ObservableObject {
         inputTranscriptBuffer = ""
         resetCallTimer()
         // Disconnect the audio session; next text send will lazy-reconnect in text mode
-        geminiService?.disconnect()
+        geminiService?.disconnect(reason: "stopVoiceSession")
         connectionState = .disconnected
         if wasPresented {
             sendCallHaptic(style: .warning)
         }
+        logAudioSessionState("Voice session stop finished")
     }
     
     func toggleMute() {
         isMicrophoneMuted.toggle()
-        print("[UI] Microphone \(isMicrophoneMuted ? "muted" : "unmuted")")
         callState.isListening = !isMicrophoneMuted
+        logAudioSessionState("Microphone toggle", extra: "isMuted=\(isMicrophoneMuted)")
         if !isMicrophoneMuted && callState.isPresented && audioEngine == nil {
             startAudioCapture()
         }
     }
 
     func toggleSpeaker() {
-        let session = AVAudioSession.sharedInstance()
         do {
             let shouldPreferSpeaker = !isSpeakerPreferred
-            try session.overrideOutputAudioPort(shouldPreferSpeaker ? .speaker : .none)
-            isSpeakerPreferred = shouldPreferSpeaker
-            print("[UI] Speaker preference set to \(shouldPreferSpeaker ? "speaker" : "system route")")
+            logAudioSessionState(
+                "Speaker toggle requested",
+                extra: "target=\(shouldPreferSpeaker ? "speaker" : "receiver/system")"
+            )
+            if callKitEnabled && captureStartedFromCallKit {
+                configureActiveCallKitSession(preferSpeaker: shouldPreferSpeaker)
+            } else {
+                let session = AVAudioSession.sharedInstance()
+                try session.overrideOutputAudioPort(shouldPreferSpeaker ? .speaker : .none)
+                syncSpeakerRouteState()
+            }
+            logAudioSessionState(
+                "Speaker toggle applied",
+                extra: "target=\(shouldPreferSpeaker ? "speaker" : "receiver/system")"
+            )
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                self?.logAudioSessionState(
+                    "Speaker toggle settled",
+                    extra: "target=\(shouldPreferSpeaker ? "speaker" : "receiver/system")"
+                )
+            }
         } catch {
-            print("Audio Session override error: \(error)")
+            logAudioSessionState("Speaker toggle failed", extra: "error=\(error.localizedDescription)")
         }
     }
 
@@ -619,7 +779,10 @@ class ChatViewModel: ObservableObject {
 
     private func startAudioCapture() {
         // Prevent double start
-        if audioEngine?.isRunning == true { return }
+        if audioEngine?.isRunning == true {
+            logAudioSessionState("Capture start skipped", extra: "reason=already-running")
+            return
+        }
         
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
@@ -663,17 +826,22 @@ class ChatViewModel: ObservableObject {
             captureTapCallbackCount = 0
             capturedAudioChunkCount = 0
             capturedAudioByteCount = 0
-            print("[Audio] Capture started. targetRate=\(Int(ChatConfig.captureSampleRate))Hz")
+            logAudioSessionState(
+                "Capture started",
+                extra: "inputRate=\(Int(inputFormat.sampleRate))Hz channels=\(inputFormat.channelCount) targetRate=\(Int(ChatConfig.captureSampleRate))Hz"
+            )
         } catch {
             print("Audio Engine Start Error: \(error)")
             inputNode.removeTap(onBus: 0)
             audioEngine = nil
             captureConverter = nil
             captureTargetFormat = nil
+            logAudioSessionState("Capture start failed", extra: "error=\(error.localizedDescription)")
         }
     }
 
     private func stopAudioCapture() {
+        let hadEngine = audioEngine != nil
         if capturedAudioChunkCount > 0 {
             consecutiveSilentCaptureStops = 0
             print("[Audio] Capture stopped. callbacks=\(captureTapCallbackCount) chunks=\(capturedAudioChunkCount) bytes=\(capturedAudioByteCount)")
@@ -691,6 +859,10 @@ class ChatViewModel: ObservableObject {
         captureConverter = nil
         captureTargetFormat = nil
         callState.audioLevel = 0
+        logAudioSessionState(
+            hadEngine ? "Capture stopped" : "Capture stop requested with no active engine",
+            extra: "callbacks=\(captureTapCallbackCount) chunks=\(capturedAudioChunkCount) bytes=\(capturedAudioByteCount)"
+        )
     }
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
@@ -790,17 +962,28 @@ class ChatViewModel: ObservableObject {
         setupPlaybackEngineIfNeeded()
         guard let buffer = makePCMBuffer(from: data) else { return }
 
+        let engineWasRunning = playbackEngine?.isRunning == true
         if let engine = playbackEngine, !engine.isRunning {
             do {
                 try engine.start()
+                logAudioSessionState("Playback engine restarted", extra: "bufferBytes=\(data.count)")
             } catch {
                 print("Audio Playback restart error: \(error)")
                 return
             }
         }
 
-        if playbackNode?.isPlaying == false {
+        let shouldResetPlayer = !engineWasRunning || playbackEnqueuedBufferCount == 0
+        if shouldResetPlayer {
+            playbackNode?.stop()
+        }
+
+        if shouldResetPlayer || playbackNode?.isPlaying != true {
             playbackNode?.play()
+            logAudioSessionState(
+                "Playback node started",
+                extra: "bufferBytes=\(data.count) reset=\(shouldResetPlayer)"
+            )
         }
 
         incrementPlaybackBufferCount()
@@ -900,10 +1083,12 @@ class ChatViewModel: ObservableObject {
 
     private func adaptToDeviceChange() {
         if isAdaptingToRouteChange {
+            logAudioSessionState("Route adaptation skipped", extra: "reason=already-adapting")
             return
         }
         if let last = lastRouteAdaptationAt,
            Date().timeIntervalSince(last) < 1.0 {
+            logAudioSessionState("Route adaptation skipped", extra: "reason=debounced")
             return
         }
         isAdaptingToRouteChange = true
@@ -920,6 +1105,11 @@ class ChatViewModel: ObservableObject {
 
         guard shouldResumeCapture || shouldResumePlayback else { return }
 
+        logAudioSessionState(
+            "Route adaptation started",
+            extra: "resumeCapture=\(shouldResumeCapture) resumePlayback=\(shouldResumePlayback)"
+        )
+
         stopAudioCapture()
         stopPlayback(clearQueue: false)
 
@@ -931,6 +1121,20 @@ class ChatViewModel: ObservableObject {
         if shouldResumePlayback {
             setupPlaybackEngineIfNeeded()
         }
+        logAudioSessionState("Route adaptation finished")
+    }
+
+    private func resetIdlePlaybackGraphForRouteChange(reason: String) {
+        guard playbackEngine != nil || playbackNode != nil else { return }
+        guard playbackEnqueuedBufferCount == 0 else {
+            logAudioSessionState(
+                "Playback graph reset deferred",
+                extra: "reason=\(reason) enqueuedBuffers=\(playbackEnqueuedBufferCount)"
+            )
+            return
+        }
+        logAudioSessionState("Resetting idle playback graph", extra: "reason=\(reason)")
+        stopPlayback(clearQueue: false)
     }
 
     private func incrementPlaybackBufferCount() {
@@ -944,6 +1148,8 @@ class ChatViewModel: ObservableObject {
         playbackEnqueuedBufferCount = max(0, playbackEnqueuedBufferCount - 1)
         if playbackEnqueuedBufferCount == 0 {
             callState.isSpeaking = false
+            playbackNode?.stop()
+            logAudioSessionState("Playback queue drained")
         }
     }
 
@@ -1503,7 +1709,7 @@ extension ChatViewModel: GeminiServiceDelegate {
     func geminiServiceDidConnect(_ service: GeminiService) {
         connectionState = .connected
         resetReconnectBackoff()
-        print("[Gemini] Connected. callKitEnabled=\(callKitEnabled) pendingVoiceStart=\(pendingVoiceStart)")
+        logAudioSessionState("Gemini delegate connected")
         flushPendingMessages()
         if callState.isPresented {
             startCallTimer()
@@ -1530,6 +1736,7 @@ extension ChatViewModel: GeminiServiceDelegate {
         connectionState = .disconnected
         callState.isListening = false
         isTyping = false
+        logAudioSessionState("Gemini delegate disconnected", extra: "autoReconnect=\(shouldAutoReconnect)")
         if callState.isPresented {
             pauseCallTimer()
             pendingVoiceStart = true
@@ -1545,6 +1752,7 @@ extension ChatViewModel: GeminiServiceDelegate {
         finalizeAssistantStreamingMessages()
         markPendingMessagesFailed()
         markLatestUserMessageFailedIfSending()
+        logAudioSessionState("Gemini delegate error", extra: "error=\(error.localizedDescription)")
         if callState.isPresented {
             pauseCallTimer()
         }

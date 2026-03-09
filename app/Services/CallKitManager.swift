@@ -28,6 +28,19 @@ final class CallKitManager: NSObject {
     var onMuteChanged: ((Bool) -> Void)?
     var onTransactionError: ((Error) -> Void)?
 
+    private func logCallKitEvent(_ event: String, audioSession: AVAudioSession? = nil, extra: String = "") {
+        let session = audioSession ?? AVAudioSession.sharedInstance()
+        let currentCallID = currentCall?.id.uuidString ?? "none"
+        let currentCallName = currentCall?.displayName ?? "none"
+        let routeInputs = session.currentRoute.inputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", ")
+        let routeOutputs = session.currentRoute.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", ")
+        let availableInputs = (session.availableInputs ?? []).map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", ")
+        let prefix = extra.isEmpty ? "" : " \(extra)"
+        print(
+            "[CallKit] \(event)\(prefix) | callID=\(currentCallID) displayName=\(currentCallName) category=\(session.category.rawValue) mode=\(session.mode.rawValue) sampleRate=\(Int(session.sampleRate))Hz inputs=[\(routeInputs)] outputs=[\(routeOutputs)] availableInputs=[\(availableInputs)]"
+        )
+    }
+
     init(appName: String) {
         _ = appName
         let config = CXProviderConfiguration()
@@ -48,6 +61,7 @@ final class CallKitManager: NSObject {
         let startAction = CXStartCallAction(call: callId, handle: handle)
         let transaction = CXTransaction(action: startAction)
         currentCall = CallKitCall(id: callId, displayName: displayName)
+        logCallKitEvent("startCall requested", extra: "target=\(displayName)")
         request(transaction: transaction)
     }
 
@@ -55,11 +69,13 @@ final class CallKitManager: NSObject {
         guard let callId = currentCall?.id else { return }
         let endAction = CXEndCallAction(call: callId)
         let transaction = CXTransaction(action: endAction)
+        logCallKitEvent("endCall requested")
         request(transaction: transaction)
     }
 
     func reportConnected() {
         guard let callId = currentCall?.id else { return }
+        logCallKitEvent("reportConnected")
         provider.reportOutgoingCall(with: callId, connectedAt: Date())
     }
 
@@ -67,12 +83,12 @@ final class CallKitManager: NSObject {
         callController.request(transaction) { error in
             if let error {
                 let details = Self.describeTransactionError(error)
-                print("CallKit transaction error: \(details)")
+                self.logCallKitEvent("transaction request failed", extra: details)
                 Task { @MainActor in
                     self.onTransactionError?(error)
                 }
             } else {
-                print("[CallKit] Transaction request accepted")
+                self.logCallKitEvent("transaction request accepted")
             }
         }
     }
@@ -117,31 +133,39 @@ final class CallKitManager: NSObject {
 
 extension CallKitManager: CXProviderDelegate {
     func providerDidReset(_ provider: CXProvider) {
+        logCallKitEvent("providerDidReset", extra: "phase=before-stop")
         currentCall = nil
         onStopAudio?()
+        logCallKitEvent("providerDidReset", extra: "phase=after-stop")
     }
 
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        logCallKitEvent("provider perform start", extra: "actionCallID=\(action.callUUID.uuidString)")
         provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        logCallKitEvent("provider perform end", extra: "actionCallID=\(action.callUUID.uuidString) phase=before-stop")
         onStopAudio?()
         currentCall = nil
         action.fulfill()
+        logCallKitEvent("provider perform end", extra: "actionCallID=\(action.callUUID.uuidString) phase=after-stop")
     }
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        logCallKitEvent("provider perform mute", extra: "isMuted=\(action.isMuted)")
         onMuteChanged?(action.isMuted)
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        logCallKitEvent("provider didActivate", audioSession: audioSession)
         onStartAudio?()
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        logCallKitEvent("provider didDeactivate", audioSession: audioSession)
         onStopAudio?()
     }
 }
