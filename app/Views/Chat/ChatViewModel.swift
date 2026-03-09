@@ -40,12 +40,21 @@ class ChatViewModel: ObservableObject {
         case error
     }
 
+    struct ToolCallDetail: Identifiable, Equatable {
+        let key: String
+        let value: String
+
+        var id: String { "\(key)|\(value)" }
+    }
+
     struct ToolCallChip: Identifiable, Equatable {
         let id: String
         let functionName: String
+        var anchorMessageID: UUID?
+        let iconName: String
+        let actionText: String
         var status: ToolCallStatus
-        var summary: String
-        var details: String?
+        var details: [ToolCallDetail]
     }
 
     // MARK: - Published Properties
@@ -1116,13 +1125,15 @@ class ChatViewModel: ObservableObject {
         print("[Chat] Marked latest user message as Failed")
     }
 
-    private func startToolCallChip(id: String, name: String) {
+    private func startToolCallChip(id: String, name: String, arguments: [String: Any]) {
         let pending = ToolCallChip(
             id: id,
             functionName: name,
+            anchorMessageID: nil,
+            iconName: toolDomainIconName(functionName: name),
+            actionText: actionDescription(functionName: name, arguments: arguments),
             status: .pending,
-            summary: "Heard, chef! Working...",
-            details: nil
+            details: []
         )
         if let index = toolCallChips.firstIndex(where: { $0.id == id }) {
             toolCallChips[index] = pending
@@ -1136,70 +1147,170 @@ class ChatViewModel: ObservableObject {
 
     private func finishToolCallChip(name: String, result: FunctionResult) {
         let isSuccess = (result.response["success"] as? Bool) == true
-        let summary = isSuccess
-            ? successSummary(functionName: name, response: result.response)
-            : errorSummary(response: result.response)
-        let details = prettyPrintedJSON(result.response)
+        let details = detailItems(from: result.response)
 
         if let index = toolCallChips.firstIndex(where: { $0.id == result.id }) {
             toolCallChips[index].status = isSuccess ? .success : .error
-            toolCallChips[index].summary = summary
             toolCallChips[index].details = details
         } else {
             toolCallChips.append(
                 ToolCallChip(
                     id: result.id,
                     functionName: name,
+                    anchorMessageID: nil,
+                    iconName: toolDomainIconName(functionName: name),
+                    actionText: actionDescription(functionName: name, arguments: [:]),
                     status: isSuccess ? .success : .error,
-                    summary: summary,
                     details: details
                 )
             )
         }
     }
 
-    private func successSummary(functionName: String, response: [String: Any]) -> String {
+    private func toolDomainIconName(functionName: String) -> String {
+        if functionName.contains("ingredient") {
+            return "refrigerator.fill"
+        }
+        if functionName.contains("recipe") {
+            return "fork.knife.circle.fill"
+        }
+        return "gearshape.fill"
+    }
+
+    private func actionDescription(functionName: String, arguments: [String: Any]) -> String {
         switch functionName {
+        case "search_ingredients", "search_recipes":
+            return "Search: \(quoted(arguments["query"]))"
+        case "get_ingredient", "get_recipe":
+            return "View: \(quoted(arguments["name"]))"
+        case "list_ingredients", "list_recipes":
+            return "List"
         case "add_ingredient":
-            if let ingredient = response["ingredient"] as? [String: Any],
-               let name = ingredient["name"] as? String {
-                return "Added \(name)"
-            }
-            return "Added item"
+            return "Add: \(quoted(arguments["name"]))"
         case "remove_ingredient":
-            return "Removed item"
+            return "Remove: \(quoted(arguments["name"]))"
+        case "update_ingredient":
+            return "Update: \(quoted(arguments["name"]))"
         case "create_recipe":
-            if let name = response["name"] as? String {
-                return "Created '\(name)'"
-            }
-            return "Created recipe"
+            return "Create: \(quoted(arguments["name"]))"
         case "update_recipe":
-            return "Updated recipe"
+            return "Update recipe: \(quoted(arguments["name"]))"
         case "delete_recipe":
-            return "Deleted recipe"
-        case "list_recipes":
-            return "Listed recipes"
-        case "search_recipes":
-            return "Searched recipes"
+            return "Delete recipe: \(quoted(arguments["name"]))"
+        case "suggest_recipes":
+            return "Suggest recipes"
+        case "check_recipe_availability":
+            return "Check availability: \(quoted(arguments["name"]))"
         default:
-            return response["message"] as? String ?? "Completed \(functionName)"
+            return functionName
+                .replacingOccurrences(of: "_", with: " ")
+                .capitalized
         }
     }
 
-    private func errorSummary(response: [String: Any]) -> String {
-        if let error = response["error"] as? String, !error.isEmpty {
-            return error
+    private func quoted(_ value: Any?) -> String {
+        if let string = value as? String, !string.isEmpty {
+            return "\"\(string)\""
         }
-        return "Tool call failed"
+        return "item"
     }
 
-    private func prettyPrintedJSON(_ object: [String: Any]) -> String? {
-        guard JSONSerialization.isValidJSONObject(object),
-              let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted]),
-              let json = String(data: data, encoding: .utf8) else {
-            return nil
+    private func attachUnanchoredToolChips(to messageID: UUID) {
+        for index in toolCallChips.indices where toolCallChips[index].anchorMessageID == nil {
+            toolCallChips[index].anchorMessageID = messageID
         }
-        return json
+    }
+
+    private func detailItems(from response: [String: Any]) -> [ToolCallDetail] {
+        var details: [ToolCallDetail] = []
+        for key in response.keys.sorted() {
+            if key == "success" { continue }
+            appendDetailItems(value: response[key] as Any, path: [key], into: &details)
+        }
+        return details
+    }
+
+    private func appendDetailItems(value: Any, path: [String], into details: inout [ToolCallDetail]) {
+        if let map = value as? [String: Any] {
+            if map.isEmpty {
+                details.append(ToolCallDetail(key: makeDetailTitle(path), value: "None"))
+                return
+            }
+            for key in map.keys.sorted() {
+                appendDetailItems(value: map[key] as Any, path: path + [key], into: &details)
+            }
+            return
+        }
+
+        if let array = value as? [Any] {
+            if array.isEmpty {
+                details.append(ToolCallDetail(key: makeDetailTitle(path), value: "None"))
+                return
+            }
+
+            let scalarValues = array.compactMap { formattedScalar($0) }
+            if scalarValues.count == array.count {
+                details.append(
+                    ToolCallDetail(
+                        key: makeDetailTitle(path),
+                        value: scalarValues.joined(separator: ", ")
+                    )
+                )
+                return
+            }
+
+            for (index, item) in array.enumerated() {
+                appendDetailItems(value: item, path: path + ["\(index + 1)"], into: &details)
+            }
+            return
+        }
+
+        let scalar = formattedScalar(value) ?? String(describing: value)
+        details.append(ToolCallDetail(key: makeDetailTitle(path), value: scalar))
+    }
+
+    private func formattedScalar(_ value: Any) -> String? {
+        if value is NSNull {
+            return "None"
+        }
+        if let text = value as? String {
+            return text
+        }
+        if let bool = value as? Bool {
+            return bool ? "Yes" : "No"
+        }
+        if let int = value as? Int {
+            return "\(int)"
+        }
+        if let double = value as? Double {
+            return numberFormatter.string(from: NSNumber(value: double)) ?? "\(double)"
+        }
+        if let number = value as? NSNumber {
+            return numberFormatter.string(from: number) ?? number.stringValue
+        }
+        return nil
+    }
+
+    private func makeDetailTitle(_ path: [String]) -> String {
+        path.map(humanizeDetailSegment).joined(separator: " > ")
+    }
+
+    private func humanizeDetailSegment(_ segment: String) -> String {
+        if Int(segment) != nil {
+            return "Item \(segment)"
+        }
+        return segment
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .capitalized
+    }
+
+    private var numberFormatter: NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = 4
+        formatter.minimumFractionDigits = 0
+        formatter.numberStyle = .decimal
+        return formatter
     }
 
     // MARK: - Transcript Handling
@@ -1279,11 +1390,13 @@ class ChatViewModel: ObservableObject {
         if let messageId = assistantTranscriptMessageId,
            let index = messages.firstIndex(where: { $0.id == messageId }) {
             messages[index].updateText(text, isDraft: !isFinal)
+            attachUnanchoredToolChips(to: messageId)
         } else {
             let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
             insertMessage(message)
             messages.append(message)
             assistantTranscriptMessageId = message.id
+            attachUnanchoredToolChips(to: message.id)
         }
 
         if isFinal {
@@ -1302,11 +1415,13 @@ class ChatViewModel: ObservableObject {
         if let messageId = assistantTextMessageId,
            let index = messages.firstIndex(where: { $0.id == messageId }) {
             messages[index].updateText(text, isDraft: !isFinal)
+            attachUnanchoredToolChips(to: messageId)
         } else {
             let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
             insertMessage(message)
             messages.append(message)
             assistantTextMessageId = message.id
+            attachUnanchoredToolChips(to: message.id)
         }
 
         if isFinal {
@@ -1475,8 +1590,8 @@ extension ChatViewModel: GeminiServiceDelegate {
         service.notifyCurrentSendResult()
     }
 
-    func geminiService(_ service: GeminiService, didStartFunctionCall id: String, name: String) {
-        startToolCallChip(id: id, name: name)
+    func geminiService(_ service: GeminiService, didStartFunctionCall id: String, name: String, arguments: [String: Any]) {
+        startToolCallChip(id: id, name: name, arguments: arguments)
     }
 
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult) {

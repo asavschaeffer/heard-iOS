@@ -38,7 +38,7 @@ protocol GeminiServiceDelegate: AnyObject {
     func geminiService(_ service: GeminiService, didReceiveInputTranscript transcript: String, isFinal: Bool)
     func geminiService(_ service: GeminiService, didReceiveResponse text: String)
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data)
-    func geminiService(_ service: GeminiService, didStartFunctionCall id: String, name: String)
+    func geminiService(_ service: GeminiService, didStartFunctionCall id: String, name: String, arguments: [String: Any])
     func geminiService(_ service: GeminiService, didExecuteFunctionCall name: String, result: FunctionResult)
     func geminiServiceDidStartResponse(_ service: GeminiService)
     func geminiServiceDidEndResponse(_ service: GeminiService)
@@ -586,7 +586,7 @@ class GeminiService: NSObject {
             for (id, name, args) in functionCalls {
                 let call = FunctionCall(id: id, name: name, arguments: args)
                 await MainActor.run {
-                    self.delegate?.geminiService(self, didStartFunctionCall: id, name: name)
+                    self.delegate?.geminiService(self, didStartFunctionCall: id, name: name, arguments: args)
                 }
 
                 let result: FunctionResult
@@ -956,7 +956,7 @@ class GeminiService: NSObject {
             }
 
             let call = FunctionCall(id: id, name: name, arguments: args)
-            delegate?.geminiService(self, didStartFunctionCall: id, name: name)
+            delegate?.geminiService(self, didStartFunctionCall: id, name: name, arguments: args)
 
             // Validate the call
             if let validationError = GeminiTools.validate(call: call) {
