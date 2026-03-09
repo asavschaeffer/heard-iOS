@@ -74,6 +74,9 @@ class GeminiService: NSObject {
     private var inboundTurnAudioBytes = 0
     private var inboundTurnTranscriptParts = 0
     private var inboundRESTTurnSequence = 0
+    private var webSocketSessionSequence = 0
+    private var activeWebSocketSessionID = "ws-0"
+    private var pendingDisconnectReason = "none"
 
     // Pending requests tracking with timeout
     private var pendingMessageID: UUID?
@@ -129,6 +132,13 @@ class GeminiService: NSObject {
         }
 
         self.activeConfig = config ?? .text()
+        webSocketSessionSequence += 1
+        activeWebSocketSessionID = "ws-\(webSocketSessionSequence)"
+        pendingDisconnectReason = "none"
+        logSocketEvent(
+            "connect requested",
+            extra: "mode=\(describe(mode: activeConfig?.mode)) model=\(activeConfig?.model ?? "none") existingTask=\(webSocketTask != nil)"
+        )
 
         let urlString = "\(baseURL)?key=\(apiKey)"
         guard let url = URL(string: urlString) else {
@@ -148,9 +158,10 @@ class GeminiService: NSObject {
             do {
                 try await Task.sleep(nanoseconds: UInt64(self.acceptanceTimeout * 1_000_000_000))
                 if !self.hasAccepted && !self.isConnected {
-                    print("[Gemini] Acceptance timeout")
+                    self.logSocketEvent("acceptance timeout")
                     await MainActor.run {
                         self.delegate?.geminiService(self, didReceiveError: GeminiError.connectionFailed)
+                        self.pendingDisconnectReason = "acceptance-timeout"
                         self.webSocketTask?.cancel(with: .goingAway, reason: nil)
                         self.resetTrackingState()
                     }
@@ -161,7 +172,9 @@ class GeminiService: NSObject {
         }
     }
 
-    func disconnect() {
+    func disconnect(reason: String = "manual") {
+        pendingDisconnectReason = reason
+        logSocketEvent("disconnect requested", extra: "reason=\(reason)")
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
         urlSession = nil
@@ -185,7 +198,7 @@ class GeminiService: NSObject {
 
     /// Switch to audio mode (for live voice calls)
     func switchToAudioMode() {
-        disconnect()
+        disconnect(reason: "switchToAudioMode")
         connect(config: .audio())
     }
 
@@ -193,6 +206,27 @@ class GeminiService: NSObject {
         hasAccepted = false
         lastStreamChunkAt = nil
         pendingMessageID = nil
+    }
+
+    private func describe(mode: SessionMode?) -> String {
+        switch mode {
+        case .audio:
+            return "audio"
+        case .text:
+            return "text"
+        case .none:
+            return "none"
+        }
+    }
+
+    private func logSocketEvent(_ event: String, extra: String = "") {
+        let linkedPendingMessage = pendingMessageID.map { String($0.uuidString.prefix(8)) } ?? "none"
+        let lastChunkAgeMs = lastStreamChunkAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1
+        let inboundTurn = inboundTurnID ?? "none"
+        let suffix = extra.isEmpty ? "" : " \(extra)"
+        print(
+            "[Gemini] \(activeWebSocketSessionID) \(event)\(suffix) | connected=\(isConnected) accepted=\(hasAccepted) streaming=\(isStreamingResponse) mode=\(describe(mode: currentMode)) pendingMessage=\(linkedPendingMessage) inboundTurn=\(inboundTurn) lastChunkAgeMs=\(lastChunkAgeMs) disconnectReason=\(pendingDisconnectReason)"
+        )
     }
 
     // MARK: - Setup Message
@@ -234,7 +268,7 @@ class GeminiService: NSObject {
         }
 
         let payload: [String: Any] = ["setup": setup]
-        print("[Gemini] Sending setup for model=\(model) mode=\(config.mode)")
+        logSocketEvent("sending setup", extra: "model=\(model) mode=\(describe(mode: config.mode))")
         if case let .failure(error) = sendJSON(payload) {
             print("[Gemini] Setup send failed before dispatch: \(error.localizedDescription)")
             delegate?.geminiService(self, didReceiveError: error)
@@ -716,7 +750,7 @@ class GeminiService: NSObject {
                     self.receiveMessage()
 
                 case .failure(let error):
-                    print("[Gemini] Receive error: \(error)")
+                    self.logSocketEvent("receive error", extra: "error=\(error.localizedDescription)")
                     self.delegate?.geminiService(self, didReceiveError: error)
                     self.acceptanceTask?.cancel()
                     self.acceptanceTask = nil
@@ -754,11 +788,11 @@ class GeminiService: NSObject {
         }
 
         if !hasAccepted {
-            print("[Gemini] Pre-accept message: \(json)")
+            logSocketEvent("pre-accept message", extra: "payload=\(json)")
         }
 
         if let serverError = parseServerError(json) {
-            print("[Gemini] Server error: \(serverError)")
+            logSocketEvent("server error", extra: "message=\(serverError)")
             delegate?.geminiService(self, didReceiveError: GeminiError.serverError(serverError))
             return
         }
@@ -773,6 +807,7 @@ class GeminiService: NSObject {
             sentAudioByteCount = 0
             receivedAudioChunkCount = 0
             receivedAudioByteCount = 0
+            logSocketEvent("setup complete acknowledged")
             delegate?.geminiServiceDidConnect(self)
             return
         }
@@ -791,7 +826,7 @@ class GeminiService: NSObject {
 
         if let goAway = json["goAway"] as? [String: Any] {
             let timeLeft = goAway["timeLeft"] as? String ?? "unknown"
-            print("[Gemini] Server goAway received (timeLeft=\(timeLeft))")
+            logSocketEvent("server goAway received", extra: "timeLeft=\(timeLeft)")
             return
         }
 
@@ -1678,7 +1713,7 @@ class GeminiService: NSObject {
 
         task.send(.string(string)) { [weak self] error in
             if let error = error {
-                print("[Gemini] WebSocket send error: \(error)")
+                self?.logSocketEvent("send error", extra: "error=\(error.localizedDescription)")
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.delegate?.geminiService(self, didReceiveError: error)
@@ -1716,8 +1751,8 @@ extension GeminiService: URLSessionWebSocketDelegate {
         webSocketTask: URLSessionWebSocketTask,
         didOpenWithProtocol protocol: String?
     ) {
-        print("[Gemini] WebSocket opened")
         Task { @MainActor in
+            self.logSocketEvent("websocket opened", extra: "protocol=\(`protocol` ?? "none")")
             self.sendSetupMessage()
         }
     }
@@ -1729,8 +1764,11 @@ extension GeminiService: URLSessionWebSocketDelegate {
         reason: Data?
     ) {
         let reasonStr = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "none"
-        print("[Gemini] WebSocket closed: code=\(closeCode.rawValue) reason=\(reasonStr)")
         Task { @MainActor in
+            self.logSocketEvent(
+                "websocket closed",
+                extra: "code=\(closeCode.rawValue) reason=\(reasonStr) initiatedBy=\(self.pendingDisconnectReason)"
+            )
             self.isConnected = false
             self.isStreamingResponse = false
 
@@ -1742,6 +1780,7 @@ extension GeminiService: URLSessionWebSocketDelegate {
             self.heartbeatTask = nil
 
             self.resetTrackingState()
+            self.pendingDisconnectReason = "none"
 
             self.delegate?.geminiServiceDidDisconnect(self)
         }
