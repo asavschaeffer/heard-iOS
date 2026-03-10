@@ -297,6 +297,7 @@ struct InventoryDetailView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Ingredient")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

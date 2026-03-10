@@ -103,6 +103,7 @@ The repo now has one real internal subsystem module:
 Supporting docs:
 
 - `docs/testing/ios-testing-playbook.md`
+- `docs/testing/testing-strategy.md`
 - `docs/architecture/repo-structure-roadmap.md`
 - `docs/rebuild/04-voice-regression-matrix.md`
 
@@ -158,7 +159,7 @@ The repo is past the highest-risk voice infrastructure phase.
 
 **Short term**
 
-- finish the remaining physical-device voice regression matrix
+- finish the remaining physical-device voice regression matrix(deferred)
 - keep docs and repo structure aligned with the landed `VoiceCore` architecture
 - standardize the local verification loop for `VoiceCore`, `heardTests`, and `build-for-testing`
 
@@ -179,7 +180,8 @@ The repo is past the highest-risk voice infrastructure phase.
 **UX Fixes**
 - [ ] Fix ingredients page camera (or redirect to chat with camera open)
 - [ ] First-action lag (phone button, long-hold message, share button)
-- [ ] Keyboard dismiss in add/edit ingredients and edit recipe modals
+- [x] Keyboard dismiss in add/edit ingredients and edit recipe modals
+- [ ] Speakerphone echo with Google Live API (model interrupts itself)
 - [ ] Nav order: Inventory → Chat → Recipes → Settings
 
 **Visual Polish**
@@ -202,6 +204,7 @@ The repo is past the highest-risk voice infrastructure phase.
 
 - `docs/gemini-tools.md` - Drill-down toolset and Gemini tool architecture
 - `docs/testing/ios-testing-playbook.md` - Canonical local verification commands and test ownership
+- `docs/testing/testing-strategy.md` - Test layer philosophy, ownership rules, and future UI-test direction
 - `docs/architecture/repo-structure-roadmap.md` - Current module/app ownership rules and extraction direction
 - `docs/rebuild/04-voice-regression-matrix.md` - Physical-device checklist for voice and attachment regressions
 
