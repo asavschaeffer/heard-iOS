@@ -22,6 +22,12 @@ struct AddInventoryView: View {
                 Section("Details") {
                     TextField("Ingredient name", text: $name)
                         .focused($isNameFocused)
+                        .accessibilityIdentifier("inventory.add.nameField")
+
+                    UITestFocusProbe(
+                        identifier: "inventory.add.nameField.focusState",
+                        isFocused: isNameFocused
+                    )
 
                     HStack {
                         Text("Quantity")
@@ -70,6 +76,7 @@ struct AddInventoryView: View {
                     quickAddButtons
                 }
             }
+            .accessibilityIdentifier("inventory.add.form")
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Add Ingredient")
             .navigationBarTitleDisplayMode(.inline)

@@ -4,11 +4,15 @@
 
 This document is the source of truth for how to test the app today.
 
-There are three test surfaces:
+There are three active test surfaces today:
 
 - `VoiceCoreTests`: the primary automated logic suite for voice/call behavior
 - `heardTests`: a smoke-only app-hosted suite
 - manual device validation: required for route-sensitive audio behavior and richer AI attachment flows
+
+There is also a UI interaction test surface:
+
+- `heardUITests`: simulator-driven interaction coverage for stable editor flows, modal flows, and opt-in keyboard regressions
 
 The current automation split is intentional:
 
@@ -26,6 +30,24 @@ Use this simulator target as the default local CLI destination:
 If that runtime is not installed on a machine, choose the nearest current iPhone simulator and update the command explicitly instead of relying on Xcode defaults.
 
 ## Quick Start
+
+Use the shared script entrypoint by default:
+
+```sh
+./scripts/test-ios.sh voicecore
+./scripts/test-ios.sh app-build
+./scripts/test-ios.sh app-smoke
+./scripts/test-ios.sh app-ui
+./scripts/test-ios.sh app-ui-gestures
+./scripts/test-ios.sh all
+./scripts/xcresult-summary.sh --latest
+```
+
+The script is the preferred entrypoint for local CLI use, AI agents, and CI because it resolves a concrete simulator, boots it ahead of time, and creates a placeholder `Secrets.xcconfig` when a machine does not already have one.
+
+Raw `xcodebuild` commands remain useful when you want tighter control.
+
+Use `./scripts/xcresult-summary.sh --latest` after a run when you want a compact summary of the newest result bundle, or `--json` when you want machine-readable output for automation.
 
 ### Run `VoiceCore` tests
 
@@ -101,6 +123,28 @@ Not allowed:
 - heavy async transport tests
 - attachment or media fixture logic tests unless they are explicitly app-host smoke checks
 
+### `heardUITests`
+
+Location:
+
+- `heardUITests/`
+
+This target owns simulator-driven interaction regressions.
+
+Current coverage:
+
+- stable editor-open coverage in add ingredient, edit ingredient, and edit recipe flows
+- opt-in keyboard dismissal coverage for those same flows
+
+Recommended future coverage:
+
+- modal and sheet regressions
+- stable navigation and editor regressions by default
+- gesture-based keyboard dismissal regressions once they stabilize in simulator
+- navigation path regressions
+- confirmation dialog flows
+- stable simulator-safe attachment happy paths
+
 ## Current Known Constraints
 
 - Simulator success does not prove receiver, speaker, Bluetooth, or CallKit route correctness.
@@ -112,12 +156,26 @@ Not allowed:
 
 - `VoiceCoreTests` is a non-hosted bundle — tests themselves run in ~0.1s, but simulator boot and xcodebuild overhead add 15–25s wall time on a warm simulator.
 - `heardTests` is hosted — it launches the full app binary (in test mode), so expect 60–90s wall time even though the test logic is instant.
+- `heardUITests` is also hosted and drives the simulator UI, so expect it to be the slowest and most failure-sensitive layer.
 - **Boot the simulator first** to avoid cold-boot delays and transient "Invalid device state" errors:
   ```sh
   xcrun simctl boot "iPhone 17 Pro" 2>/dev/null
   ```
 - For faster iteration, run `VoiceCoreTests` alone. Only run `heardTests` when validating app-host integration.
+- Run `heardUITests` when the change touches user interaction or when doing full pre-merge verification.
+- Run `./scripts/test-ios.sh app-ui-gestures` only when you explicitly want the experimental keyboard-dismiss regression pass.
 - When running from CLI (AI agents, CI), target a specific scheme (`-only-testing:VoiceCoreTests` or `-only-testing:heardTests`) to avoid running both suites every time.
+- If local gesture UI keyboard tests do not show a software keyboard, disable `I/O > Keyboard > Connect Hardware Keyboard` in Simulator and rerun.
+- CI now uploads `.xcresult` bundles as artifacts, so failure triage should start from the preserved result bundle rather than raw log text alone.
+
+## Directory Conventions
+
+- `Modules/<Module>/Tests/<Module>Tests/` owns deterministic subsystem coverage
+- `heardTests/Smoke/` owns app-host smoke checks
+- `heardTests/Support/` is reserved for helpers and factories
+- `heardUITests/Scenarios/` owns user-flow regressions
+- `heardUITests/Support/` owns UI harness helpers
+- `docs/testing/testing-strategy.md` explains the ownership model
 
 ## Test Mode App Behavior
 
@@ -244,8 +302,9 @@ When debugging route-sensitive bugs, always correlate:
 
 1. Run `heard` `build-for-testing` with the canonical simulator destination.
 2. Run `heard` smoke tests.
-3. Run the relevant module tests.
-4. Verify test mode still boots cleanly.
+3. Run `heardUITests` if the change touches user interaction.
+4. Run the relevant module tests.
+5. Verify test mode still boots cleanly.
 
 ### Attachment / Media Changes
 

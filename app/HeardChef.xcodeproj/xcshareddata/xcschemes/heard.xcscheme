@@ -27,8 +27,16 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "YES">
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <TestPlans>
+         <TestPlanReference
+            reference = "container:TestPlans/heard-stable.xctestplan"
+            default = "YES">
+         </TestPlanReference>
+         <TestPlanReference
+            reference = "container:TestPlans/heard-experimental.xctestplan">
+         </TestPlanReference>
+      </TestPlans>
       <Testables>
          <TestableReference
             skipped = "NO"
@@ -38,6 +46,17 @@
                BlueprintIdentifier = "ECE5464B2F5F98EB00465205"
                BuildableName = "heardTests.xctest"
                BlueprintName = "heardTests"
+               ReferencedContainer = "container:HeardChef.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "F10000052F70000100000001"
+               BuildableName = "heardUITests.xctest"
+               BlueprintName = "heardUITests"
                ReferencedContainer = "container:HeardChef.xcodeproj">
             </BuildableReference>
          </TestableReference>

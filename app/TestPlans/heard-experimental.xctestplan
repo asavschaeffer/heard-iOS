@@ -1,0 +1,33 @@
+{
+  "configurations" : [
+    {
+      "id" : "770BA02C-7B58-4B2C-B85D-8F0B1A2B46ED",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "HEARD_ENABLE_GESTURE_UI_TESTS",
+        "value" : "1"
+      }
+    ],
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "skippedTests" : [
+        "EditorFlowUITests"
+      ],
+      "target" : {
+        "containerPath" : "container:HeardChef.xcodeproj",
+        "identifier" : "F10000052F70000100000001",
+        "name" : "heardUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
