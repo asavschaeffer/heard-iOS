@@ -6,7 +6,7 @@ final class EditorFlowUITests: XCTestCase {
     }
 
     func testAddIngredientSheetOpensNameField() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Inventory"].tap()
         app.buttons["inventory.addButton"].tap()
@@ -16,7 +16,7 @@ final class EditorFlowUITests: XCTestCase {
     }
 
     func testEditIngredientSheetOpensNameField() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Inventory"].tap()
 
@@ -29,7 +29,7 @@ final class EditorFlowUITests: XCTestCase {
     }
 
     func testEditRecipeSheetOpensNameField() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Recipes"].tap()
 

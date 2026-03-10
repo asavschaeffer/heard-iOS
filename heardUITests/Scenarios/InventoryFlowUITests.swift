@@ -6,7 +6,7 @@ final class InventoryFlowUITests: XCTestCase {
     }
 
     func testCreateIngredientAddsRowToInventoryList() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Inventory"].tap()
         app.buttons["inventory.addButton"].tap()
@@ -29,7 +29,7 @@ final class InventoryFlowUITests: XCTestCase {
     }
 
     func testEditSeededIngredientUpdatesInventoryRow() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Inventory"].tap()
 
@@ -56,7 +56,7 @@ final class InventoryFlowUITests: XCTestCase {
     }
 
     func testDeleteSeededIngredientRemovesInventoryRow() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Inventory"].tap()
 

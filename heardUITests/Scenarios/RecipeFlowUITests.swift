@@ -6,7 +6,7 @@ final class RecipeFlowUITests: XCTestCase {
     }
 
     func testOpenSeededRecipeShowsDetailView() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Recipes"].tap()
 
@@ -18,11 +18,11 @@ final class RecipeFlowUITests: XCTestCase {
         let descriptionText = element("recipe.detail.descriptionText", in: app)
         XCTAssertTrue(detailView.waitForExistence(timeout: 2))
         XCTAssertTrue(descriptionText.waitForExistence(timeout: 2))
-        XCTAssertEqual(descriptionText.label, "Seeded recipe for UI keyboard dismissal checks.")
+        XCTAssertEqual(descriptionText.label, "Seeded recipe for UI editor flow checks.")
     }
 
     func testEditSeededRecipeUpdatesDetailContent() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Recipes"].tap()
 
@@ -54,7 +54,7 @@ final class RecipeFlowUITests: XCTestCase {
     }
 
     func testDeleteSeededRecipeRemovesRecipeCard() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Recipes"].tap()
 

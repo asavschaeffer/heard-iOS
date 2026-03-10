@@ -6,7 +6,7 @@ final class SearchFilteringUITests: XCTestCase {
     }
 
     func testInventorySearchShowsSeededIngredient() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .searchFiltering)
 
         app.tabBars.buttons["Inventory"].tap()
 
@@ -26,7 +26,7 @@ final class SearchFilteringUITests: XCTestCase {
     }
 
     func testInventorySearchHidesNonMatchingIngredient() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .searchFiltering)
 
         app.tabBars.buttons["Inventory"].tap()
 
@@ -47,7 +47,7 @@ final class SearchFilteringUITests: XCTestCase {
     }
 
     func testRecipeSearchShowsSeededRecipe() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .searchFiltering)
 
         app.tabBars.buttons["Recipes"].tap()
 
@@ -67,7 +67,7 @@ final class SearchFilteringUITests: XCTestCase {
     }
 
     func testRecipeSearchHidesNonMatchingRecipe() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .searchFiltering)
 
         app.tabBars.buttons["Recipes"].tap()
 
@@ -88,7 +88,7 @@ final class SearchFilteringUITests: XCTestCase {
     }
 
     func testRecipeFilterToggleHidesAndRestoresNonMakeableRecipe() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .searchFiltering)
 
         app.tabBars.buttons["Recipes"].tap()
 

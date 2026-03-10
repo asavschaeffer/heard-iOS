@@ -10,7 +10,7 @@ final class KeyboardDismissUITests: XCTestCase {
     }
 
     func testAddIngredientSheetDismissesKeyboardOnSwipeDown() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .keyboardDismiss)
 
         app.tabBars.buttons["Inventory"].tap()
         app.buttons["inventory.addButton"].tap()
@@ -31,7 +31,7 @@ final class KeyboardDismissUITests: XCTestCase {
     }
 
     func testEditIngredientSheetDismissesKeyboardOnSwipeDown() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .keyboardDismiss)
 
         app.tabBars.buttons["Inventory"].tap()
         let ingredientRow = element("inventory.row.ui_test_butter", in: app)
@@ -54,7 +54,7 @@ final class KeyboardDismissUITests: XCTestCase {
     }
 
     func testEditRecipeSheetDismissesKeyboardOnSwipeDown() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .keyboardDismiss)
 
         app.tabBars.buttons["Recipes"].tap()
         let recipeCard = element("recipes.card.ui_test_pasta", in: app)
