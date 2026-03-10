@@ -56,6 +56,7 @@
 		ECE54E9B2F5F9B0400465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		ECE54FAA2F5FA33300465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		ECE556762F5FB82700465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		ECE558BA2F5FC41E00465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		F00000012F60000100000001 /* VoiceCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VoiceCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F00000022F60000100000001 /* VoiceCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoiceCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -233,6 +234,11 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		ECE558BF2F5FC41E00465205 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		F00000192F60000100000001 /* Modules */ = {
 			isa = PBXGroup;
 			children = (
@@ -379,12 +385,36 @@
 					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
 				},
 				{
-					ProductGroup = EC0D25672F38F1C70028674C /* Products */;
-					ProjectRef = EC0D25632F38F1C70028674C /* HeardChef.xcodeproj */;
-				},
-				{
 					ProductGroup = ECE5567A2F5FB82700465205 /* Products */;
 					ProjectRef = ECE556762F5FB82700465205 /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = ECE558BF2F5FC41E00465205 /* Products */;
+					ProjectRef = ECE558BA2F5FC41E00465205 /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = ECE54FAE2F5FA33300465205 /* Products */;
+					ProjectRef = ECE54FAA2F5FA33300465205 /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = ECE5461A2F5F8ABB00465205 /* Products */;
+					ProjectRef = ECE546162F5F8ABB00465205 /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC0D26012F390AEF0028674C /* Products */;
+					ProjectRef = EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC06F6F12F4D06C400A6A1F9 /* Products */;
+					ProjectRef = EC06F6ED2F4D06C400A6A1F9 /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC06F6882F4CEF8500A6A1F9 /* Products */;
+					ProjectRef = EC06F6842F4CEF8500A6A1F9 /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC0D25672F38F1C70028674C /* Products */;
+					ProjectRef = EC0D25632F38F1C70028674C /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = ECE5442A2F5E93C500465205 /* Products */;
@@ -407,32 +437,12 @@
 					ProjectRef = ECE543BD2F5BE68500465205 /* HeardChef.xcodeproj */;
 				},
 				{
-					ProductGroup = ECE54FAE2F5FA33300465205 /* Products */;
-					ProjectRef = ECE54FAA2F5FA33300465205 /* HeardChef.xcodeproj */;
-				},
-				{
-					ProductGroup = ECE5461A2F5F8ABB00465205 /* Products */;
-					ProjectRef = ECE546162F5F8ABB00465205 /* HeardChef.xcodeproj */;
-				},
-				{
 					ProductGroup = ECE54E9F2F5F9B0400465205 /* Products */;
 					ProjectRef = ECE54E9B2F5F9B0400465205 /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = EC7C41462F38EE55009FB9AF /* Products */;
 					ProjectRef = EC7C41422F38EE55009FB9AF /* HeardChef.xcodeproj */;
-				},
-				{
-					ProductGroup = EC0D26012F390AEF0028674C /* Products */;
-					ProjectRef = EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */;
-				},
-				{
-					ProductGroup = EC06F6F12F4D06C400A6A1F9 /* Products */;
-					ProjectRef = EC06F6ED2F4D06C400A6A1F9 /* HeardChef.xcodeproj */;
-				},
-				{
-					ProductGroup = EC06F6882F4CEF8500A6A1F9 /* Products */;
-					ProjectRef = EC06F6842F4CEF8500A6A1F9 /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
