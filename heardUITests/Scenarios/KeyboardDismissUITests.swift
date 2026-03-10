@@ -7,6 +7,14 @@ final class KeyboardDismissUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         try requireGestureCoverage()
+        addTeardownBlock { [weak self] in
+            guard let self, self.testRun?.hasSucceeded == false else { return }
+            let screenshot = XCUIScreen.main.screenshot()
+            let attachment = XCTAttachment(screenshot: screenshot)
+            attachment.name = "\(self.name)-failure"
+            attachment.lifetime = .keepAlways
+            self.add(attachment)
+        }
     }
 
     func testAddIngredientSheetDismissesKeyboardOnSwipeDown() {
