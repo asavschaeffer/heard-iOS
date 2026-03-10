@@ -109,24 +109,24 @@ for ((i = 0; i < ACTION_COUNT; i++)); do
     TESTS_REF_ID="$(jq -r ".actions._values[$i].actionResult.testsRef.id._value // empty" <<<"$INVOCATION_JSON")"
     FAILURE_ISSUES_JSON="$(jq -c "
         [
-            (.actions._values[$i].actionResult.issues.testFailureSummaries._values // [])[]? | {
+            ((.actions._values[$i].actionResult.issues.testFailureSummaries._values // [])[]? | {
                 type: \"testFailure\",
                 testCaseName: (.testCaseName._value // \"unknown\"),
                 message: (.message._value // \"\"),
                 file: (.documentLocationInCreatingWorkspace.url._value // \"\")
-            },
-            (.actions._values[$i].actionResult.issues.buildFailureSummaries._values // [])[]? | {
+            }),
+            ((.actions._values[$i].actionResult.issues.buildFailureSummaries._values // [])[]? | {
                 type: \"buildFailure\",
                 testCaseName: (.issueType._value // \"build\"),
                 message: (.message._value // \"\"),
                 file: (.documentLocationInCreatingWorkspace.url._value // \"\")
-            },
-            (.actions._values[$i].actionResult.issues.errorSummaries._values // [])[]? | {
+            }),
+            ((.actions._values[$i].actionResult.issues.errorSummaries._values // [])[]? | {
                 type: \"error\",
                 testCaseName: (.issueType._value // \"error\"),
                 message: (.message._value // \"\"),
                 file: (.documentLocationInCreatingWorkspace.url._value // \"\")
-            }
+            })
         ]
     " <<<"$INVOCATION_JSON")"
 
