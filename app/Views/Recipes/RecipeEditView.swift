@@ -54,6 +54,7 @@ struct RecipeEditView: View {
                         Button("Delete Recipe", role: .destructive) {
                             showingDeleteConfirmation = true
                         }
+                        .accessibilityIdentifier("recipe.edit.deleteButton")
                     }
                 }
             }
@@ -66,6 +67,7 @@ struct RecipeEditView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .accessibilityIdentifier(isEditing ? "recipe.edit.cancelButton" : "recipe.add.cancelButton")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -74,6 +76,7 @@ struct RecipeEditView: View {
                     }
                     .fontWeight(.semibold)
                     .disabled(trimmedName.isEmpty || ingredients.isEmpty || validSteps.isEmpty)
+                    .accessibilityIdentifier(isEditing ? "recipe.edit.saveButton" : "recipe.add.saveButton")
                 }
             }
             .sheet(isPresented: $showingAddIngredient) {
@@ -88,7 +91,9 @@ struct RecipeEditView: View {
                     }
                     dismiss()
                 }
+                .accessibilityIdentifier("recipe.edit.confirmDeleteButton")
                 Button("Cancel", role: .cancel) {}
+                    .accessibilityIdentifier("recipe.edit.cancelDeleteButton")
             } message: {
                 Text("This action cannot be undone.")
             }
@@ -114,6 +119,7 @@ struct RecipeEditView: View {
 
             TextField("Description (optional)", text: $description, axis: .vertical)
                 .lineLimit(2...4)
+                .accessibilityIdentifier(isEditing ? "recipe.edit.descriptionField" : "recipe.add.descriptionField")
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Chef's Notes (optional)")

@@ -50,6 +50,7 @@ struct RecipeDetailView: View {
                     .padding()
                 }
             }
+            .accessibilityIdentifier("recipe.detail.view")
             .navigationTitle(recipe.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -57,6 +58,7 @@ struct RecipeDetailView: View {
                     Button("Close") {
                         dismiss()
                     }
+                    .accessibilityIdentifier("recipe.detail.closeButton")
                 }
 
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
@@ -111,6 +113,7 @@ struct RecipeDetailView: View {
                 Text(description)
                     .font(.body)
                     .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("recipe.detail.descriptionText")
             }
 
             if !recipe.tags.isEmpty {
