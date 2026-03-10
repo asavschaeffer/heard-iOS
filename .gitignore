@@ -5,6 +5,7 @@
 **/project.xcworkspace/
 *.xcuserstate
 DerivedData/
+.deriveddata/
 *.moved-aside
 *.pbxuser
 !default.pbxuser
@@ -20,6 +21,7 @@ build/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcresult
 
 # CocoaPods (if used later)
 Pods/

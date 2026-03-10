@@ -7,7 +7,7 @@ private let logger = Logger(subsystem: "com.heardchef", category: "App")
 @main
 struct HeardChefApp: App {
     @StateObject private var warmup = AppWarmup()
-    private let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    private let isRunningTests = TestSupport.isRunningTests
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -18,7 +18,7 @@ struct HeardChefApp: App {
             ChatThread.self,
             ChatMessage.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: TestSupport.isRunningTests)
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
