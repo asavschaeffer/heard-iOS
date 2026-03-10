@@ -2,7 +2,7 @@
 
 ![Status](https://img.shields.io/badge/status-in%20development-yellow)
 ![Swift](https://img.shields.io/badge/swift-5.9-orange)
-![Xcode](https://img.shields.io/badge/xcode-15%2B-blue)
+![Xcode](https://img.shields.io/badge/xcode-17%2B-blue)
 
 > **"Heard, chef!"** - this AI definitely will not say "you're absolutely right!"
 
@@ -132,6 +132,8 @@ Result-bundle diagnostics:
 - `./scripts/xcresult-summary.sh --latest`
 - `./scripts/xcresult-summary.sh --latest --json`
 - `./scripts/xcresult-summary.sh --latest --markdown`
+- `./scripts/xcresult-summary.sh --all`
+- `./scripts/xcresult-summary.sh --all --json`
 
 Current shared hosted plans live at:
 
@@ -155,10 +157,13 @@ AI and humans should inspect the `.xcresult` summary before reading raw logs. Cu
 - experimental gesture instability
 - performance regression
 
+Use `--latest` when you want one bundle. Use `--all` when you want a gate-level summary across the full stable run.
+
 ## Setup & Requirements
 
-- **Xcode 15.0+**
-- **iOS 17.0+**
+- **Xcode 17.0+** for the current shared test-plan and simulator workflow
+- **Deployment target:** iOS 17.0+
+- **Canonical test simulator:** iPhone 17 Pro on iOS 26.2, or the nearest installed current runtime
 - **API Key:** Google Gemini API Key (multimodal live access).
 
 ### 1. Clone & Project Creation
@@ -203,8 +208,9 @@ The repo is past the highest-risk voice infrastructure phase.
   - `heardUITests` for simulator-driven interaction regressions
   - stable vs experimental hosted plans under `app/TestPlans/`
   - `.xcresult` summaries as the default diagnostics interface
+  - gate-level `.xcresult` aggregation for CI and AI triage
   - `VoiceCorePerformanceTests` and `AppStartupPerformanceTests` in the experimental lane
-  - gesture-heavy UI regressions stay opt-in until simulator behavior proves stable enough for default CI
+  - gesture-heavy UI regressions stay opt-in until repeated local and CI evidence proves them stable enough for default CI
   - physical-device validation for route-sensitive truth
 - The current short-term focus is reliability closure, documentation accuracy, and repeated verification, not another voice rewrite.
 

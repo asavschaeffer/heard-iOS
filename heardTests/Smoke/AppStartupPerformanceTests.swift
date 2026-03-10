@@ -4,9 +4,17 @@ import XCTest
 @MainActor
 final class AppStartupPerformanceTests: XCTestCase {
     func testSharedModelContainerCreationPerformance() {
-        measure(metrics: [XCTClockMetric()]) {
+        _ = HeardChefApp().sharedModelContainer
+
+        let options = XCTMeasureOptions()
+        options.iterationCount = 10
+        options.invocationOptions = [.manuallyStart, .manuallyStop]
+
+        measure(metrics: [XCTClockMetric()], options: options) {
+            startMeasuring()
             let app = HeardChefApp()
             _ = app.sharedModelContainer
+            stopMeasuring()
         }
     }
 }

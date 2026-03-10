@@ -6,17 +6,20 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/.deriveddata/codex-tests}"
 TEST_LOG_DIR="$DERIVED_DATA_PATH/Logs/Test"
 OUTPUT_MODE="text"
+SUMMARY_MODE="single"
 RESULT_PATH=""
+ALL_RESULTS_DIR="$TEST_LOG_DIR"
 
 usage() {
     cat <<'EOF'
-Usage: scripts/xcresult-summary.sh [--json|--markdown] [--latest] [--path <xcresult-path>] [xcresult-path]
+Usage: scripts/xcresult-summary.sh [--json|--markdown] [--latest] [--path <xcresult-path>] [--all [xcresult-dir]] [xcresult-path]
 
 Options:
   --json      Emit machine-readable JSON
   --markdown  Emit GitHub-friendly markdown
   --latest    Use the latest xcresult bundle in derived data
   --path      Use an explicit xcresult bundle path
+  --all       Summarize every xcresult bundle in a directory (default: derived data test logs)
 
 If no path is provided, the script defaults to --latest.
 EOF
@@ -38,6 +41,192 @@ resolve_latest_result() {
     echo "$latest_result"
 }
 
+collect_result_paths() {
+    local search_dir="$1"
+
+    if [ ! -d "$search_dir" ]; then
+        echo "xcresult directory not found: $search_dir" >&2
+        exit 1
+    fi
+
+    find "$search_dir" -maxdepth 1 -name 'Test-*.xcresult' -print |
+        sort |
+        while IFS= read -r candidate; do
+            [ -f "$candidate/Info.plist" ] || continue
+            printf '%s\n' "$candidate"
+        done
+}
+
+render_all_markdown() {
+    local summary_json="$1"
+
+    jq -r '
+        [
+            "## xcresult Gate Summary",
+            "",
+            "- Directory: `" + .path + "`",
+            "- Bundles: `" + (.aggregate.bundlesCount | tostring) + "`",
+            "- Status: `" + .aggregate.status + "`",
+            "- Duration: `" + ((.aggregate.duration * 100 | round / 100) | tostring) + "s`",
+            "- Counts: `passed " + (.aggregate.passedCount | tostring) + " / failed " + (.aggregate.failedCount | tostring) + " / skipped " + (.aggregate.skippedCount | tostring) + " / total " + (.aggregate.testsCount | tostring) + "`",
+            (
+                if (.aggregate.failedBundles | length) > 0 then
+                    "- Failed bundles:\n" + (.aggregate.failedBundles | map("  - `" + . + "`") | join("\n"))
+                else
+                    "- Failed bundles: none"
+                end
+            ),
+            "",
+            (
+                .bundles[]
+                | "### Bundle `" + .path + "`",
+                  "",
+                  (
+                      .actions[]
+                      | "- " + .title +
+                        ": `" + .status + "` " +
+                        "(passed " + (.passedCount | tostring) +
+                        " / failed " + (.failedCount | tostring) +
+                        " / skipped " + (.skippedCount | tostring) +
+                        " / total " + (.testsCount | tostring) + ")" +
+                        " on `" + .device + "`" +
+                        (
+                            if (.failedTests | length) > 0 then
+                                "\n  - Failed tests:\n" + (.failedTests | map("    - `" + .identifier + "`") | join("\n"))
+                            else
+                                ""
+                            end
+                        ) +
+                        (
+                            if (.failureIssues | length) > 0 then
+                                "\n  - Failure issues:\n" + (.failureIssues | map("    - `" + .testCaseName + "`: " + .message) | join("\n"))
+                            else
+                                ""
+                            end
+                        )
+                  ),
+                  ""
+            )
+        ] | join("\n")
+    ' <<<"$summary_json"
+}
+
+render_all_text() {
+    local summary_json="$1"
+
+    jq -r '
+        "xcresult directory: " + .path,
+        "gate status: " + .aggregate.status +
+        " | bundles: " + (.aggregate.bundlesCount | tostring) +
+        " | duration: " + ((.aggregate.duration * 100 | round / 100) | tostring) + "s" +
+        " | tests: " + (.aggregate.testsCount | tostring) +
+        " | passed: " + (.aggregate.passedCount | tostring) +
+        " | failed: " + (.aggregate.failedCount | tostring) +
+        " | skipped: " + (.aggregate.skippedCount | tostring),
+        (
+            if (.aggregate.failedBundles | length) > 0 then
+                "failed bundles:\n" + (.aggregate.failedBundles | map("- " + .) | join("\n"))
+            else
+                empty
+            end
+        ),
+        (
+            .bundles[]
+            | "\nbundle: " + .path,
+              (
+                  .actions[]
+                  | "- " + .title +
+                    " | status: " + .status +
+                    " | device: " + .device +
+                    " | runtime: " + .runtime +
+                    " | duration: " + ((.duration * 100 | round / 100) | tostring) + "s" +
+                    " | tests: " + (.testsCount | tostring) +
+                    " | passed: " + (.passedCount | tostring) +
+                    " | failed: " + (.failedCount | tostring) +
+                    " | skipped: " + (.skippedCount | tostring) +
+                    (
+                        if (.failedTests | length) > 0 then
+                            "\n  failed tests:\n" + (.failedTests | map("  - " + .identifier) | join("\n"))
+                        else
+                            ""
+                        end
+                    ) +
+                    (
+                        if (.failureIssues | length) > 0 then
+                            "\n  failure issues:\n" + (.failureIssues | map("  - " + .testCaseName + ": " + .message) | join("\n"))
+                        else
+                            ""
+                        end
+                    )
+              )
+        )
+    ' <<<"$summary_json"
+}
+
+summarize_all_results() {
+    local search_dir="$1"
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    local bundle_file="$tmp_dir/bundles.jsonl"
+    touch "$bundle_file"
+
+    while IFS= read -r bundle_path; do
+        "$ROOT_DIR/scripts/xcresult-summary.sh" --path "$bundle_path" --json >>"$bundle_file"
+    done < <(collect_result_paths "$search_dir")
+
+    if [ ! -s "$bundle_file" ]; then
+        echo "No xcresult bundles found under $search_dir" >&2
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+
+    local summary_json
+    summary_json="$(
+        jq -s --arg path "$search_dir" '
+            {
+                path: $path,
+                aggregate: {
+                    bundlesCount: length,
+                    actionsCount: ([.[].actions | length] | add // 0),
+                    status: (
+                        if ([.[] | .actions[]? | select(.status != "succeeded")] | length) > 0
+                        then "failed"
+                        else "succeeded"
+                        end
+                    ),
+                    duration: ([.[].actions[]?.duration] | add // 0),
+                    testsCount: ([.[].actions[]?.testsCount] | add // 0),
+                    passedCount: ([.[].actions[]?.passedCount] | add // 0),
+                    failedCount: ([.[].actions[]?.failedCount] | add // 0),
+                    skippedCount: ([.[].actions[]?.skippedCount] | add // 0),
+                    bundlePaths: [.[].path],
+                    failedBundles: [
+                        .[]
+                        | select([.actions[]? | select(.status != "succeeded")] | length > 0)
+                        | .path
+                    ]
+                },
+                bundles: .
+            }
+        ' "$bundle_file"
+    )"
+
+    rm -rf "$tmp_dir"
+
+    if [ "$OUTPUT_MODE" = "json" ]; then
+        printf '%s\n' "$summary_json"
+        exit 0
+    fi
+
+    if [ "$OUTPUT_MODE" = "markdown" ]; then
+        render_all_markdown "$summary_json"
+        exit 0
+    fi
+
+    render_all_text "$summary_json"
+    exit 0
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --json)
@@ -47,6 +236,7 @@ while [ "$#" -gt 0 ]; do
             OUTPUT_MODE="markdown"
             ;;
         --latest)
+            SUMMARY_MODE="single"
             RESULT_PATH="$(resolve_latest_result)"
             ;;
         --path)
@@ -55,13 +245,25 @@ while [ "$#" -gt 0 ]; do
                 echo "--path requires an xcresult bundle path." >&2
                 exit 1
             fi
+            SUMMARY_MODE="single"
             RESULT_PATH="$1"
+            ;;
+        --all)
+            SUMMARY_MODE="all"
+            if [ "$#" -gt 1 ] && [[ "$2" != -* ]]; then
+                shift
+                ALL_RESULTS_DIR="$1"
+            fi
             ;;
         -h|--help)
             usage
             exit 0
             ;;
         *)
+            if [ "$SUMMARY_MODE" = "all" ]; then
+                echo "Positional xcresult paths are not supported with --all." >&2
+                exit 1
+            fi
             if [ -n "$RESULT_PATH" ]; then
                 echo "Only one xcresult path may be provided." >&2
                 exit 1
@@ -71,6 +273,10 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
+
+if [ "$SUMMARY_MODE" = "all" ]; then
+    summarize_all_results "$ALL_RESULTS_DIR"
+fi
 
 if [ -z "$RESULT_PATH" ]; then
     RESULT_PATH="$(resolve_latest_result)"
@@ -156,16 +362,18 @@ for ((i = 0; i < ACTION_COUNT; i++)); do
         FAILED_TESTS_JSON="$(jq -c '[.[] | select(.status == "Failure")]' <<<"$TEST_ENTRIES_JSON")"
         SKIPPED_TESTS_JSON="$(jq -c '[.[] | select(.status == "Skipped")]' <<<"$TEST_ENTRIES_JSON")"
         SUITES_JSON="$(jq -c '
-            [
-                .summaries._values[]?.testableSummaries._values[]?
-                | {
-                    name: (.name._value // .targetName._value // "unknown"),
-                    target: (.targetName._value // .name._value // "unknown"),
-                    kind: (.testKind._value // "unknown"),
-                    duration: ((.tests._values[0].duration._value | tonumber?) // 0)
-                }
-            ]
-        ' <<<"$TESTS_JSON")"
+            sort_by(.suite)
+            | group_by(.suite)
+            | map({
+                name: .[0].suite,
+                target: .[0].suite,
+                kind: "testSuite",
+                duration: (map(.duration) | add // 0),
+                testsCount: length,
+                failedCount: (map(select(.status == "Failure")) | length),
+                skippedCount: (map(select(.status == "Skipped")) | length)
+            })
+        ' <<<"$TEST_ENTRIES_JSON")"
         ACTION_DURATION="$(jq -r '[.[].duration] | add // 0' <<<"$SUITES_JSON")"
 
         FAILED_SUMMARY_REFS="$(jq -r '.[] | .summaryRef | select(length > 0)' <<<"$FAILED_TESTS_JSON")"
@@ -273,7 +481,7 @@ if [ "$OUTPUT_MODE" = "markdown" ]; then
                   "- Counts: `passed " + (.passedCount | tostring) + " / failed " + (.failedCount | tostring) + " / skipped " + (.skippedCount | tostring) + " / total " + (.testsCount | tostring) + "`",
                   (
                       if (.suites | length) > 0 then
-                          "- Suites: " + (.suites | map("`" + .name + "`") | join(", "))
+                          "- Suites:\n" + (.suites | map("  - `" + .name + "` (" + ((.duration * 100 | round / 100) | tostring) + "s)") | join("\n"))
                       else
                           "- Suites: none"
                       end

@@ -20,6 +20,12 @@ Current experimental coverage:
 
 - `KeyboardDismissUITests`
 
+Current status:
+
+- the gesture suite is measurable with repeat tooling
+- it is not promotion-ready yet
+- failures must remain diagnosable from `.xcresult` before any stable-lane move
+
 Do not move a UI class into the stable lane until it passes repeated runs and produces actionable diagnostics when it fails.
 
 ## Scenarios
@@ -69,6 +75,8 @@ Diagnostics:
 
 - `./scripts/xcresult-summary.sh --latest`
 - `./scripts/xcresult-summary.sh --latest --json`
+- `./scripts/xcresult-summary.sh --all`
+- `./scripts/xcresult-summary.sh --all --json`
 
 ## Gesture promotion rule
 

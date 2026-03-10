@@ -22,17 +22,17 @@ jobs:
       - name: Run stable iOS gate
         run: ./scripts/test-ios.sh stable
 
-      - name: Summarize latest xcresult
+      - name: Summarize stable gate xcresults
         if: always()
-        run: ./scripts/xcresult-summary.sh --latest
+        run: ./scripts/xcresult-summary.sh --all .deriveddata/codex-tests/Logs/Test
 
-      - name: Write markdown xcresult summary
+      - name: Write markdown stable gate summary
         if: always()
-        run: ./scripts/xcresult-summary.sh --latest --markdown >> "$GITHUB_STEP_SUMMARY"
+        run: ./scripts/xcresult-summary.sh --all .deriveddata/codex-tests/Logs/Test --markdown >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Export latest xcresult JSON summary
+      - name: Export stable gate JSON summary
         if: always()
-        run: ./scripts/xcresult-summary.sh --latest --json > .deriveddata/codex-tests/xcresult-summary-latest.json
+        run: ./scripts/xcresult-summary.sh --all .deriveddata/codex-tests/Logs/Test --json > .deriveddata/codex-tests/xcresult-summary-stable-gate.json
 
       - name: Upload xcresult bundles
         if: always()
@@ -47,5 +47,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: xcresult-summary-json
-          path: .deriveddata/codex-tests/xcresult-summary-latest.json
+          path: .deriveddata/codex-tests/xcresult-summary-stable-gate.json
           if-no-files-found: ignore

@@ -3,18 +3,25 @@ import XCTest
 final class KeyboardDismissUITests: XCTestCase {
     private let focusedValue = "focused"
     private let blurredValue = "blurred"
+    private var didAttachFailureScreenshot = false
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        didAttachFailureScreenshot = false
         try requireGestureCoverage()
-        addTeardownBlock { [weak self] in
-            guard let self, self.testRun?.hasSucceeded == false else { return }
+    }
+
+    override func record(_ issue: XCTIssue) {
+        if !didAttachFailureScreenshot {
+            didAttachFailureScreenshot = true
             let screenshot = XCUIScreen.main.screenshot()
             let attachment = XCTAttachment(screenshot: screenshot)
-            attachment.name = "\(self.name)-failure"
+            attachment.name = "\(name)-failure"
             attachment.lifetime = .keepAlways
-            self.add(attachment)
+            add(attachment)
         }
+
+        super.record(issue)
     }
 
     func testAddIngredientSheetDismissesKeyboardOnSwipeDown() {

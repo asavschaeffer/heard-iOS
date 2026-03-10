@@ -4,8 +4,17 @@ import XCTest
 
 @MainActor
 final class VoiceCorePerformanceTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        VoiceDiagnostics.setVerboseLoggingEnabled(false)
+    }
+
+    override func tearDown() {
+        VoiceDiagnostics.setVerboseLoggingEnabled(true)
+        super.tearDown()
+    }
+
     func testCaptureBufferProcessingPerformance() {
-        let engine = VoiceCaptureEngine()
         let inputFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: 48_000,
@@ -18,25 +27,41 @@ final class VoiceCorePerformanceTests: XCTestCase {
         for index in 0..<Int(buffer.frameLength) {
             channel[index] = 0.5
         }
-        engine.prepareConverterForTesting(inputFormat: inputFormat)
-        engine.shouldSendAudio = { true }
 
-        measure(metrics: [XCTClockMetric()]) {
+        let options = XCTMeasureOptions()
+        options.iterationCount = 10
+        options.invocationOptions = [.manuallyStart, .manuallyStop]
+
+        measure(metrics: [XCTClockMetric()], options: options) {
+            let engine = VoiceCaptureEngine()
+            engine.prepareConverterForTesting(inputFormat: inputFormat)
+            engine.shouldSendAudio = { true }
+
+            startMeasuring()
             engine.processAudioBufferForTesting(buffer)
+            stopMeasuring()
+
             XCTAssertGreaterThan(engine.metrics.byteCount, 0)
         }
     }
 
     func testPlaybackQueueDrainPerformance() {
-        measure(metrics: [XCTClockMetric()]) {
+        let options = XCTMeasureOptions()
+        options.iterationCount = 10
+        options.invocationOptions = [.manuallyStart, .manuallyStop]
+
+        measure(metrics: [XCTClockMetric()], options: options) {
             let engine = VoicePlaybackEngine()
 
             for _ in 0..<250 {
                 engine.simulateScheduledBufferForTesting()
             }
+
+            startMeasuring()
             for _ in 0..<250 {
                 engine.simulatePlaybackCompletionForTesting()
             }
+            stopMeasuring()
 
             XCTAssertEqual(engine.enqueuedBufferCount, 0)
             XCTAssertFalse(engine.isSpeaking)
