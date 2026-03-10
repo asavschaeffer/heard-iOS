@@ -85,6 +85,7 @@ struct AddInventoryView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .accessibilityIdentifier("inventory.add.cancelButton")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -93,6 +94,7 @@ struct AddInventoryView: View {
                     }
                     .fontWeight(.semibold)
                     .disabled(name.isEmpty || quantity <= 0)
+                    .accessibilityIdentifier("inventory.add.saveButton")
                 }
             }
             .onAppear {

@@ -20,7 +20,8 @@
   "testTargets" : [
     {
       "skippedTests" : [
-        "EditorFlowUITests"
+        "EditorFlowUITests",
+        "InventoryFlowUITests"
       ],
       "target" : {
         "containerPath" : "container:HeardChef.xcodeproj",

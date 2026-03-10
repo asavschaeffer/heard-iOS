@@ -307,6 +307,7 @@ struct InventoryDetailView: View {
                         modelContext.delete(ingredient)
                         dismiss()
                     }
+                    .accessibilityIdentifier("inventory.edit.deleteButton")
                 }
             }
             .accessibilityIdentifier("inventory.edit.form")
@@ -318,6 +319,7 @@ struct InventoryDetailView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .accessibilityIdentifier("inventory.edit.cancelButton")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -327,6 +329,7 @@ struct InventoryDetailView: View {
                     }
                     .fontWeight(.semibold)
                     .disabled(!canSave)
+                    .accessibilityIdentifier("inventory.edit.saveButton")
                 }
             }
             .onAppear {
