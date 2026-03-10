@@ -70,6 +70,7 @@ struct AddInventoryView: View {
                     quickAddButtons
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Add Ingredient")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

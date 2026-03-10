@@ -56,6 +56,7 @@ struct RecipeEditView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(isEditing ? "Edit Recipe" : "New Recipe")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -517,6 +518,7 @@ struct AddRecipeIngredientView: View {
                     TextField("e.g., diced, room temperature", text: $preparation)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Add Ingredient")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
