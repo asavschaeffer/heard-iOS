@@ -65,6 +65,7 @@ struct RecipeDetailView: View {
                     } label: {
                         Image(systemName: "pencil")
                     }
+                    .accessibilityIdentifier("recipe.detail.editButton")
 
                     Button {
                         showingCookingMode = true

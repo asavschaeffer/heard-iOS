@@ -99,6 +99,7 @@ The repo now has one real internal subsystem module:
 - `app/` remains the app shell, UI, persistence wiring, and Gemini integration layer.
 - `Modules/VoiceCore/Tests/VoiceCoreTests/` is the primary automated logic suite for voice behavior.
 - `heardTests/` is intentionally smoke-only and exists to verify the hosted app test harness, not to absorb subsystem logic coverage.
+- `heardUITests/` owns simulator-driven interaction regressions, with stable editor-flow coverage on by default and gesture-heavy keyboard dismissal coverage available as opt-in.
 
 Supporting docs:
 
@@ -106,6 +107,7 @@ Supporting docs:
 - `docs/testing/testing-strategy.md`
 - `docs/architecture/repo-structure-roadmap.md`
 - `docs/rebuild/04-voice-regression-matrix.md`
+- `scripts/xcresult-summary.sh` for compact local test-result summaries
 
 ## Setup & Requirements
 
@@ -152,6 +154,8 @@ The repo is past the highest-risk voice infrastructure phase.
 - The automated test split is intentional:
   - `VoiceCoreTests` for module-owned logic
   - `heardTests` for app-host smoke coverage
+  - `heardUITests` for simulator-driven interaction regressions
+  - gesture-heavy UI regressions stay opt-in until simulator behavior proves stable enough for default CI
   - physical-device validation for route-sensitive truth
 - The current short-term focus is reliability closure, documentation accuracy, and repeated verification, not another voice rewrite.
 

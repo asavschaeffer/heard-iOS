@@ -50,6 +50,7 @@ struct RecipesView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityIdentifier("recipes.addButton")
                 }
             }
             .sheet(isPresented: $showingAddRecipe) {
@@ -123,11 +124,12 @@ struct RecipesView: View {
                     .font(.headline)
             }
 
-            ForEach(filteredRecipes) { recipe in
-                RecipeCard(recipe: recipe, inventory: ingredients)
-                    .onTapGesture {
-                        selectedRecipe = recipe
-                    }
+                ForEach(filteredRecipes) { recipe in
+                    RecipeCard(recipe: recipe, inventory: ingredients)
+                        .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
+                        .onTapGesture {
+                            selectedRecipe = recipe
+                        }
             }
         }
     }
@@ -150,6 +152,7 @@ struct RecipesView: View {
 
                 ForEach(makeable) { recipe in
                     RecipeCard(recipe: recipe, inventory: ingredients)
+                        .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
                         .onTapGesture {
                             selectedRecipe = recipe
                         }
@@ -169,6 +172,7 @@ struct RecipesView: View {
 
                 ForEach(needIngredients) { recipe in
                     RecipeCard(recipe: recipe, inventory: ingredients)
+                        .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
                         .onTapGesture {
                             selectedRecipe = recipe
                         }

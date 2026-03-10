@@ -1,0 +1,51 @@
+name: iOS Tests
+
+on:
+  pull_request:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Run stable iOS gate
+        run: ./scripts/test-ios.sh stable
+
+      - name: Summarize latest xcresult
+        if: always()
+        run: ./scripts/xcresult-summary.sh --latest
+
+      - name: Write markdown xcresult summary
+        if: always()
+        run: ./scripts/xcresult-summary.sh --latest --markdown >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Export latest xcresult JSON summary
+        if: always()
+        run: ./scripts/xcresult-summary.sh --latest --json > .deriveddata/codex-tests/xcresult-summary-latest.json
+
+      - name: Upload xcresult bundles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult-bundles
+          path: .deriveddata/codex-tests/Logs/Test/*.xcresult
+          if-no-files-found: ignore
+
+      - name: Upload xcresult JSON summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult-summary-json
+          path: .deriveddata/codex-tests/xcresult-summary-latest.json
+          if-no-files-found: ignore

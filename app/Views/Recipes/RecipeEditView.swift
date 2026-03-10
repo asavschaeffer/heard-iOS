@@ -22,6 +22,7 @@ struct RecipeEditView: View {
 
     @State private var showingAddIngredient = false
     @State private var showingDeleteConfirmation = false
+    @FocusState private var isNameFocused: Bool
 
     private var isEditing: Bool { recipe != nil }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
@@ -56,6 +57,7 @@ struct RecipeEditView: View {
                     }
                 }
             }
+            .accessibilityIdentifier(isEditing ? "recipe.edit.form" : "recipe.add.form")
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(isEditing ? "Edit Recipe" : "New Recipe")
             .navigationBarTitleDisplayMode(.inline)
@@ -102,6 +104,13 @@ struct RecipeEditView: View {
     private var basicInfoSection: some View {
         Section("Details") {
             TextField("Recipe name", text: $name)
+                .focused($isNameFocused)
+                .accessibilityIdentifier(isEditing ? "recipe.edit.nameField" : "recipe.add.nameField")
+
+            UITestFocusProbe(
+                identifier: isEditing ? "recipe.edit.nameField.focusState" : "recipe.add.nameField.focusState",
+                isFocused: isNameFocused
+            )
 
             TextField("Description (optional)", text: $description, axis: .vertical)
                 .lineLimit(2...4)

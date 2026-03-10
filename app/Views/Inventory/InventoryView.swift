@@ -46,12 +46,14 @@ struct InventoryView: View {
                     } label: {
                         Image(systemName: "camera")
                     }
+                    .accessibilityIdentifier("inventory.cameraButton")
 
                     Button {
                         showingAddSheet = true
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityIdentifier("inventory.addButton")
                 }
             }
             .sheet(isPresented: $showingAddSheet) {
@@ -87,6 +89,7 @@ struct InventoryView: View {
                     Section {
                         ForEach(items) { ingredient in
                             IngredientRow(ingredient: ingredient)
+                                .accessibilityIdentifier("inventory.row.\(UITestSupport.identifierSlug(ingredient.name))")
                                 .onTapGesture {
                                     selectedIngredient = ingredient
                                 }
@@ -111,6 +114,7 @@ struct InventoryView: View {
                     Section {
                         ForEach(items) { ingredient in
                             IngredientRow(ingredient: ingredient)
+                                .accessibilityIdentifier("inventory.row.\(UITestSupport.identifierSlug(ingredient.name))")
                                 .onTapGesture {
                                     selectedIngredient = ingredient
                                 }
@@ -240,12 +244,20 @@ struct InventoryDetailView: View {
     @State private var expiryDate: Date = Date()
     @State private var hasExpiry: Bool = false
     @State private var notes: String = ""
+    @FocusState private var isNameFocused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Details") {
                     TextField("Name", text: $name)
+                        .focused($isNameFocused)
+                        .accessibilityIdentifier("inventory.edit.nameField")
+
+                    UITestFocusProbe(
+                        identifier: "inventory.edit.nameField.focusState",
+                        isFocused: isNameFocused
+                    )
 
                     HStack {
                         Text("Quantity")
@@ -297,6 +309,7 @@ struct InventoryDetailView: View {
                     }
                 }
             }
+            .accessibilityIdentifier("inventory.edit.form")
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Ingredient")
             .navigationBarTitleDisplayMode(.inline)
@@ -318,6 +331,7 @@ struct InventoryDetailView: View {
             }
             .onAppear {
                 loadIngredientData()
+                isNameFocused = true
             }
         }
     }

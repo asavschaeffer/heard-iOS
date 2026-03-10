@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct MainTabView: View {
-    @State private var selectedTab = 0
+    @State private var selectedTab = TestSupport.defaultTabIndex
 
     var body: some View {
         TabView(selection: $selectedTab) {
