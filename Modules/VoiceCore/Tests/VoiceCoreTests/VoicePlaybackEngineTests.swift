@@ -1,5 +1,5 @@
 import XCTest
-@testable import heard
+@testable import VoiceCore
 
 @MainActor
 final class VoicePlaybackEngineTests: XCTestCase {

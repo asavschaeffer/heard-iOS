@@ -1,6 +1,6 @@
 import Foundation
 
-enum VoiceDiagnostics {
+public enum VoiceDiagnostics {
     #if DEBUG
     private static let defaultVerboseLoggingEnabled = true
     #else
@@ -9,23 +9,23 @@ enum VoiceDiagnostics {
 
     private static var verboseLoggingEnabled = defaultVerboseLoggingEnabled
 
-    static func setVerboseLoggingEnabled(_ isEnabled: Bool) {
+    public static func setVerboseLoggingEnabled(_ isEnabled: Bool) {
         verboseLoggingEnabled = isEnabled
     }
 
-    static func audio(_ message: @autoclosure () -> String) {
+    public static func audio(_ message: @autoclosure () -> String) {
         verbose(message())
     }
 
-    static func callKit(_ message: @autoclosure () -> String) {
+    public static func callKit(_ message: @autoclosure () -> String) {
         verbose(message())
     }
 
-    static func gemini(_ message: @autoclosure () -> String) {
+    public static func gemini(_ message: @autoclosure () -> String) {
         verbose(message())
     }
 
-    static func fault(_ message: @autoclosure () -> String) {
+    public static func fault(_ message: @autoclosure () -> String) {
         print(message())
     }
 
