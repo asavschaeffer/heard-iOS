@@ -19,7 +19,7 @@ CallKit and `AVAudioSession` ownership now live behind `VoiceCallCoordinator` an
 
 ### AVAudioSession Setup
 
-**Files**: `app/Services/Voice/VoiceAudioSessionController.swift`, `app/Services/Voice/VoiceCallCoordinator.swift`
+**Files**: `Modules/VoiceCore/Sources/VoiceCore/VoiceAudioSessionController.swift`, `Modules/VoiceCore/Sources/VoiceCore/VoiceCallCoordinator.swift`
 
 ```swift
 let session = AVAudioSession.sharedInstance()

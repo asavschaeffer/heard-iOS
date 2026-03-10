@@ -8,7 +8,7 @@ The audio pipeline handles bidirectional voice communication between the user's 
 
 ## Current Architecture
 
-The voice stack is no longer owned directly by `ChatViewModel`. It is now split into a thin internal subsystem under `app/Services/Voice/`:
+The voice stack is no longer owned directly by `ChatViewModel`. It is now split into the `VoiceCore` module under `Modules/VoiceCore/Sources/VoiceCore/`:
 - `VoiceCallCoordinator`: Owns call lifecycle, route adaptation, CallKit wiring, and call-facing state publication.
 - `VoiceAudioSessionController`: Owns `AVAudioSession` category, mode, route descriptions, and route/interruption interpretation.
 - `VoiceCaptureEngine`: Owns microphone capture, resampling to 16 kHz PCM16, mute-aware chunk emission, and voice-processing fallback.
@@ -16,6 +16,8 @@ The voice stack is no longer owned directly by `ChatViewModel`. It is now split 
 - `VoiceDiagnostics`: Gates verbose voice logs to debug builds while still allowing faults in release builds.
 
 `ChatViewModel` now acts as the bridge between Gemini transport events and the voice subsystem. It still owns chat messages, transcripts, reconnect scheduling, and other UI-facing state.
+
+The subsystem tests now live under `Modules/VoiceCore/Tests/VoiceCoreTests/` and should remain the primary automated logic surface for voice behavior.
 
 ## Current State (Implemented)
 

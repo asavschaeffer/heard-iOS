@@ -2,6 +2,12 @@
 
 Use this checklist before merging voice-stack changes.
 
+Testing workflow and simulator commands now live in:
+
+- `docs/testing/ios-testing-playbook.md`
+
+This matrix is for physical-device validation. Simulator results are useful, but they are not a substitute for validating receiver, speaker, Bluetooth, wired routes, and CallKit behavior on hardware.
+
 ## Receiver and Speaker
 
 - Start a call on receiver, speak, wait for a response, switch to speaker, speak again, and confirm Gemini audio plays on speaker.
@@ -23,6 +29,13 @@ Use this checklist before merging voice-stack changes.
 - Trigger a real interruption if possible and confirm the call resumes capture/playback afterward.
 - Use Control Center or the system call UI to mute and unmute, and confirm the in-app state stays in sync.
 - End a call while Gemini is speaking and confirm local playback is torn down cleanly.
+
+## Attachments
+
+- Attach an image from Photos and confirm preview, send, and Gemini-side handling all work.
+- Attach a short video and confirm preview, send, and Gemini-side handling all work.
+- Open the Photos picker on simulator and on device and confirm selection works without silent failures.
+- Exercise camera capture flow if it is enabled in the current build and confirm captured media enters the composer correctly.
 
 ## Logs
 
