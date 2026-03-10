@@ -12,6 +12,7 @@ final class VoiceCallCoordinatorTests: XCTestCase {
         XCTAssertTrue(harness.coordinator.state.isPresented)
         XCTAssertTrue(harness.coordinator.state.pendingVoiceStart)
         XCTAssertEqual(harness.callKit.startCallCount, 1)
+        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "starting(callKit,disconnected,awaitingCallKit,awaitingTransport)")
     }
 
     func testTransportConnectStartsDirectCaptureAndClearsPendingStart() {
@@ -25,6 +26,7 @@ final class VoiceCallCoordinatorTests: XCTestCase {
         XCTAssertEqual(harness.capture.startCount, 1)
         XCTAssertFalse(harness.coordinator.state.pendingVoiceStart)
         XCTAssertTrue(harness.coordinator.state.isListening)
+        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "active(direct,connected)")
     }
 
     func testUnmuteRestartsCaptureWhenCallIsActive() {
@@ -41,6 +43,7 @@ final class VoiceCallCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(harness.capture.startCount, 2)
         XCTAssertFalse(harness.coordinator.state.isMicrophoneMuted)
+        XCTAssertEqual(harness.coordinator.callLifecycleState.runtimeContext?.isMuted, false)
     }
 
     func testSpeakerToggleUsesCallKitSessionControllerWhenCallKitOwnsAudio() {
@@ -52,6 +55,7 @@ final class VoiceCallCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(harness.audioSession.callKitSpeakerOverrides, [nil, true])
         XCTAssertTrue(harness.coordinator.state.isSpeakerPreferred)
+        XCTAssertEqual(harness.coordinator.routeLifecycleState.baseContext.speakerPreferred, true)
     }
 
     func testOverrideRouteChangeRebuildsGraphsForCallKitFallbackPath() {
@@ -77,6 +81,155 @@ final class VoiceCallCoordinatorTests: XCTestCase {
         XCTAssertEqual(harness.capture.startCount, 2)
         XCTAssertEqual(harness.playback.stopCount, 1)
         XCTAssertEqual(harness.playback.prepareCount, 1)
+        XCTAssertEqual(harness.coordinator.routeLifecycleState.debugLabel, "stable(speaker=false, reason=override)")
+    }
+
+    func testStartCallWithoutCallKitButConnectedTransportTransitionsDirectlyToActive() {
+        let harness = CoordinatorHarness(callKitEnabled: false)
+
+        harness.coordinator.transportDidConnect()
+        harness.coordinator.startCall()
+
+        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "active(direct,connected)")
+        XCTAssertEqual(harness.audioSession.directSpeakerPreferences, [true, true])
+        XCTAssertEqual(harness.capture.startCount, 1)
+    }
+
+    func testTransportFailureTransitionsToFailedState() {
+        let harness = CoordinatorHarness(callKitEnabled: false)
+
+        harness.coordinator.startCall()
+        harness.coordinator.transportDidFail(message: "socket")
+
+        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "failed(direct,error(socket),awaitingTransport, message=socket)")
+    }
+
+    func testTransportWillConnectFromFailureTransitionsToReconnecting() {
+        let harness = CoordinatorHarness(callKitEnabled: false)
+
+        harness.coordinator.startCall()
+        harness.coordinator.transportDidFail(message: "socket")
+        harness.coordinator.transportWillConnect()
+
+        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "reconnecting(direct,connecting,awaitingTransport)")
+    }
+
+    func testCallKitDeactivateTransitionsBackToWaitingForActivation() {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+
+        harness.coordinator.transportDidConnect()
+        harness.coordinator.startCall()
+        harness.callKit.onStartAudio?()
+        harness.capture.isRunning = true
+
+        harness.callKit.onStopAudio?()
+
+        XCTAssertEqual(harness.capture.stopCount, 1)
+        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "starting(callKit,connected,awaitingCallKit,fallbackInput)")
+    }
+
+    func testCallKitTransactionFailureDisablesCallKitAndFallsBackToDirectAudio() {
+        let harness = CoordinatorHarness(callKitEnabled: true, disableCallKitAfterError: true)
+
+        harness.coordinator.transportDidConnect()
+        harness.coordinator.startCall()
+        harness.callKit.onStartAudio?()
+        harness.callKit.onTransactionError?(MockError())
+
+        XCTAssertFalse(harness.coordinator.callKitEnabled)
+        XCTAssertEqual(harness.audioSession.directSpeakerPreferences.last, false)
+        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "active(direct,connected,fallbackInput)")
+        XCTAssertEqual(harness.delegate.callKitEnabledChanges, [false])
+    }
+
+    func testRouteChangeDebounceTransitionsRouteStateToBlocked() {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+
+        harness.coordinator.transportDidConnect()
+        harness.coordinator.startCall()
+        harness.callKit.onStartAudio?()
+        harness.capture.isRunning = true
+        harness.playback.isRunning = true
+
+        let event = VoiceRouteChangeEvent(
+            reason: .override,
+            reasonDescription: "override",
+            previousRouteDescription: "inputs=[] outputs=[]",
+            shouldAdapt: true
+        )
+
+        harness.coordinator.handleRouteChange(event)
+        harness.capture.isRunning = true
+        harness.playback.isRunning = true
+        harness.coordinator.handleRouteChange(event)
+
+        XCTAssertEqual(harness.coordinator.routeLifecycleState.debugLabel, "blocked(reason=debounced)")
+        XCTAssertTrue(harness.eventSink.events.contains(.routeAdaptationSkipped(reason: "debounced")))
+    }
+
+    func testInterruptionEndedWithoutResumeLeavesCaptureStopped() {
+        let harness = CoordinatorHarness(callKitEnabled: false)
+
+        harness.coordinator.transportDidConnect()
+        harness.coordinator.startCall()
+        harness.capture.isRunning = true
+
+        harness.coordinator.handleInterruption(
+            VoiceInterruptionEvent(
+                type: .began,
+                typeDescription: "began",
+                options: [],
+                optionsDescription: "[]"
+            )
+        )
+        harness.coordinator.handleInterruption(
+            VoiceInterruptionEvent(
+                type: .ended,
+                typeDescription: "ended",
+                options: [],
+                optionsDescription: "[]"
+            )
+        )
+
+        XCTAssertEqual(harness.capture.stopCount, 1)
+        XCTAssertFalse(harness.coordinator.state.isListening)
+        XCTAssertFalse(harness.capture.isRunning)
+    }
+
+    func testEventSinkRecordsCallStateTransitionsForCallStart() {
+        let harness = CoordinatorHarness(callKitEnabled: false)
+
+        harness.coordinator.transportDidConnect()
+        harness.coordinator.startCall()
+
+        XCTAssertTrue(harness.eventSink.events.contains {
+            if case .stateTransition(let from, let to) = $0 {
+                return from == .idle && to.debugLabel == "active(direct,connected)"
+            }
+            return false
+        })
+    }
+
+    func testEventSinkRecordsRouteAdaptationLifecycle() {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+
+        harness.coordinator.transportDidConnect()
+        harness.coordinator.startCall()
+        harness.callKit.onStartAudio?()
+        harness.capture.isRunning = true
+        harness.playback.isRunning = true
+
+        harness.coordinator.handleRouteChange(
+            VoiceRouteChangeEvent(
+                reason: .override,
+                reasonDescription: "override",
+                previousRouteDescription: "inputs=[] outputs=[]",
+                shouldAdapt: true
+            )
+        )
+
+        XCTAssertTrue(harness.eventSink.events.contains(.routeAdaptationStarted(resumeCapture: true, resumePlayback: true)))
+        XCTAssertTrue(harness.eventSink.events.contains(.routeAdaptationFinished))
     }
 }
 
@@ -86,9 +239,11 @@ private final class CoordinatorHarness {
     let audioSession = MockAudioSessionController()
     let capture = MockCaptureEngine()
     let playback = MockPlaybackEngine()
+    let eventSink = MockEventSink()
+    let delegate = MockCoordinatorDelegate()
     let coordinator: VoiceCallCoordinator
 
-    init(callKitEnabled: Bool) {
+    init(callKitEnabled: Bool, disableCallKitAfterError: Bool = false) {
         coordinator = VoiceCallCoordinator(
             displayName: "Heard, Chef",
             callKitEnabled: callKitEnabled,
@@ -97,8 +252,35 @@ private final class CoordinatorHarness {
             captureEngine: capture,
             playbackEngine: playback,
             describeTransactionError: { _ in "mock" },
-            shouldDisableCallKitAfterError: { _ in false }
+            shouldDisableCallKitAfterError: { _ in disableCallKitAfterError },
+            eventSink: eventSink
         )
+        coordinator.delegate = delegate
+    }
+}
+
+@MainActor
+private final class MockCoordinatorDelegate: VoiceCallCoordinatorDelegate {
+    private(set) var updates: [VoiceCallUIState] = []
+    private(set) var callKitEnabledChanges: [Bool] = []
+
+    func voiceCallCoordinator(_ coordinator: VoiceCallCoordinator, didUpdate state: VoiceCallUIState) {
+        _ = coordinator
+        updates.append(state)
+    }
+
+    func voiceCallCoordinator(_ coordinator: VoiceCallCoordinator, didChangeCallKitEnabled isEnabled: Bool) {
+        _ = coordinator
+        callKitEnabledChanges.append(isEnabled)
+    }
+}
+
+@MainActor
+private final class MockEventSink: VoiceCoordinatorEventSink {
+    private(set) var events: [VoiceCoordinatorEvent] = []
+
+    func record(_ event: VoiceCoordinatorEvent) {
+        events.append(event)
     }
 }
 
@@ -261,28 +443,20 @@ private final class MockPlaybackEngine: VoicePlaybackHandling {
         stopCount += 1
         isRunning = false
         isSpeaking = false
-        enqueuedBufferCount = 0
-        onRunningChanged?(false)
+        if clearQueue {
+            enqueuedBufferCount = 0
+        }
         onSpeakingChanged?(false)
+        onRunningChanged?(false)
     }
 
     func resetIdleGraphForRouteChange(reason: String) {
         _ = reason
-        isRunning = false
-        onRunningChanged?(false)
     }
 
-    func simulateScheduledBufferForTesting() {
-        enqueuedBufferCount += 1
-        isSpeaking = true
-        onSpeakingChanged?(true)
-    }
+    func simulateScheduledBufferForTesting() {}
 
-    func simulatePlaybackCompletionForTesting() {
-        enqueuedBufferCount = max(0, enqueuedBufferCount - 1)
-        if enqueuedBufferCount == 0 {
-            isSpeaking = false
-            onSpeakingChanged?(false)
-        }
-    }
+    func simulatePlaybackCompletionForTesting() {}
 }
+
+private struct MockError: Error {}

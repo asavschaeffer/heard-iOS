@@ -13,6 +13,21 @@ That is the template to follow going forward:
 
 This document explains the intended repo shape now and the cleanup steps that should happen next without introducing churn-heavy moves too early.
 
+## Current State
+
+What is landed enough to treat as baseline:
+
+- `VoiceCore` is the first reference-quality internal module
+- voice/call logic is no longer primarily owned by `ChatViewModel`
+- `VoiceCore` now owns explicit lifecycle and route state handling plus structured eventing
+- module tests and app-host smoke tests are intentionally split
+
+What remains open:
+
+- completing the physical-device regression matrix for route-sensitive behaviors
+- keeping roadmap/docs aligned with the current implementation
+- deciding whether a second real module is justified yet
+
 ## Current Top-Level Layout
 
 ### `app/`
@@ -126,19 +141,26 @@ This should be treated as the reference example for future internal modules.
 
 ## What Gets Extracted Next
 
-### 1. Deeper `VoiceCore` work
+### 1. `VoiceCore` bake-and-verify period
 
-The next meaningful technical step inside `VoiceCore` is not folder churn. It is behavior hardening:
+The recent `VoiceCore` hardening pass is already landed:
 
-- explicit call lifecycle state machine
-- explicit route lifecycle state machine
-- clearer structured eventing for capture, playback, and transport boundaries
+- explicit call lifecycle state
+- explicit route lifecycle state
+- structured eventing for capture, playback, and transport boundaries
+- derived `VoiceCallUIState`
+
+The next work around `VoiceCore` is:
+
+- complete the remaining physical-device matrix
+- keep verification commands and docs current
+- let the module bake under real usage before proposing another large rewrite
 
 ### 2. Possible Gemini transport modularization
 
 If the Gemini integration grows more complex or needs reuse beyond the current app shell, a dedicated transport-oriented module may make sense.
 
-That is not a current commitment. It is a future candidate.
+That is not a current commitment. It is the default next candidate only if app-side integration pressure justifies extraction.
 
 ### 3. Possible terminal/tooling module
 
@@ -168,6 +190,7 @@ Rules:
 In practice:
 
 - treat `refs/` as disposable learning material
+- keep it untracked if it is still temporarily useful
 - do not build new architecture around it
 
 ## Migration Triggers
@@ -177,6 +200,7 @@ Do the next round of structural cleanup only when one of these becomes true:
 - a second reusable subsystem is extracted into `Modules/`
 - `app/` becomes crowded enough that ownership is unclear
 - multiple module targets need shared conventions or shared infrastructure
+- Gemini transport complexity clearly exceeds what the app layer should own
 
 At that point, consider a measured split of `app/` into:
 
@@ -188,11 +212,11 @@ That should happen incrementally, not as a giant one-shot churn.
 
 ## Recommended Near-Term Cleanup Order
 
-1. Keep `Modules/` as the home for reusable subsystems.
-2. Keep `app/` as the app shell and UI/integration layer.
-3. Keep `heardTests` smoke-only.
-4. Add and maintain clear testing and architecture docs.
-5. Extract the next real subsystem before attempting the larger `app/` split.
+1. Finish the physical-device voice regression matrix.
+2. Keep `README` and engineering docs aligned with the landed `VoiceCore` architecture.
+3. Keep `Modules/` as the home for reusable subsystems and `app/` as the app shell/integration layer.
+4. Keep `heardTests` smoke-only.
+5. Evaluate the next real subsystem before attempting the larger `app/` split.
 
 ## Long-Term Direction
 

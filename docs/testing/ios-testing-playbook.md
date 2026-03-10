@@ -16,12 +16,21 @@ The current automation split is intentional:
 - app-host coverage stays minimal in `heardTests/`
 - physical device checks remain mandatory for receiver, speaker, Bluetooth, CallKit, and interruption flows
 
+## Canonical Local Target
+
+Use this simulator target as the default local CLI destination:
+
+- model: `iPhone 17 Pro`
+- runtime: `iOS 26.2`
+
+If that runtime is not installed on a machine, choose the nearest current iPhone simulator and update the command explicitly instead of relying on Xcode defaults.
+
 ## Quick Start
 
 ### Run `VoiceCore` tests
 
 ```sh
-xcodebuild -project app/HeardChef.xcodeproj -scheme VoiceCore -destination 'platform=iOS Simulator,name=iPhone 15' test
+xcodebuild -project app/HeardChef.xcodeproj -scheme VoiceCore -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' test
 ```
 
 Use this as the default automated suite for voice-stack work.
@@ -29,10 +38,18 @@ Use this as the default automated suite for voice-stack work.
 ### Run `heard` smoke tests
 
 ```sh
-xcodebuild -project app/HeardChef.xcodeproj -scheme heard -destination 'platform=iOS Simulator,name=iPhone 15' test
+xcodebuild -project app/HeardChef.xcodeproj -scheme heard -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' test
 ```
 
 This validates that the app host and test harness still boot correctly.
+
+### Run `heard` build-for-testing
+
+```sh
+xcodebuild -project app/HeardChef.xcodeproj -scheme heard -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' build-for-testing
+```
+
+Use this for fast host validation when you want to confirm the app target, test bundle, and simulator destination still build cleanly without paying for a full hosted test run.
 
 ### Important: always provide a simulator destination
 
@@ -60,7 +77,7 @@ Responsibilities:
 - audio session and route policy decisions
 - capture fallback behavior
 - playback queue and restart behavior
-- future explicit call/route state machine coverage
+- explicit call and route state machine coverage
 
 ### `heardTests`
 
@@ -90,6 +107,17 @@ Not allowed:
 - Physical-device testing is still required for route-sensitive audio behavior.
 - Media-heavy AI flows are only partially automatable today.
 - Attachment flows can be exercised in simulator and on device, but they are not yet backed by a committed deterministic fixture suite.
+
+### Test execution speed
+
+- `VoiceCoreTests` is a non-hosted bundle — tests themselves run in ~0.1s, but simulator boot and xcodebuild overhead add 15–25s wall time on a warm simulator.
+- `heardTests` is hosted — it launches the full app binary (in test mode), so expect 60–90s wall time even though the test logic is instant.
+- **Boot the simulator first** to avoid cold-boot delays and transient "Invalid device state" errors:
+  ```sh
+  xcrun simctl boot "iPhone 17 Pro" 2>/dev/null
+  ```
+- For faster iteration, run `VoiceCoreTests` alone. Only run `heardTests` when validating app-host integration.
+- When running from CLI (AI agents, CI), target a specific scheme (`-only-testing:VoiceCoreTests` or `-only-testing:heardTests`) to avoid running both suites every time.
 
 ## Test Mode App Behavior
 
@@ -203,22 +231,25 @@ When debugging route-sensitive bugs, always correlate:
 - broader deterministic harnesses for Gemini-related feature flows
 - deeper state-machine coverage inside `VoiceCore`
 
-## Recommended Workflow By Change Type
+## Preferred Verification Flow
 
-### Voice / Call Changes
+### Voice-Only Changes
 
 1. Run `VoiceCore` tests.
-2. Run `heard` smoke tests with a simulator destination.
-3. Run the manual device checklist in `docs/rebuild/04-voice-regression-matrix.md`.
+2. Run `heard` `build-for-testing` with the canonical simulator destination.
+3. Run `heard` smoke tests if the change touches app-side integration.
+4. Run the manual device checklist in `docs/rebuild/04-voice-regression-matrix.md`.
 
-### App Shell / Integration Changes
+### App-Host Changes
 
-1. Run `heard` smoke tests with a simulator destination.
-2. Run the relevant module tests.
-3. Verify test mode still boots cleanly.
+1. Run `heard` `build-for-testing` with the canonical simulator destination.
+2. Run `heard` smoke tests.
+3. Run the relevant module tests.
+4. Verify test mode still boots cleanly.
 
-### Attachment / AI Media Changes
+### Attachment / Media Changes
 
-1. Run `heard` smoke tests with a simulator destination.
-2. Exercise local fixtures manually from `TestFixtures.local/`.
-3. Validate image/video flows on a physical device when camera or route-sensitive behavior is involved.
+1. Run `heard` `build-for-testing` with the canonical simulator destination.
+2. Run `heard` smoke tests.
+3. Exercise local fixtures manually from `TestFixtures.local/`.
+4. Validate image/video flows on a physical device when camera or route-sensitive behavior is involved.

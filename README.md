@@ -91,6 +91,21 @@ LLMs speak in approximations; databases need precision.
 - **Normalization:** The engine maps "bunch" to a standard unit (e.g., `count: 1`) and categorizes it under `.produce`.
 - **Persistence:** Only validated, strictly-typed data is saved to **SwiftData** (SQLite), ensuring sorting and filtering always work.
 
+### 4. Internal Modules and Verification Surfaces
+
+The repo now has one real internal subsystem module:
+
+- `Modules/VoiceCore/` owns voice/call coordination, route recovery, structured eventing, and the derived `VoiceCallUIState` used by the app.
+- `app/` remains the app shell, UI, persistence wiring, and Gemini integration layer.
+- `Modules/VoiceCore/Tests/VoiceCoreTests/` is the primary automated logic suite for voice behavior.
+- `heardTests/` is intentionally smoke-only and exists to verify the hosted app test harness, not to absorb subsystem logic coverage.
+
+Supporting docs:
+
+- `docs/testing/ios-testing-playbook.md`
+- `docs/architecture/repo-structure-roadmap.md`
+- `docs/rebuild/04-voice-regression-matrix.md`
+
 ## Setup & Requirements
 
 - **Xcode 15.0+**
@@ -126,18 +141,40 @@ _(REST uses `gemini-2.5-flash`; Live API uses `gemini-2.5-flash-native-audio-pre
 - **Voice Persona:** You can change the voice in `GeminiService.swift`. Supported voices include: `Aoede`, `Charon`, `Fenrir`, `Kore`, and `Puck`.
 - **System Prompt:** Customize the chef's personality (e.g., "Gordon Ramsay mode" vs "Grandma mode") in `ChefIntelligence.swift`.
 
+## Current Engineering Status
+
+The repo is past the highest-risk voice infrastructure phase.
+
+- `VoiceCore` is landed as an internal module under `Modules/VoiceCore/`.
+- Voice/call logic no longer primarily lives in `ChatViewModel`.
+- Explicit lifecycle and route state handling now live inside `VoiceCore`.
+- The automated test split is intentional:
+  - `VoiceCoreTests` for module-owned logic
+  - `heardTests` for app-host smoke coverage
+  - physical-device validation for route-sensitive truth
+- The current short-term focus is reliability closure, documentation accuracy, and repeated verification, not another voice rewrite.
+
 ## Roadmap
 
-- [x] **Phase 1: Foundation** — UX prototypes, SwiftData schema, "Brain Protocol" definition
-- [x] **Phase 2: Core Intelligence** — Gemini Live streaming, REST + WebSocket dual API, full tool calling
-- [ ] **Phase 3: Visual Polish (in progress)** — iMessage/FaceTime rebuild, PiP calling, markdown bubbles
-- [ ] **Phase 4: Local Fallback** — On-device model for offline inventory checks
+**Short term**
+
+- finish the remaining physical-device voice regression matrix
+- keep docs and repo structure aligned with the landed `VoiceCore` architecture
+- standardize the local verification loop for `VoiceCore`, `heardTests`, and `build-for-testing`
+
+**Medium term**
+
+- evaluate a `Modules/GeminiTransport` extraction only if app-side integration pressure justifies it
+- keep `app/` stable until a second real reusable module exists
+- adopt local-only media fixtures for repeated manual and smoke validation
+
+**Long term**
+
+- evolve toward a modular app shell with two or more real internal modules
+- strengthen module-first automation while keeping hardware checks for route-sensitive audio
+- keep broad folder churn deferred until it is justified by real subsystem boundaries
 
 ## Todo
-
-**Stability & Infrastructure**
-- [ ] Voice stack stabilization
-- [ ] Test infrastructure
 
 **UX Fixes**
 - [ ] Fix ingredients page camera (or redirect to chat with camera open)
@@ -164,6 +201,9 @@ _(REST uses `gemini-2.5-flash`; Live API uses `gemini-2.5-flash-native-audio-pre
 ## Specs
 
 - `docs/gemini-tools.md` - Drill-down toolset and Gemini tool architecture
+- `docs/testing/ios-testing-playbook.md` - Canonical local verification commands and test ownership
+- `docs/architecture/repo-structure-roadmap.md` - Current module/app ownership rules and extraction direction
+- `docs/rebuild/04-voice-regression-matrix.md` - Physical-device checklist for voice and attachment regressions
 
 
 ## Known Limitations
