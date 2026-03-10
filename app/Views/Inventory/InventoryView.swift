@@ -25,6 +25,7 @@ struct InventoryView: View {
                     groupedSections
                 }
             }
+            .accessibilityIdentifier("inventory.list")
             .searchable(text: $searchText, prompt: "Search ingredients")
             .navigationTitle("Inventory")
             .toolbar {

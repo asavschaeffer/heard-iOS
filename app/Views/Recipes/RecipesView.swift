@@ -28,6 +28,7 @@ struct RecipesView: View {
                 }
                 .padding()
             }
+            .accessibilityIdentifier("recipes.scrollView")
             .searchable(text: $searchText, prompt: "Search recipes")
             .navigationTitle("Recipes")
             .toolbar {
@@ -42,6 +43,7 @@ struct RecipesView: View {
                             systemImage: showMakeableOnly ? "list.bullet" : "checkmark.circle"
                         )
                     }
+                    .accessibilityIdentifier("recipes.filterButton")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
