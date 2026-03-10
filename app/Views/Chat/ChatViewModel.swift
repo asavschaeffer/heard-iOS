@@ -4,6 +4,7 @@ import SwiftData
 import UniformTypeIdentifiers
 import UIKit
 import Combine
+import VoiceCore
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -89,14 +90,7 @@ class ChatViewModel: ObservableObject {
 
     init() {
         let initialCallKitEnabled = true
-        let coordinator = VoiceCallCoordinator(
-            displayName: "Heard, Chef",
-            callKitEnabled: initialCallKitEnabled,
-            callKitManager: CallKitManager(appName: "Heard, Chef"),
-            audioSessionController: VoiceAudioSessionController(),
-            captureEngine: VoiceCaptureEngine(),
-            playbackEngine: VoicePlaybackEngine()
-        )
+        let coordinator = VoiceCallCoordinator(displayName: "Heard, Chef", callKitEnabled: initialCallKitEnabled)
         self.voiceCoordinator = coordinator
         coordinator.delegate = self
         coordinator.onCapturedAudio = { [weak self] data in
@@ -254,7 +248,7 @@ class ChatViewModel: ObservableObject {
     func connect(mode: SessionMode = .audio) {
         guard connectionState != .connecting else { return }
         connectionState = .connecting
-        voiceCoordinator.updateTransportState(.connecting)
+        voiceCoordinator.transportWillConnect()
         let config: SessionConfig = {
             switch mode {
             case .audio:
@@ -270,7 +264,7 @@ class ChatViewModel: ObservableObject {
         stopVoiceSession()
         geminiService?.disconnect(reason: "ChatViewModel.disconnect")
         connectionState = .disconnected
-        voiceCoordinator.updateTransportState(.disconnected)
+        voiceCoordinator.transportDidDisconnect()
     }
 
     func sendMessage(_ text: String) {
@@ -332,7 +326,7 @@ class ChatViewModel: ObservableObject {
         // Disconnect the audio session; next text send will lazy-reconnect in text mode
         geminiService?.disconnect(reason: "stopVoiceSession")
         connectionState = .disconnected
-        voiceCoordinator.updateTransportState(.disconnected)
+        voiceCoordinator.transportDidDisconnect()
         if wasPresented {
             sendCallHaptic(style: .warning)
         }
@@ -929,7 +923,7 @@ extension ChatViewModel: GeminiServiceDelegate {
 
     func geminiService(_ service: GeminiService, didReceiveError error: Error) {
         connectionState = .error(error.localizedDescription)
-        voiceCoordinator.updateTransportState(.error(error.localizedDescription))
+        voiceCoordinator.transportDidFail(message: error.localizedDescription)
         isTyping = false
         finalizeAssistantStreamingMessages()
         markPendingMessagesFailed()

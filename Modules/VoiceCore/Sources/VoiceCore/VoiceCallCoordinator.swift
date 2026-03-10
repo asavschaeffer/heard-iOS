@@ -16,15 +16,15 @@ protocol VoiceCallKitControlling: AnyObject {
 extension CallKitManager: VoiceCallKitControlling {}
 
 @MainActor
-protocol VoiceCallCoordinatorDelegate: AnyObject {
+public protocol VoiceCallCoordinatorDelegate: AnyObject {
     func voiceCallCoordinator(_ coordinator: VoiceCallCoordinator, didUpdate state: VoiceCallUIState)
     func voiceCallCoordinator(_ coordinator: VoiceCallCoordinator, didChangeCallKitEnabled isEnabled: Bool)
 }
 
 @MainActor
-final class VoiceCallCoordinator {
-    weak var delegate: VoiceCallCoordinatorDelegate?
-    var onCapturedAudio: ((Data) -> Void)?
+public final class VoiceCallCoordinator {
+    public weak var delegate: VoiceCallCoordinatorDelegate?
+    public var onCapturedAudio: ((Data) -> Void)?
 
     private let displayName: String
     private let audioSessionController: VoiceAudioSessionControlling
@@ -38,8 +38,19 @@ final class VoiceCallCoordinator {
     private var isAdaptingToRouteChange = false
     private var lastRouteAdaptationAt: Date?
 
-    private(set) var state = VoiceCallUIState()
-    private(set) var callKitEnabled: Bool
+    public private(set) var state = VoiceCallUIState()
+    public private(set) var callKitEnabled: Bool
+
+    public convenience init(displayName: String, callKitEnabled: Bool = true) {
+        self.init(
+            displayName: displayName,
+            callKitEnabled: callKitEnabled,
+            callKitManager: callKitEnabled ? CallKitManager(appName: displayName) : nil,
+            audioSessionController: VoiceAudioSessionController(),
+            captureEngine: VoiceCaptureEngine(),
+            playbackEngine: VoicePlaybackEngine()
+        )
+    }
 
     init(
         displayName: String,
@@ -78,7 +89,15 @@ final class VoiceCallCoordinator {
         transportState = state
     }
 
-    func startCall() {
+    public func transportWillConnect() {
+        transportState = .connecting
+    }
+
+    public func transportDidFail(message: String) {
+        transportState = .error(message)
+    }
+
+    public func startCall() {
         logAudioState("Voice session start requested")
         let wasPresented = state.isPresented
         if wasPresented { return }
@@ -105,7 +124,7 @@ final class VoiceCallCoordinator {
         logAudioState("Voice session start finished")
     }
 
-    func stopCall() {
+    public func stopCall() {
         logAudioState("Voice session stop requested")
         state.isPresented = false
         state.isListening = false
@@ -125,7 +144,7 @@ final class VoiceCallCoordinator {
         logAudioState("Voice session stop finished")
     }
 
-    func toggleMute() {
+    public func toggleMute() {
         state.isMicrophoneMuted.toggle()
         updateListeningState()
         publishState()
@@ -136,7 +155,7 @@ final class VoiceCallCoordinator {
         }
     }
 
-    func toggleSpeaker() {
+    public func toggleSpeaker() {
         let shouldPreferSpeaker = !state.isSpeakerPreferred
         logAudioState(
             "Speaker toggle requested",
@@ -169,7 +188,7 @@ final class VoiceCallCoordinator {
         }
     }
 
-    func transportDidConnect() {
+    public func transportDidConnect() {
         transportState = .connected
         logAudioState("Gemini delegate connected")
 
@@ -189,7 +208,7 @@ final class VoiceCallCoordinator {
         }
     }
 
-    func transportDidDisconnect() {
+    public func transportDidDisconnect() {
         transportState = .disconnected
         state.isListening = false
         if state.isPresented {
@@ -199,7 +218,7 @@ final class VoiceCallCoordinator {
         logAudioState("Gemini delegate disconnected", extra: "autoReconnect=true")
     }
 
-    func transportDidReceiveAudio(_ data: Data) {
+    public func transportDidReceiveAudio(_ data: Data) {
         playbackEngine.play(data)
         state.isPlaybackRunning = playbackEngine.isRunning
         publishState()

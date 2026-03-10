@@ -3,6 +3,7 @@ import SwiftData
 import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
+import VoiceCore
 
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext

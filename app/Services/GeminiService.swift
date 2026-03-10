@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import VoiceCore
 
 // MARK: - Session Mode
 

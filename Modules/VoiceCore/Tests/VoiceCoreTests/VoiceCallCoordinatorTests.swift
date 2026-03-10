@@ -1,6 +1,6 @@
 import XCTest
 @preconcurrency import AVFoundation
-@testable import heard
+@testable import VoiceCore
 
 @MainActor
 final class VoiceCallCoordinatorTests: XCTestCase {

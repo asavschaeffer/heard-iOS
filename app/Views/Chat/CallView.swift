@@ -1,4 +1,5 @@
 import SwiftUI
+import VoiceCore
 
 struct CallView: View {
     @ObservedObject var viewModel: ChatViewModel
