@@ -36,7 +36,7 @@ final class CallKitManager: NSObject {
         let routeOutputs = session.currentRoute.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", ")
         let availableInputs = (session.availableInputs ?? []).map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", ")
         let prefix = extra.isEmpty ? "" : " \(extra)"
-        print(
+        VoiceDiagnostics.callKit(
             "[CallKit] \(event)\(prefix) | callID=\(currentCallID) displayName=\(currentCallName) category=\(session.category.rawValue) mode=\(session.mode.rawValue) sampleRate=\(Int(session.sampleRate))Hz inputs=[\(routeInputs)] outputs=[\(routeOutputs)] availableInputs=[\(availableInputs)]"
         )
     }
@@ -83,12 +83,14 @@ final class CallKitManager: NSObject {
         callController.request(transaction) { error in
             if let error {
                 let details = Self.describeTransactionError(error)
-                self.logCallKitEvent("transaction request failed", extra: details)
                 Task { @MainActor in
+                    self.logCallKitEvent("transaction request failed", extra: details)
                     self.onTransactionError?(error)
                 }
             } else {
-                self.logCallKitEvent("transaction request accepted")
+                Task { @MainActor in
+                    self.logCallKitEvent("transaction request accepted")
+                }
             }
         }
     }
