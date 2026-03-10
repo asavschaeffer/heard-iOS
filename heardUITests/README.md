@@ -2,30 +2,79 @@
 
 This target owns simulator-driven interaction regressions.
 
-Use it for:
+## Stable vs experimental
 
-- modal presentation and dismissal
-- stable editor and navigation flows
-- opt-in keyboard dismissal behavior
-- navigation flows
-- destructive confirmation flows
+Stable classes belong in the default `app-ui` lane and should be trustworthy enough for CI.
 
-Do not use it for:
+Current stable coverage:
 
-- pure logic that belongs in module tests
-- app boot sanity that belongs in `heardTests`
-- hardware-sensitive audio or camera truth that still needs device validation
+- editor-open flows
+- inventory CRUD flows
+- recipe CRUD flows
+- navigation continuity
+- inventory and recipe search/filter regressions
 
-The tests in this target should launch the app with `-ui-testing` and a deterministic `UITEST_SCENARIO`.
+Experimental classes stay opt-in.
+
+Current experimental coverage:
+
+- `KeyboardDismissUITests`
+
+Do not move a UI class into the stable lane until it passes repeated runs and produces actionable diagnostics when it fails.
+
+## Scenarios
+
+Every UI test should launch the app with `-ui-testing` and an explicit `UITEST_SCENARIO`.
 
 Current named scenarios:
 
-- `editor_flows` for stable editor, CRUD, and navigation coverage
-- `search_filtering` for stable inventory and recipe search/filter coverage
-- `keyboard_dismiss` for opt-in gesture dismissal checks
-- `empty_state` reserved for future empty-state coverage
-- `attachments_basic` reserved for future attachment/media coverage
+- `editor_flows`
+- `search_filtering`
+- `keyboard_dismiss`
+- `empty_state`
+- `attachments_basic`
 
-Default `app-ui` runs should stay green and stable.
+Rules:
 
-Gesture-heavy regressions that are still simulator-sensitive should be opt-in and skipped unless explicitly enabled via `HEARD_ENABLE_GESTURE_UI_TESTS=1`.
+- request the scenario explicitly through `UIHarness.launchApp(scenario:)`
+- keep scenario data deterministic and in-memory only
+- add fixture data through the app-side scenario fixtures, not ad hoc inside the test
+
+## Use this target for
+
+- modal presentation and dismissal
+- stable CRUD and navigation regressions
+- destructive confirmation flows
+- search and filtering regressions
+- simulator-safe future attachment happy paths
+
+## Do not use this target for
+
+- pure logic that belongs in module tests
+- app boot sanity that belongs in `heardTests`
+- route or camera truth that still needs device validation
+
+## Commands
+
+Stable:
+
+- `./scripts/test-ios.sh app-ui`
+
+Experimental:
+
+- `./scripts/test-ios.sh app-ui-gestures`
+- `./scripts/test-ios.sh app-ui-gestures-repeat 10`
+
+Diagnostics:
+
+- `./scripts/xcresult-summary.sh --latest`
+- `./scripts/xcresult-summary.sh --latest --json`
+
+## Gesture promotion rule
+
+Gesture-heavy regressions stay experimental until:
+
+- they pass repeated local runs
+- they pass repeated CI runs
+- they need no undocumented simulator setup
+- their failures are diagnosable from `.xcresult`

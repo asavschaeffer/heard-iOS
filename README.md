@@ -98,8 +98,8 @@ The repo now has one real internal subsystem module:
 - `Modules/VoiceCore/` owns voice/call coordination, route recovery, structured eventing, and the derived `VoiceCallUIState` used by the app.
 - `app/` remains the app shell, UI, persistence wiring, and Gemini integration layer.
 - `Modules/VoiceCore/Tests/VoiceCoreTests/` is the primary automated logic suite for voice behavior.
-- `heardTests/` is intentionally smoke-only and exists to verify the hosted app test harness, not to absorb subsystem logic coverage.
-- `heardUITests/` owns simulator-driven interaction regressions, with stable editor-flow coverage on by default and gesture-heavy keyboard dismissal coverage available as opt-in.
+- `heardTests/` is intentionally smoke-first and exists to verify the hosted app test harness, with hosted performance checks kept experimental.
+- `heardUITests/` owns simulator-driven interaction regressions, with stable CRUD/navigation/search coverage on by default and gesture-heavy keyboard dismissal coverage available as opt-in.
 
 Supporting docs:
 
@@ -108,6 +108,52 @@ Supporting docs:
 - `docs/architecture/repo-structure-roadmap.md`
 - `docs/rebuild/04-voice-regression-matrix.md`
 - `scripts/xcresult-summary.sh` for compact local test-result summaries
+
+### Testing Workflow
+
+The iOS test system now has a stable default lane and an opt-in experimental lane.
+
+Stable commands:
+
+- `./scripts/test-ios.sh voicecore`
+- `./scripts/test-ios.sh app-build`
+- `./scripts/test-ios.sh app-smoke`
+- `./scripts/test-ios.sh app-ui`
+- `./scripts/test-ios.sh stable`
+
+Experimental commands:
+
+- `./scripts/test-ios.sh app-ui-gestures`
+- `./scripts/test-ios.sh app-ui-gestures-repeat 10`
+- `./scripts/test-ios.sh experimental`
+
+Result-bundle diagnostics:
+
+- `./scripts/xcresult-summary.sh --latest`
+- `./scripts/xcresult-summary.sh --latest --json`
+- `./scripts/xcresult-summary.sh --latest --markdown`
+
+Current shared hosted plans live at:
+
+- `app/TestPlans/heard-stable.xctestplan`
+- `app/TestPlans/heard-experimental.xctestplan`
+
+Current UI-test scenarios are explicit:
+
+- `editor_flows`
+- `search_filtering`
+- `keyboard_dismiss`
+- `empty_state`
+- `attachments_basic`
+
+AI and humans should inspect the `.xcresult` summary before reading raw logs. Current failure classes are:
+
+- build failure
+- module logic failure
+- app-host smoke failure
+- stable UI regression
+- experimental gesture instability
+- performance regression
 
 ## Setup & Requirements
 
@@ -153,8 +199,11 @@ The repo is past the highest-risk voice infrastructure phase.
 - Explicit lifecycle and route state handling now live inside `VoiceCore`.
 - The automated test split is intentional:
   - `VoiceCoreTests` for module-owned logic
-  - `heardTests` for app-host smoke coverage
+  - `heardTests` for app-host smoke coverage plus experimental hosted perf
   - `heardUITests` for simulator-driven interaction regressions
+  - stable vs experimental hosted plans under `app/TestPlans/`
+  - `.xcresult` summaries as the default diagnostics interface
+  - `VoiceCorePerformanceTests` and `AppStartupPerformanceTests` in the experimental lane
   - gesture-heavy UI regressions stay opt-in until simulator behavior proves stable enough for default CI
   - physical-device validation for route-sensitive truth
 - The current short-term focus is reliability closure, documentation accuracy, and repeated verification, not another voice rewrite.
