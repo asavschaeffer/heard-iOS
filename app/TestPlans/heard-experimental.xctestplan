@@ -20,6 +20,16 @@
   "testTargets" : [
     {
       "skippedTests" : [
+        "AppLaunchSmokeTests"
+      ],
+      "target" : {
+        "containerPath" : "container:HeardChef.xcodeproj",
+        "identifier" : "ECE5464B2F5F98EB00465205",
+        "name" : "heardTests"
+      }
+    },
+    {
+      "skippedTests" : [
         "EditorFlowUITests",
         "InventoryFlowUITests",
         "NavigationUITests",
