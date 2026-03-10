@@ -23,7 +23,8 @@
         "EditorFlowUITests",
         "InventoryFlowUITests",
         "NavigationUITests",
-        "RecipeFlowUITests"
+        "RecipeFlowUITests",
+        "SearchFilteringUITests"
       ],
       "target" : {
         "containerPath" : "container:HeardChef.xcodeproj",
