@@ -24,7 +24,7 @@ Commands:
   app-ui-gestures-repeat [count]
                     Repeat the gesture UI suite (default: 10)
   stable             Run the default stable gate
-  experimental       Run the current experimental heard test plan
+  experimental       Run experimental VoiceCore perf plus heard experimental tests
   all                Alias for stable
 
 Optional environment:
@@ -138,7 +138,16 @@ run_voicecore_tests() {
     run_xcodebuild "$destination" \
         -scheme VoiceCore \
         test \
-        -only-testing:VoiceCoreTests
+        -only-testing:VoiceCoreTests \
+        -skip-testing:VoiceCoreTests/VoiceCorePerformanceTests
+}
+
+run_voicecore_performance_tests() {
+    local destination="$1"
+    run_xcodebuild "$destination" \
+        -scheme VoiceCore \
+        test \
+        -only-testing:VoiceCoreTests/VoiceCorePerformanceTests
 }
 
 run_app_build_for_testing() {
@@ -310,6 +319,7 @@ run_stable_gate() {
 
 run_experimental_gate() {
     local destination="$1"
+    run_voicecore_performance_tests "$destination"
     restart_simulator "$destination"
     HEARD_ENABLE_GESTURE_UI_TESTS="${HEARD_ENABLE_GESTURE_UI_TESTS:-1}" run_heard_tests "$destination" "$HEARD_EXPERIMENTAL_PLAN"
 }

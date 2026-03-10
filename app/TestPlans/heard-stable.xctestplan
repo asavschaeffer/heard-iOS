@@ -13,6 +13,9 @@
   },
   "testTargets" : [
     {
+      "skippedTests" : [
+        "AppStartupPerformanceTests"
+      ],
       "target" : {
         "containerPath" : "container:HeardChef.xcodeproj",
         "identifier" : "ECE5464B2F5F98EB00465205",
