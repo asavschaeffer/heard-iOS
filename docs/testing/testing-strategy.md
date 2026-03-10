@@ -185,6 +185,8 @@ Primary commands:
 - `./scripts/xcresult-summary.sh --latest --json`
 - `./scripts/xcresult-summary.sh --latest --markdown`
 - `./scripts/xcresult-summary.sh --path <bundle>`
+- `./scripts/xcresult-summary.sh --all`
+- `./scripts/xcresult-summary.sh --all --json`
 
 Use result bundles for:
 
@@ -195,6 +197,8 @@ Use result bundles for:
 - UI attachments such as screen recordings, synthesized events, and failure screenshots
 
 AI and humans should inspect the result bundle summary before reading raw xcodebuild logs.
+
+Use `--latest` or `--path` when you are triaging one specific bundle. Use `--all` when you need a gate-level view across multiple bundles, such as the default stable CI run.
 
 ## AI operating model
 
@@ -236,15 +240,13 @@ Policy:
 
 - keep perf tests in the experimental lane until budgets and hardware expectations settle
 - use `measure {}` only around deterministic hot paths
-- document observed numbers before turning perf regressions into a hard gate
+- document observed numbers and variance before turning perf regressions into a hard gate
 
-Current initial observations on `iPhone 17 Pro` / `iOS 26.2` from the first landed runs:
+Current status:
 
-- capture buffer processing: roughly `0.00049s` to `0.00064s`
-- playback queue drain: roughly `0.000066s` to `0.000071s`
-- shared model container creation in test mode: roughly `0.0023s` to `0.0031s`
-
-Treat these as provisional budgets for investigation, not failing thresholds.
+- the perf classes pass
+- relative standard deviation is still high enough that the numbers should be treated as investigation aids, not release budgets
+- any future budget work must be based on repeated runs and variance review, not one clean sample
 
 ## Promotion rule for experimental tests
 
@@ -257,6 +259,12 @@ Experimental tests only graduate into the stable lane when:
 - adding them does not break the default green path
 
 This rule currently applies most directly to `KeyboardDismissUITests`.
+
+Current status:
+
+- `KeyboardDismissUITests` remains experimental
+- repeat-run evidence is mixed rather than cleanly green
+- the class should not be described as promotion-ready until the documented local and CI thresholds are actually met
 
 ## Reliability rules
 

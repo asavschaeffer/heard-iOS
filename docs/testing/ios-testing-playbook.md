@@ -65,9 +65,11 @@ Meaning:
 ./scripts/xcresult-summary.sh --latest --json
 ./scripts/xcresult-summary.sh --latest --markdown
 ./scripts/xcresult-summary.sh --path <bundle>
+./scripts/xcresult-summary.sh --all
+./scripts/xcresult-summary.sh --all --json
 ```
 
-Use the JSON mode for automation and AI triage. Use markdown when writing into CI summaries or PR notes.
+Use the JSON mode for automation and AI triage. Use markdown when writing into CI summaries or PR notes. Use `--all` when you want a gate-level summary across multiple bundles.
 
 ## Supported environment variables
 
@@ -188,14 +190,9 @@ Current policy:
 - stable `voicecore` skips `VoiceCorePerformanceTests`
 - stable `heard` skips `AppStartupPerformanceTests`
 - `./scripts/test-ios.sh experimental` includes VoiceCore perf plus the hosted experimental plan
+- current perf values are reference-only because run-to-run variance is still high
 
-Initial observed values on `iPhone 17 Pro` / `iOS 26.2`:
-
-- capture buffer processing: about `0.00049s` to `0.00064s`
-- playback queue drain: about `0.000066s` to `0.000071s`
-- shared model container creation in test mode: about `0.0023s` to `0.0031s`
-
-These are reference numbers, not fail-the-build budgets yet.
+Treat current values as instrumentation, not budgets. Review repeated-run spread and relative standard deviation before calling a regression or setting thresholds.
 
 ## Result-bundle workflow
 
@@ -205,10 +202,13 @@ After any run:
 2. read the summary
 3. only then read raw logs if the summary is insufficient
 
+Use `--all` when the command produced more than one bundle and you need one machine-readable view of the full run.
+
 ### What the summary gives you
 
 - action title
 - bundle path
+- gate path when using `--all`
 - device and runtime
 - pass, fail, skip, and total counts
 - failed and skipped test identifiers
@@ -222,6 +222,9 @@ After any run:
 ./scripts/test-ios.sh app-ui
 ./scripts/xcresult-summary.sh --latest
 ./scripts/xcresult-summary.sh --latest --json
+
+./scripts/test-ios.sh stable
+./scripts/xcresult-summary.sh --all --json
 ```
 
 ## AI failure triage workflow
@@ -263,6 +266,12 @@ Only promote an experimental test into the stable lane when:
 
 At the moment, this rule mainly applies to `KeyboardDismissUITests`.
 
+Current status:
+
+- `KeyboardDismissUITests` is still experimental
+- repeated local evidence is mixed rather than decisively green
+- do not promote it or describe it as nearly ready until the documented thresholds are actually satisfied
+
 ## Preferred verification flows
 
 ### VoiceCore logic change
@@ -288,7 +297,7 @@ At the moment, this rule mainly applies to `KeyboardDismissUITests`.
 
 1. `xcodebuild ... -only-testing:VoiceCoreTests/VoiceCorePerformanceTests`
 2. `xcodebuild ... -testPlan heard-experimental -only-testing:heardTests/AppStartupPerformanceTests`
-3. compare observed values against the provisional reference numbers
+3. compare repeated-run spread before treating any value like a budget
 
 ## Manual validation reminders
 

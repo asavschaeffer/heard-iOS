@@ -27,6 +27,12 @@ Experimental hosted coverage:
 
 - `AppStartupPerformanceTests`
 
+Current status:
+
+- hosted perf remains experimental
+- current measurements are useful for comparison and investigation
+- current variance is too high to treat them as hard budgets
+
 The stable `heard` plan skips `AppStartupPerformanceTests` so `app-smoke` remains smoke-only.
 
 The experimental `heard` plan skips `AppLaunchSmokeTests` so hosted perf work can run without duplicating stable smoke.
