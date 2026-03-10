@@ -2,7 +2,11 @@ import Foundation
 import SwiftData
 
 enum UITestScenario: String {
+    case editorFlows = "editor_flows"
     case keyboardDismiss = "keyboard_dismiss"
+    case searchFiltering = "search_filtering"
+    case emptyState = "empty_state"
+    case attachmentsBasic = "attachments_basic"
 }
 
 enum UITestSupport {
@@ -18,11 +22,7 @@ enum UITestSupport {
 
     static func configure(container: ModelContainer) {
         guard isEnabled else { return }
-
-        switch scenario {
-        case .keyboardDismiss, .none:
-            seedKeyboardDismissScenario(into: container.mainContext)
-        }
+        UITestScenarioFixtures.seed(scenario ?? .editorFlows, into: container.mainContext)
     }
 
     static func identifierSlug(_ value: String) -> String {
@@ -35,39 +35,5 @@ enum UITestSupport {
             options: .regularExpression
         )
         return collapsed.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
-    }
-
-    private static func seedKeyboardDismissScenario(into context: ModelContext) {
-        let butter = Ingredient(
-            name: "UI Test Butter",
-            quantity: 1,
-            unit: .piece,
-            category: .dairy,
-            location: .fridge
-        )
-
-        let recipe = Recipe(
-            name: "UI Test Pasta",
-            description: "Seeded recipe for UI keyboard dismissal checks.",
-            ingredients: [
-                RecipeIngredient(name: "Pasta", quantity: 1, unit: .boxes),
-                RecipeIngredient(name: "Butter", quantity: 2, unit: .tablespoons)
-            ],
-            steps: [
-                RecipeStep(instruction: "Boil pasta.", orderIndex: 0),
-                RecipeStep(instruction: "Toss with butter.", orderIndex: 1)
-            ],
-            prepTime: 5,
-            cookTime: 10,
-            servings: 2,
-            tags: ["ui-test"],
-            difficulty: .easy,
-            source: .userCreated
-        )
-
-        context.insert(butter)
-        context.insert(recipe)
-
-        try? context.save()
     }
 }

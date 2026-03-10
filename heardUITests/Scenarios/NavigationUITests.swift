@@ -6,7 +6,7 @@ final class NavigationUITests: XCTestCase {
     }
 
     func testInventoryDetailDismissReturnsToInventoryList() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Inventory"].tap()
 
@@ -27,7 +27,7 @@ final class NavigationUITests: XCTestCase {
     }
 
     func testRecipeDetailAndEditDismissReturnToRecipesList() {
-        let app = UIHarness.launchApp()
+        let app = UIHarness.launchApp(scenario: .editorFlows)
 
         app.tabBars.buttons["Recipes"].tap()
 
