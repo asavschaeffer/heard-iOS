@@ -113,11 +113,11 @@ class GeminiService: NSObject {
         let envKey = ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
         self.apiKey = plistKey ?? envKey ?? ""
 
-        print("[Gemini] API key loaded: \(!apiKey.isEmpty ? "✓" : "✗")")
+        VoiceDiagnostics.gemini("[Gemini] API key loaded: \(!apiKey.isEmpty ? "✓" : "✗")")
         if apiKey.isEmpty {
-            print("[Gemini] Info.plist key: \(!(plistKey?.isEmpty ?? true) ? "✓" : "✗")")
-            print("[Gemini] Environment key: \(!(envKey?.isEmpty ?? true) ? "✓" : "✗")")
-            print("[Gemini] Add GEMINI_API_KEY to Secrets.xcconfig or environment")
+            VoiceDiagnostics.fault("[Gemini] Info.plist key: \(!(plistKey?.isEmpty ?? true) ? "✓" : "✗")")
+            VoiceDiagnostics.fault("[Gemini] Environment key: \(!(envKey?.isEmpty ?? true) ? "✓" : "✗")")
+            VoiceDiagnostics.fault("[Gemini] Add GEMINI_API_KEY to Secrets.xcconfig or environment")
         }
 
         super.init()
@@ -219,12 +219,20 @@ class GeminiService: NSObject {
         }
     }
 
+    private func debugLog(_ message: @autoclosure () -> String) {
+        VoiceDiagnostics.gemini(message())
+    }
+
+    private func faultLog(_ message: @autoclosure () -> String) {
+        VoiceDiagnostics.fault(message())
+    }
+
     private func logSocketEvent(_ event: String, extra: String = "") {
         let linkedPendingMessage = pendingMessageID.map { String($0.uuidString.prefix(8)) } ?? "none"
         let lastChunkAgeMs = lastStreamChunkAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1
         let inboundTurn = inboundTurnID ?? "none"
         let suffix = extra.isEmpty ? "" : " \(extra)"
-        print(
+        debugLog(
             "[Gemini] \(activeWebSocketSessionID) \(event)\(suffix) | connected=\(isConnected) accepted=\(hasAccepted) streaming=\(isStreamingResponse) mode=\(describe(mode: currentMode)) pendingMessage=\(linkedPendingMessage) inboundTurn=\(inboundTurn) lastChunkAgeMs=\(lastChunkAgeMs) disconnectReason=\(pendingDisconnectReason)"
         )
     }
@@ -270,7 +278,7 @@ class GeminiService: NSObject {
         let payload: [String: Any] = ["setup": setup]
         logSocketEvent("sending setup", extra: "model=\(model) mode=\(describe(mode: config.mode))")
         if case let .failure(error) = sendJSON(payload) {
-            print("[Gemini] Setup send failed before dispatch: \(error.localizedDescription)")
+            faultLog("[Gemini] Setup send failed before dispatch: \(error.localizedDescription)")
             delegate?.geminiService(self, didReceiveError: error)
         }
     }
@@ -348,14 +356,14 @@ class GeminiService: NSObject {
 
     func sendAudio(data: Data) {
         guard isConnected else {
-            print("[Gemini] Dropping audio chunk while disconnected, bytes=\(data.count)")
+            debugLog("[Gemini] Dropping audio chunk while disconnected, bytes=\(data.count)")
             return
         }
 
         sentAudioChunkCount += 1
         sentAudioByteCount += data.count
         if sentAudioChunkCount == 1 || sentAudioChunkCount % 200 == 0 {
-            print("[Gemini] Sent audio chunk #\(sentAudioChunkCount), bytes=\(data.count), totalBytes=\(sentAudioByteCount)")
+            debugLog("[Gemini] Sent audio chunk #\(sentAudioChunkCount), bytes=\(data.count), totalBytes=\(sentAudioByteCount)")
         }
 
         let base64Audio = data.base64EncodedString()
@@ -381,7 +389,7 @@ class GeminiService: NSObject {
         let turnID = nextOutboundTurnID(messageID: messageID)
         // During a call with active WebSocket, send via WebSocket
         if isConnected {
-            print("[Gemini] Outbound turn \(turnID) sendText(ws) chars=\(text.count) messageID=\(messageID?.uuidString ?? "none")")
+            debugLog("[Gemini] Outbound turn \(turnID) sendText(ws) chars=\(text.count) messageID=\(messageID?.uuidString ?? "none")")
             let message: [String: Any] = [
                 "clientContent": [
                     "turns": [
@@ -404,7 +412,7 @@ class GeminiService: NSObject {
         }
 
         // Otherwise use REST API
-        print("[Gemini] Outbound turn \(turnID) sendText(rest) chars=\(text.count) messageID=\(messageID?.uuidString ?? "none")")
+        debugLog("[Gemini] Outbound turn \(turnID) sendText(rest) chars=\(text.count) messageID=\(messageID?.uuidString ?? "none")")
         sendTextREST(text, messageID: messageID)
         return .success(())
     }
@@ -413,7 +421,7 @@ class GeminiService: NSObject {
     func sendPhoto(_ imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
         let turnID = nextOutboundTurnID(messageID: messageID)
         if isConnected {
-            print("[Gemini] Outbound turn \(turnID) sendPhoto(ws) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
+            debugLog("[Gemini] Outbound turn \(turnID) sendPhoto(ws) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
             let base64Image = imageData.base64EncodedString()
             let message: [String: Any] = [
                 "clientContent": [
@@ -441,7 +449,7 @@ class GeminiService: NSObject {
             return result
         }
 
-        print("[Gemini] Outbound turn \(turnID) sendPhoto(rest) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
+        debugLog("[Gemini] Outbound turn \(turnID) sendPhoto(rest) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
         sendPhotoREST(imageData, messageID: messageID)
         return .success(())
     }
@@ -450,7 +458,7 @@ class GeminiService: NSObject {
     func sendTextWithPhoto(_ text: String, imageData: Data, messageID: UUID? = nil) -> Result<Void, Error> {
         let turnID = nextOutboundTurnID(messageID: messageID)
         if isConnected {
-            print("[Gemini] Outbound turn \(turnID) sendTextWithPhoto(ws) chars=\(text.count) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
+            debugLog("[Gemini] Outbound turn \(turnID) sendTextWithPhoto(ws) chars=\(text.count) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
             let base64Image = imageData.base64EncodedString()
             let message: [String: Any] = [
                 "clientContent": [
@@ -479,7 +487,7 @@ class GeminiService: NSObject {
             return result
         }
 
-        print("[Gemini] Outbound turn \(turnID) sendTextWithPhoto(rest) chars=\(text.count) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
+        debugLog("[Gemini] Outbound turn \(turnID) sendTextWithPhoto(rest) chars=\(text.count) imageBytes=\(imageData.count) messageID=\(messageID?.uuidString ?? "none")")
         sendTextWithPhotoREST(text, imageData: imageData, messageID: messageID)
         return .success(())
     }
@@ -488,7 +496,7 @@ class GeminiService: NSObject {
 
     func sendTextREST(_ text: String, messageID: UUID? = nil) {
         let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
-        print("[Gemini] Outbound turn \(turnID) compose REST text parts=1 chars=\(text.count)")
+        debugLog("[Gemini] Outbound turn \(turnID) compose REST text parts=1 chars=\(text.count)")
         let userParts: [[String: Any]] = [["text": text]]
         let userTurn: [String: Any] = ["role": "user", "parts": userParts]
         sendRESTRequest(userTurn: userTurn, messageID: messageID)
@@ -496,7 +504,7 @@ class GeminiService: NSObject {
 
     func sendPhotoREST(_ imageData: Data, messageID: UUID? = nil) {
         let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
-        print("[Gemini] Outbound turn \(turnID) compose REST image parts=1 imageBytes=\(imageData.count)")
+        debugLog("[Gemini] Outbound turn \(turnID) compose REST image parts=1 imageBytes=\(imageData.count)")
         let base64Image = imageData.base64EncodedString()
         let userParts: [[String: Any]] = [
             ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]]
@@ -507,7 +515,7 @@ class GeminiService: NSObject {
 
     func sendTextWithPhotoREST(_ text: String, imageData: Data, messageID: UUID? = nil) {
         let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
-        print("[Gemini] Outbound turn \(turnID) compose REST text+image parts=2 chars=\(text.count) imageBytes=\(imageData.count)")
+        debugLog("[Gemini] Outbound turn \(turnID) compose REST text+image parts=2 chars=\(text.count) imageBytes=\(imageData.count)")
         let base64Image = imageData.base64EncodedString()
         let userParts: [[String: Any]] = [
             ["text": text],
@@ -526,7 +534,7 @@ class GeminiService: NSObject {
         let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
         let restInboundID = "in-rest-\(inboundRESTTurnSequence + 1)"
         let startedAt = Date()
-        print("[Gemini] Inbound turn \(restInboundID) started linkedOutbound=\(turnID) mode=rest")
+        debugLog("[Gemini] Inbound turn \(restInboundID) started linkedOutbound=\(turnID) mode=rest")
         delegate?.geminiServiceDidStartResponse(self)
 
         // Append user turn to history
@@ -541,11 +549,11 @@ class GeminiService: NSObject {
                 await MainActor.run {
                     if !responseText.isEmpty {
                         let preview = responseText.count > 160 ? String(responseText.prefix(160)) + "..." : responseText
-                        print("[Gemini] Inbound turn \(restInboundID) restText chars=\(responseText.count) preview=\(preview)")
+                        self.debugLog("[Gemini] Inbound turn \(restInboundID) restText chars=\(responseText.count) preview=\(preview)")
                         self.delegate?.geminiService(self, didReceiveResponse: responseText)
                     }
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                    print("[Gemini] Inbound turn \(restInboundID) complete elapsedMs=\(elapsedMs) textParts=\(responseText.isEmpty ? 0 : 1) audioChunks=0 audioBytes=0 transcriptParts=0")
+                    self.debugLog("[Gemini] Inbound turn \(restInboundID) complete elapsedMs=\(elapsedMs) textParts=\(responseText.isEmpty ? 0 : 1) audioChunks=0 audioBytes=0 transcriptParts=0")
                     self.inboundRESTTurnSequence += 1
                     self.delegate?.geminiServiceDidEndResponse(self)
                 }
@@ -554,7 +562,7 @@ class GeminiService: NSObject {
             } catch {
                 await MainActor.run {
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                    print("[Gemini] Inbound turn \(restInboundID) failed elapsedMs=\(elapsedMs) error=\(error.localizedDescription)")
+                    self.debugLog("[Gemini] Inbound turn \(restInboundID) failed elapsedMs=\(elapsedMs) error=\(error.localizedDescription)")
                     self.inboundRESTTurnSequence += 1
                     self.delegate?.geminiService(self, didReceiveError: error)
                     self.delegate?.geminiServiceDidEndResponse(self)
@@ -585,7 +593,7 @@ class GeminiService: NSObject {
 
         guard (200...299).contains(httpResponse.statusCode) else {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("[Gemini REST] HTTP \(httpResponse.statusCode): \(errorBody)")
+            faultLog("[Gemini REST] HTTP \(httpResponse.statusCode): \(errorBody)")
             if httpResponse.statusCode == 429 {
                 throw GeminiError.requestTimeout
             }
@@ -694,7 +702,7 @@ class GeminiService: NSObject {
     /// Uses image/jpeg per Google Live API examples.
     func sendVideoFrame(_ imageData: Data) {
         guard isConnected else { return }
-        print("[Gemini] Outbound realtime video frame send bytes=\(imageData.count)")
+        debugLog("[Gemini] Outbound realtime video frame send bytes=\(imageData.count)")
 
         let base64Image = imageData.base64EncodedString()
         let message: [String: Any] = [
@@ -715,11 +723,11 @@ class GeminiService: NSObject {
 
     func sendVideoAttachment(url: URL, utType: String?) {
         guard isConnected else {
-            print("[Gemini] Video attachment skipped (not connected). url=\(url.lastPathComponent)")
+            debugLog("[Gemini] Video attachment skipped (not connected). url=\(url.lastPathComponent)")
             return
         }
         guard supportsFileAttachments else {
-            print("[Gemini] Video attachment reached stub boundary. file=\(url.lastPathComponent) utType=\(utType ?? "unknown") reason=file-attachment-upload-not-implemented")
+            debugLog("[Gemini] Video attachment reached stub boundary. file=\(url.lastPathComponent) utType=\(utType ?? "unknown") reason=file-attachment-upload-not-implemented")
             return
         }
         // TODO: Upload video attachment when Gemini supports it.
@@ -728,11 +736,11 @@ class GeminiService: NSObject {
 
     func sendDocumentAttachment(url: URL, utType: String?) {
         guard isConnected else {
-            print("[Gemini] Document attachment skipped (not connected). url=\(url.lastPathComponent)")
+            debugLog("[Gemini] Document attachment skipped (not connected). url=\(url.lastPathComponent)")
             return
         }
         guard supportsFileAttachments else {
-            print("[Gemini] Document attachment reached stub boundary. file=\(url.lastPathComponent) utType=\(utType ?? "unknown") reason=file-attachment-upload-not-implemented")
+            debugLog("[Gemini] Document attachment reached stub boundary. file=\(url.lastPathComponent) utType=\(utType ?? "unknown") reason=file-attachment-upload-not-implemented")
             return
         }
         // TODO: Upload document attachment when Gemini supports it.
@@ -772,7 +780,7 @@ class GeminiService: NSObject {
             if let text = String(data: data, encoding: .utf8) {
                 handleTextMessage(text)
             } else {
-                print("[Gemini] Received non-UTF8 binary frame (\(data.count) bytes)")
+                debugLog("[Gemini] Received non-UTF8 binary frame (\(data.count) bytes)")
             }
         @unknown default:
             break
@@ -783,7 +791,7 @@ class GeminiService: NSObject {
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             let trimmed = text.count > 300 ? String(text.prefix(300)) + "..." : text
-            print("[Gemini] Received non-JSON text frame: \(trimmed)")
+            debugLog("[Gemini] Received non-JSON text frame: \(trimmed)")
             return
         }
 
@@ -838,7 +846,7 @@ class GeminiService: NSObject {
             hasAccepted = true
             acceptanceTask?.cancel()
             acceptanceTask = nil
-            print("[Gemini] Accepted and responding")
+            debugLog("[Gemini] Accepted and responding")
         }
 
         // Handle input transcript (user speech-to-text in audio mode)
@@ -877,7 +885,7 @@ class GeminiService: NSObject {
                     guard let pending = pendingMessageID else { return "none" }
                     return outboundTurnByMessageID[pending] ?? "msg-\(pending.uuidString.prefix(8))"
                 }()
-                print("[Gemini] Inbound turn \(turnID) started linkedOutbound=\(linkedOutbound)")
+                debugLog("[Gemini] Inbound turn \(turnID) started linkedOutbound=\(linkedOutbound)")
                 delegate?.geminiServiceDidStartResponse(self)
 
                 // Start heartbeat monitor
@@ -890,7 +898,7 @@ class GeminiService: NSObject {
                             if self.isStreamingResponse,
                                let last = self.lastStreamChunkAt,
                                Date().timeIntervalSince(last) > self.streamHeartbeatTimeout {
-                                print("[Gemini] Stream heartbeat timeout")
+                                self.debugLog("[Gemini] Stream heartbeat timeout")
                                 self.delegate?.geminiService(self, didReceiveError: GeminiError.requestTimeout)
                                 self.isStreamingResponse = false
                                 self.delegate?.geminiServiceDidEndResponse(self)
@@ -908,7 +916,7 @@ class GeminiService: NSObject {
                     inboundTurnTextParts += 1
                     if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
                         inboundTurnFirstEventLogged = true
-                        print("[Gemini] Inbound turn \(turnID) firstEvent=text chars=\(text.count)")
+                        debugLog("[Gemini] Inbound turn \(turnID) firstEvent=text chars=\(text.count)")
                     }
                     delegate?.geminiService(self, didReceiveResponse: text)
                 }
@@ -923,10 +931,10 @@ class GeminiService: NSObject {
                     inboundTurnAudioBytes += audioData.count
                     if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
                         inboundTurnFirstEventLogged = true
-                        print("[Gemini] Inbound turn \(turnID) firstEvent=audio bytes=\(audioData.count)")
+                        debugLog("[Gemini] Inbound turn \(turnID) firstEvent=audio bytes=\(audioData.count)")
                     }
                     if receivedAudioChunkCount == 1 || receivedAudioChunkCount % 200 == 0 {
-                        print("[Gemini] Received audio chunk #\(receivedAudioChunkCount), bytes=\(audioData.count), totalBytes=\(receivedAudioByteCount)")
+                        debugLog("[Gemini] Received audio chunk #\(receivedAudioChunkCount), bytes=\(audioData.count), totalBytes=\(receivedAudioByteCount)")
                     }
                     delegate?.geminiService(self, didReceiveAudio: audioData)
                 }
@@ -936,7 +944,7 @@ class GeminiService: NSObject {
                     inboundTurnTranscriptParts += 1
                     if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
                         inboundTurnFirstEventLogged = true
-                        print("[Gemini] Inbound turn \(turnID) firstEvent=transcript chars=\(transcript.count)")
+                        debugLog("[Gemini] Inbound turn \(turnID) firstEvent=transcript chars=\(transcript.count)")
                     }
                     delegate?.geminiService(self, didReceiveTranscript: transcript, isFinal: turnComplete)
                 }
@@ -951,7 +959,7 @@ class GeminiService: NSObject {
         if isComplete {
             if let turnID = inboundTurnID {
                 let elapsedMs = Int((Date().timeIntervalSince(inboundTurnStartedAt ?? Date())) * 1000)
-                print("[Gemini] Inbound turn \(turnID) complete elapsedMs=\(elapsedMs) textParts=\(inboundTurnTextParts) audioChunks=\(inboundTurnAudioChunks) audioBytes=\(inboundTurnAudioBytes) transcriptParts=\(inboundTurnTranscriptParts)")
+                debugLog("[Gemini] Inbound turn \(turnID) complete elapsedMs=\(elapsedMs) textParts=\(inboundTurnTextParts) audioChunks=\(inboundTurnAudioChunks) audioBytes=\(inboundTurnAudioBytes) transcriptParts=\(inboundTurnTranscriptParts)")
             }
             isStreamingResponse = false
             heartbeatTask?.cancel()
@@ -981,7 +989,7 @@ class GeminiService: NSObject {
 
     private func handleToolCall(_ toolCall: [String: Any]) {
         guard let functionCalls = toolCall["functionCalls"] as? [[String: Any]] else { return }
-        print("[Gemini] Tool call batch received count=\(functionCalls.count)")
+        debugLog("[Gemini] Tool call batch received count=\(functionCalls.count)")
 
         for rawCall in functionCalls {
             guard let id = rawCall["id"] as? String,
@@ -1703,7 +1711,7 @@ class GeminiService: NSObject {
         guard JSONSerialization.isValidJSONObject(json),
               let data = try? JSONSerialization.data(withJSONObject: json),
               let string = String(data: data, encoding: .utf8) else {
-            print("[Gemini] Invalid JSON payload: \(json)")
+            faultLog("[Gemini] Invalid JSON payload: \(json)")
             return .failure(GeminiError.invalidJSON)
         }
 
@@ -1713,7 +1721,9 @@ class GeminiService: NSObject {
 
         task.send(.string(string)) { [weak self] error in
             if let error = error {
-                self?.logSocketEvent("send error", extra: "error=\(error.localizedDescription)")
+                Task { @MainActor [weak self] in
+                    self?.logSocketEvent("send error", extra: "error=\(error.localizedDescription)")
+                }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.delegate?.geminiService(self, didReceiveError: error)

@@ -6,7 +6,25 @@ The audio pipeline handles bidirectional voice communication between the user's 
 - **Capture**: Microphone → resample → PCM16 → base64 → WebSocket → Gemini
 - **Playback**: Gemini → WebSocket → base64 → PCM16 → AVAudioPlayerNode → speaker
 
-## Current State (Broken)
+## Current Architecture
+
+The voice stack is no longer owned directly by `ChatViewModel`. It is now split into a thin internal subsystem under `app/Services/Voice/`:
+- `VoiceCallCoordinator`: Owns call lifecycle, route adaptation, CallKit wiring, and call-facing state publication.
+- `VoiceAudioSessionController`: Owns `AVAudioSession` category, mode, route descriptions, and route/interruption interpretation.
+- `VoiceCaptureEngine`: Owns microphone capture, resampling to 16 kHz PCM16, mute-aware chunk emission, and voice-processing fallback.
+- `VoicePlaybackEngine`: Owns playback graph setup, 24 kHz PCM playout, queue tracking, and restart-after-route-change behavior.
+- `VoiceDiagnostics`: Gates verbose voice logs to debug builds while still allowing faults in release builds.
+
+`ChatViewModel` now acts as the bridge between Gemini transport events and the voice subsystem. It still owns chat messages, transcripts, reconnect scheduling, and other UI-facing state.
+
+## Current State (Implemented)
+
+The two historical correctness fixes remain in place:
+- Capture is explicitly resampled to 16 kHz PCM16 before being sent to Gemini.
+- Playback is configured for Gemini's 24 kHz response audio instead of 16 kHz.
+- Receiver and speaker flips rebuild the local capture/playback graphs when the route change requires it, while preserving the active Gemini websocket session.
+
+## Historical Bugs (Fixed)
 
 ### Bug A: Capture sends wrong sample rate
 

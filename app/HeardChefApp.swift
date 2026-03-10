@@ -7,6 +7,7 @@ private let logger = Logger(subsystem: "com.heardchef", category: "App")
 @main
 struct HeardChefApp: App {
     @StateObject private var warmup = AppWarmup()
+    private let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -31,19 +32,25 @@ struct HeardChefApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ZStack {
-                MainTabView()
+            Group {
+                if isRunningTests {
+                    Color.clear
+                } else {
+                    ZStack {
+                        MainTabView()
 
-                if !warmup.isFinished {
-                    LaunchLoadingView()
-                        .transition(.opacity)
+                        if !warmup.isFinished {
+                            LaunchLoadingView()
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.3), value: warmup.isFinished)
+                    .task {
+                        warmup.runAll()
+                    }
+                    .environmentObject(warmup)
                 }
             }
-            .animation(.easeInOut(duration: 0.3), value: warmup.isFinished)
-            .task {
-                warmup.runAll()
-            }
-            .environmentObject(warmup)
         }
         .modelContainer(sharedModelContainer)
     }

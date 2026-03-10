@@ -7,11 +7,19 @@ For a native "phone call" experience, three Apple frameworks work together:
 - **CallKit**: Integrates with the iOS system call UI (shows call in recents, interruption handling, mute from Control Center)
 - **ActivityKit (Live Activity)**: Shows call status in Dynamic Island when the app is backgrounded
 
+## Current Architecture
+
+CallKit and `AVAudioSession` ownership now live behind `VoiceCallCoordinator` and `VoiceAudioSessionController` instead of sitting directly in `ChatViewModel`.
+- `CallKitManager` remains closure-based and is consumed only by `VoiceCallCoordinator`.
+- `VoiceAudioSessionController` is the only place that sets `.playAndRecord`, `.voiceChat`, preferred input, or output overrides.
+- `VoiceCallCoordinator` owns route-change handling, interruption handling, and the decision to rebuild local audio graphs on receiver/speaker transitions.
+- `ChatViewModel` no longer talks to `AVAudioSession`, `AVAudioEngine`, or `CallKitManager` directly.
+
 ## Current Implementation
 
 ### AVAudioSession Setup
 
-**File**: `ChatViewModel.swift` lines 149-157, 182-190
+**Files**: `app/Services/Voice/VoiceAudioSessionController.swift`, `app/Services/Voice/VoiceCallCoordinator.swift`
 
 ```swift
 let session = AVAudioSession.sharedInstance()
@@ -27,33 +35,21 @@ This is correct. The key options:
 
 ### Speakerphone Toggle
 
-**File**: `ChatViewModel.swift` lines 192-199
-
-```swift
-private func preferSpeaker() {
-    try session.overrideOutputAudioPort(.speaker)
-}
-```
-
-To toggle back to earpiece:
-```swift
-try session.overrideOutputAudioPort(.none)  // Routes to earpiece
-```
-
-Currently `preferSpeaker()` is called once at connection time but there's no toggle exposed to the UI. The `AudioRoutePickerView` wraps `AVRoutePickerView` which shows the system audio route picker — this handles speaker/Bluetooth/earpiece selection natively.
+Speaker preference is now routed through `VoiceCallCoordinator.toggleSpeaker()`. The coordinator reasserts the correct CallKit session when CallKit owns audio, and route overrides are treated as local graph-reconfiguration events instead of pure UI state changes.
 
 ### CallKit Integration
 
 **File**: `app/Services/CallKitManager.swift`
 
-The implementation is minimal but correct:
+The implementation remains intentionally small:
 
 ```
 startCall() → CXStartCallAction → system registers call
                                  → didActivate(audioSession:) callback
                                      → onStartAudio closure fires
-                                         → configureAudioSessionForCall()
-                                         → startAudioCapture()
+                                         → VoiceCallCoordinator.handleCallKitDidActivate()
+                                             → VoiceAudioSessionController.configureActiveCallKitSession()
+                                             → VoiceCaptureEngine.start()
 
 endCall() → CXEndCallAction → system deregisters call
                              → didDeactivate(audioSession:) callback
@@ -64,15 +60,19 @@ Mute from Control Center → CXSetMutedCallAction
                           → onMuteChanged(isMuted) callback
 ```
 
+### Current Behavior
+
+1. `reportConnected()` is now triggered from the coordinator after Gemini transport connects, so the coordinator is the single CallKit consumer.
+2. CallKit-owned route overrides preserve `voiceChat` mode and may rebuild the local audio graphs when the output route changes.
+3. Verbose CallKit and route logs are now funneled through `VoiceDiagnostics`, which keeps them in debug builds and quiets them in release builds.
+
 ### What's Missing
 
-1. **`reportConnected()` timing**: Currently called in `geminiServiceDidConnect()`. This is correct — it tells iOS the outgoing call was answered, which updates the system UI from "Calling..." to the connected state.
+1. **Incoming call support**: Not applicable for the AI call model, but the app still only supports the outgoing-call path.
 
-2. **Incoming call support**: Not applicable (AI doesn't initiate calls), but `CXProviderConfiguration.supportsVideo = false` is set.
+2. **Broader automated coverage**: The new subsystem adds unit coverage for coordinator and session policy decisions, but physical route validation is still required for receiver, speaker, Bluetooth, and interruption behavior.
 
-3. **Call interruption**: The `handleInterruption()` method handles system interruptions (e.g., real phone call comes in). When `.began`, it stops audio capture. When `.ended` with `.shouldResume`, it restarts. This is correct.
-
-4. **Live Activity**: `LiveActivityManager` is all stubs. Without this, there's no Dynamic Island presence when the user backgrounds the app during a call.
+3. **Live Activity**: `LiveActivityManager` is still a stub, so there is no Dynamic Island presence when the app backgrounds during a call.
 
 ## The Call Lifecycle (How It Should Work)
 
