@@ -2,88 +2,115 @@
 
 ## Overview
 
-This document is the source of truth for how to test the app today.
+This document is the source of truth for how to run, interpret, and choose iOS tests in this repo.
 
-There are three active test surfaces today:
+Current automated surfaces:
 
-- `VoiceCoreTests`: the primary automated logic suite for voice/call behavior
-- `heardTests`: a smoke-only app-hosted suite
-- manual device validation: required for route-sensitive audio behavior and richer AI attachment flows
+- `VoiceCoreTests` for deterministic logic
+- `heardTests` for hosted smoke and hosted experimental perf
+- `heardUITests` for simulator-driven interaction coverage
 
-There is also a UI interaction test surface:
+Manual validation still remains required for hardware-truth behaviors such as Bluetooth routing, receiver audio, interruptions, and camera fidelity.
 
-- `heardUITests`: simulator-driven interaction coverage for stable editor flows, modal flows, and opt-in keyboard regressions
+## Canonical simulator target
 
-The current automation split is intentional:
+Default local target:
 
-- reusable subsystem behavior lives in `Modules/VoiceCore/Tests/VoiceCoreTests/`
-- app-host coverage stays minimal in `heardTests/`
-- physical device checks remain mandatory for receiver, speaker, Bluetooth, CallKit, and interruption flows
-
-## Canonical Local Target
-
-Use this simulator target as the default local CLI destination:
-
-- model: `iPhone 17 Pro`
+- device: `iPhone 17 Pro`
 - runtime: `iOS 26.2`
 
-If that runtime is not installed on a machine, choose the nearest current iPhone simulator and update the command explicitly instead of relying on Xcode defaults.
+If `iOS 26.2` is not available, use the nearest current iPhone simulator explicitly instead of relying on Xcode defaults.
 
-## Quick Start
+## Command matrix
 
-Use the shared script entrypoint by default:
+Use `./scripts/test-ios.sh` by default.
+
+### Stable commands
 
 ```sh
 ./scripts/test-ios.sh voicecore
 ./scripts/test-ios.sh app-build
 ./scripts/test-ios.sh app-smoke
 ./scripts/test-ios.sh app-ui
-./scripts/test-ios.sh app-ui-gestures
+./scripts/test-ios.sh stable
 ./scripts/test-ios.sh all
+```
+
+Meaning:
+
+- `voicecore`: non-performance `VoiceCoreTests`
+- `app-build`: hosted app build-for-testing
+- `app-smoke`: stable hosted smoke only
+- `app-ui`: stable hosted UI classes only
+- `stable` and `all`: default full merge gate
+
+### Experimental commands
+
+```sh
+./scripts/test-ios.sh app-ui-gestures
+./scripts/test-ios.sh app-ui-gestures-repeat 10
+./scripts/test-ios.sh experimental
+```
+
+Meaning:
+
+- `app-ui-gestures`: gesture-only UI suite
+- `app-ui-gestures-repeat 10`: repeated gesture stability run with simulator restart between runs
+- `experimental`: VoiceCore perf plus the hosted experimental plan
+
+### Result-bundle commands
+
+```sh
 ./scripts/xcresult-summary.sh --latest
+./scripts/xcresult-summary.sh --latest --json
+./scripts/xcresult-summary.sh --latest --markdown
+./scripts/xcresult-summary.sh --path <bundle>
 ```
 
-The script is the preferred entrypoint for local CLI use, AI agents, and CI because it resolves a concrete simulator, boots it ahead of time, and creates a placeholder `Secrets.xcconfig` when a machine does not already have one.
+Use the JSON mode for automation and AI triage. Use markdown when writing into CI summaries or PR notes.
 
-Raw `xcodebuild` commands remain useful when you want tighter control.
+## Supported environment variables
 
-Use `./scripts/xcresult-summary.sh --latest` after a run when you want a compact summary of the newest result bundle, or `--json` when you want machine-readable output for automation.
+These are the supported testing knobs:
 
-### Run `VoiceCore` tests
+- `UITEST_SCENARIO`
+- `HEARD_ENABLE_GESTURE_UI_TESTS`
+- `IOS_SIMULATOR_ID`
+- `IOS_SIMULATOR_DESTINATION`
+- `DERIVED_DATA_PATH`
 
-```sh
-xcodebuild -project app/HeardChef.xcodeproj -scheme VoiceCore -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' test
-```
+Do not introduce one-off test flags without documenting them here.
 
-Use this as the default automated suite for voice-stack work.
+## Xcode workflow
 
-### Run `heard` smoke tests
+### Schemes and plans
 
-```sh
-xcodebuild -project app/HeardChef.xcodeproj -scheme heard -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' test
-```
+Use:
 
-This validates that the app host and test harness still boot correctly.
+- `VoiceCore` scheme for module logic and VoiceCore perf work
+- `heard` scheme with `heard-stable` for smoke and stable UI work
+- `heard` scheme with `heard-experimental` for gesture and hosted perf work
 
-### Run `heard` build-for-testing
+Shared plans:
 
-```sh
-xcodebuild -project app/HeardChef.xcodeproj -scheme heard -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.2' build-for-testing
-```
+- `app/TestPlans/heard-stable.xctestplan`
+- `app/TestPlans/heard-experimental.xctestplan`
 
-Use this for fast host validation when you want to confirm the app target, test bundle, and simulator destination still build cleanly without paying for a full hosted test run.
+### When to use each plan
 
-### Important: always provide a simulator destination
+Use `heard-stable` when:
 
-Do not rely on plain `xcodebuild test` without `-destination`.
+- validating a product regression before commit
+- iterating on smoke tests
+- iterating on stable CRUD, navigation, or search UI flows
 
-Why:
+Use `heard-experimental` when:
 
-- Xcode can select the wrong platform by default
-- app code depends on iOS-only frameworks such as `CallKit` and `AVAudioSession`
-- omitting `-destination` can lead to misleading failures that are not product regressions
+- measuring gesture flake
+- running hosted performance checks
+- investigating simulator-sensitive failures without risking the stable gate
 
-## Test Targets and Responsibilities
+## Test ownership
 
 ### `VoiceCoreTests`
 
@@ -91,15 +118,13 @@ Location:
 
 - `Modules/VoiceCore/Tests/VoiceCoreTests/`
 
-This is the primary automated logic surface.
+Use for:
 
-Responsibilities:
-
-- call coordinator behavior
-- audio session and route policy decisions
-- capture fallback behavior
-- playback queue and restart behavior
-- explicit call and route state machine coverage
+- coordinators
+- audio session policy
+- capture and playback behavior
+- route state transitions
+- deterministic performance hot paths
 
 ### `heardTests`
 
@@ -107,21 +132,13 @@ Location:
 
 - `heardTests/`
 
-This is intentionally smoke-only.
+Use for:
 
-Allowed coverage:
+- app-host smoke
+- hosted test-mode sanity
+- hosted performance checks that stay out of the stable lane
 
-- app launches in test mode
-- the app-host test harness boots correctly
-- `TestSupport` test mode keeps startup lightweight
-- minimal host integration sanity checks
-
-Not allowed:
-
-- subsystem logic tests
-- audio route policy tests
-- heavy async transport tests
-- attachment or media fixture logic tests unless they are explicitly app-host smoke checks
+Keep this target smoke-first. Do not treat it as a second logic test suite.
 
 ### `heardUITests`
 
@@ -129,186 +146,156 @@ Location:
 
 - `heardUITests/`
 
-This target owns simulator-driven interaction regressions.
+Stable coverage currently includes:
 
-Current coverage:
+- editor open flows
+- inventory create, edit, and delete
+- recipe open, edit, and delete
+- inventory and recipe navigation continuity
+- inventory and recipe search/filter coverage
 
-- stable editor-open coverage in add ingredient, edit ingredient, and edit recipe flows
-- opt-in keyboard dismissal coverage for those same flows
+Experimental coverage currently includes:
 
-Recommended future coverage:
+- keyboard swipe dismissal
 
-- modal and sheet regressions
-- stable navigation and editor regressions by default
-- gesture-based keyboard dismissal regressions once they stabilize in simulator
-- navigation path regressions
-- confirmation dialog flows
-- stable simulator-safe attachment happy paths
+## UI-test scenarios
 
-## Current Known Constraints
+Current scenario names:
 
-- Simulator success does not prove receiver, speaker, Bluetooth, or CallKit route correctness.
-- Physical-device testing is still required for route-sensitive audio behavior.
-- Media-heavy AI flows are only partially automatable today.
-- Attachment flows can be exercised in simulator and on device, but they are not yet backed by a committed deterministic fixture suite.
+- `editor_flows`
+- `search_filtering`
+- `keyboard_dismiss`
+- `empty_state`
+- `attachments_basic`
 
-### Test execution speed
+Scenario rules:
 
-- `VoiceCoreTests` is a non-hosted bundle — tests themselves run in ~0.1s, but simulator boot and xcodebuild overhead add 15–25s wall time on a warm simulator.
-- `heardTests` is hosted — it launches the full app binary (in test mode), so expect 60–90s wall time even though the test logic is instant.
-- `heardUITests` is also hosted and drives the simulator UI, so expect it to be the slowest and most failure-sensitive layer.
-- **Boot the simulator first** to avoid cold-boot delays and transient "Invalid device state" errors:
-  ```sh
-  xcrun simctl boot "iPhone 17 Pro" 2>/dev/null
-  ```
-- For faster iteration, run `VoiceCoreTests` alone. Only run `heardTests` when validating app-host integration.
-- Run `heardUITests` when the change touches user interaction or when doing full pre-merge verification.
-- Run `./scripts/test-ios.sh app-ui-gestures` only when you explicitly want the experimental keyboard-dismiss regression pass.
-- When running from CLI (AI agents, CI), target a specific scheme (`-only-testing:VoiceCoreTests` or `-only-testing:heardTests`) to avoid running both suites every time.
-- If local gesture UI keyboard tests do not show a software keyboard, disable `I/O > Keyboard > Connect Hardware Keyboard` in Simulator and rerun.
-- CI now uploads `.xcresult` bundles as artifacts, so failure triage should start from the preserved result bundle rather than raw log text alone.
+- each class should request its scenario explicitly through `UIHarness.launchApp(scenario:)`
+- scenarios seed deterministic in-memory data only
+- scenario data is reset before each app launch
+- future UI flows should reuse or extend scenario fixtures rather than ad hoc launch data
 
-## Directory Conventions
+## Perf coverage
 
-- `Modules/<Module>/Tests/<Module>Tests/` owns deterministic subsystem coverage
-- `heardTests/Smoke/` owns app-host smoke checks
-- `heardTests/Support/` is reserved for helpers and factories
-- `heardUITests/Scenarios/` owns user-flow regressions
-- `heardUITests/Support/` owns UI harness helpers
-- `docs/testing/testing-strategy.md` explains the ownership model
+Current perf tests:
 
-## Test Mode App Behavior
+- `VoiceCorePerformanceTests`
+- `AppStartupPerformanceTests`
 
-The app now has an explicit lightweight test mode.
+Current policy:
 
-Relevant files:
+- perf tests are experimental only
+- stable `voicecore` skips `VoiceCorePerformanceTests`
+- stable `heard` skips `AppStartupPerformanceTests`
+- `./scripts/test-ios.sh experimental` includes VoiceCore perf plus the hosted experimental plan
 
-- `app/TestSupport.swift`
-- `app/HeardChefApp.swift`
+Initial observed values on `iPhone 17 Pro` / `iOS 26.2`:
 
-Current behavior during tests:
+- capture buffer processing: about `0.00049s` to `0.00064s`
+- playback queue drain: about `0.000066s` to `0.000071s`
+- shared model container creation in test mode: about `0.0023s` to `0.0031s`
 
-- `TestSupport` detects XCTest launch conditions
-- SwiftData uses an in-memory `ModelConfiguration`
-- `HeardChefApp` renders `Color.clear` instead of booting the full warmup/UI stack
-- warmup tasks do not run in test mode
+These are reference numbers, not fail-the-build budgets yet.
 
-This is why `heardTests` should stay narrow and deterministic.
+## Result-bundle workflow
 
-## Manual Validation Matrix
+After any run:
 
-For voice-stack validation, use:
+1. identify the bundle with `--latest` or `--path`
+2. read the summary
+3. only then read raw logs if the summary is insufficient
 
-- `docs/rebuild/04-voice-regression-matrix.md`
+### What the summary gives you
 
-That document is the physical-device checklist for:
+- action title
+- bundle path
+- device and runtime
+- pass, fail, skip, and total counts
+- failed and skipped test identifiers
+- failure issue messages
+- per-test durations
+- attachment filenames when present
 
-- receiver and speaker switching
-- Bluetooth and wired route changes
-- background/foreground transitions
-- CallKit mute and interruption behavior
+### Example
 
-### Attachment Validation Checklist
+```sh
+./scripts/test-ios.sh app-ui
+./scripts/xcresult-summary.sh --latest
+./scripts/xcresult-summary.sh --latest --json
+```
 
-Run these manually before merging AI attachment or media-ingestion changes:
+## AI failure triage workflow
 
-- attach an image from Photos and confirm it appears in the composer and is sent successfully
-- attach a short video and confirm preview, upload, and Gemini-side handling still work
-- exercise the Photos picker on simulator and device
-- exercise camera capture flow if the feature is still enabled in the current build
-- confirm attachment failures produce user-visible errors instead of silent drops
+AI agents should follow this order:
 
-## Local Fixture Workflow
+1. run the smallest relevant command
+2. inspect `./scripts/xcresult-summary.sh --json`
+3. classify the failure
+4. decide the next command before rerunning
 
-Real media fixtures are local-only and intentionally excluded from git.
+Failure classes:
 
-Canonical local fixture root:
+- compile/build failure
+- module logic failure
+- app-host smoke failure
+- stable UI regression
+- experimental gesture instability
+- performance regression
 
-- `TestFixtures.local/`
+Expected next action by class:
 
-Expected layout:
+- compile/build failure: fix project or compile issues first
+- module logic failure: stay in `VoiceCoreTests`
+- smoke failure: inspect `heardTests`, `HeardChefApp`, and test-mode wiring
+- stable UI regression: inspect identifiers, scenario seeding, and navigation assumptions
+- experimental gesture instability: use `app-ui-gestures-repeat` and attachments before changing the test
+- performance regression: rerun the focused perf class and compare observed values before changing budgets
 
-- `TestFixtures.local/audio/`
-- `TestFixtures.local/video/`
-- `TestFixtures.local/images/`
+## Promotion rule for experimental tests
 
-Recommended formats:
+Only promote an experimental test into the stable lane when:
 
-- audio: `.wav`, mono preferred, 48 kHz preferred
-- video: short `.mov` or `.mp4`, small filesize
-- images: `.jpg` or `.png`
+- it passes repeated local runs
+- it passes repeated CI runs
+- it requires no undocumented simulator setting changes
+- the result bundle gives actionable failure diagnostics
+- adding it keeps the default stable path green and fast enough
 
-Recommended starter set:
+At the moment, this rule mainly applies to `KeyboardDismissUITests`.
 
-- `TestFixtures.local/audio/normal-speech.wav`
-- `TestFixtures.local/audio/short-utterance.wav`
-- `TestFixtures.local/audio/pause-middle.wav`
-- `TestFixtures.local/audio/room-noise.wav`
-- `TestFixtures.local/video/short-demo.mov`
-- `TestFixtures.local/images/kitchen-counter.jpg`
-- `TestFixtures.local/images/ingredient-closeup.jpg`
+## Preferred verification flows
 
-Current intended usage:
+### VoiceCore logic change
 
-- manual simulator runs
-- manual device validation
-- future smoke automation
+1. `./scripts/test-ios.sh voicecore`
+2. if needed, focused `xcodebuild` for one VoiceCore test file
+3. if app integration changed, `./scripts/test-ios.sh app-smoke`
 
-Not intended yet:
+### Stable app interaction change
 
-- deterministic unit-test dependencies
-- committed repo fixtures
+1. `./scripts/test-ios.sh app-build`
+2. `./scripts/test-ios.sh app-smoke`
+3. `./scripts/test-ios.sh app-ui`
+4. `./scripts/xcresult-summary.sh --latest`
 
-## Diagnostics and Logs
+### Experimental gesture work
 
-Voice diagnostics are funneled through `VoiceDiagnostics`.
+1. `./scripts/test-ios.sh app-ui-gestures`
+2. `./scripts/test-ios.sh app-ui-gestures-repeat 10`
+3. `./scripts/xcresult-summary.sh --path <failing bundle>`
 
-Current logging expectations:
+### Performance work
 
-- debug builds: verbose audio, route, CallKit, and Gemini lifecycle logs are available
-- release builds: verbose traces should stay quiet and only faults/errors should remain
+1. `xcodebuild ... -only-testing:VoiceCoreTests/VoiceCorePerformanceTests`
+2. `xcodebuild ... -testPlan heard-experimental -only-testing:heardTests/AppStartupPerformanceTests`
+3. compare observed values against the provisional reference numbers
 
-Useful places to inspect behavior:
+## Manual validation reminders
 
-- Xcode test output for `VoiceCore` and `heard`
-- simulator/device console logs
-- runtime logs from `VoiceDiagnostics`
+Still use physical devices for:
 
-When debugging route-sensitive bugs, always correlate:
-
-- route changes
-- CallKit activation/deactivation
-- capture start/stop
-- playback start/stop
-- Gemini websocket lifecycle
-
-## Future Automation Goals
-
-- simulator-driven smoke scenarios for AI attachment flows
-- local fixture-backed smoke checks for image/video/audio ingestion
-- broader deterministic harnesses for Gemini-related feature flows
-- deeper state-machine coverage inside `VoiceCore`
-
-## Preferred Verification Flow
-
-### Voice-Only Changes
-
-1. Run `VoiceCore` tests.
-2. Run `heard` `build-for-testing` with the canonical simulator destination.
-3. Run `heard` smoke tests if the change touches app-side integration.
-4. Run the manual device checklist in `docs/rebuild/04-voice-regression-matrix.md`.
-
-### App-Host Changes
-
-1. Run `heard` `build-for-testing` with the canonical simulator destination.
-2. Run `heard` smoke tests.
-3. Run `heardUITests` if the change touches user interaction.
-4. Run the relevant module tests.
-5. Verify test mode still boots cleanly.
-
-### Attachment / Media Changes
-
-1. Run `heard` `build-for-testing` with the canonical simulator destination.
-2. Run `heard` smoke tests.
-3. Exercise local fixtures manually from `TestFixtures.local/`.
-4. Validate image/video flows on a physical device when camera or route-sensitive behavior is involved.
+- Bluetooth and route truth
+- receiver and speaker truth
+- CallKit activation and interruption truth
+- camera capture fidelity
+- richer attachment and media flows
