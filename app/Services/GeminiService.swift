@@ -96,7 +96,7 @@ class GeminiService: NSObject {
     private let apiKey: String
     private(set) var activeConfig: SessionConfig?
     var currentMode: SessionMode? { activeConfig?.mode }
-    private let baseURL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+    private let baseURL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
     private let restBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 
     // REST conversation history (stateless API needs context each request)
@@ -243,9 +243,17 @@ class GeminiService: NSObject {
     private func sendSetupMessage() {
         let config = activeConfig ?? .audio()
         let model = config.model
+        let payload = makeSetupPayload(config: config)
+        logSocketEvent("sending setup", extra: "model=\(model) mode=\(describe(mode: config.mode))")
+        if case let .failure(error) = sendJSON(payload) {
+            faultLog("[Gemini] Setup send failed before dispatch: \(error.localizedDescription)")
+            delegate?.geminiService(self, didReceiveError: error)
+        }
+    }
 
+    func makeSetupPayload(config: SessionConfig) -> [String: Any] {
         var setup: [String: Any] = [
-            "model": "models/\(model)",
+            "model": "models/\(config.model)",
             "systemInstruction": [
                 "parts": [
                     ["text": systemPrompt]
@@ -268,6 +276,14 @@ class GeminiService: NSObject {
                     ]
                 ]
             ]
+            setup["realtimeInputConfig"] = [
+                "automaticActivityDetection": [
+                    "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
+                    "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
+                    "prefixPaddingMs": 40,
+                    "silenceDurationMs": 500
+                ]
+            ]
             setup["outputAudioTranscription"] = [String: Any]()
             setup["inputAudioTranscription"] = [String: Any]()
         case .text:
@@ -276,12 +292,7 @@ class GeminiService: NSObject {
             ]
         }
 
-        let payload: [String: Any] = ["setup": setup]
-        logSocketEvent("sending setup", extra: "model=\(model) mode=\(describe(mode: config.mode))")
-        if case let .failure(error) = sendJSON(payload) {
-            faultLog("[Gemini] Setup send failed before dispatch: \(error.localizedDescription)")
-            delegate?.geminiService(self, didReceiveError: error)
-        }
+        return ["setup": setup]
     }
 
     private var systemPrompt: String {

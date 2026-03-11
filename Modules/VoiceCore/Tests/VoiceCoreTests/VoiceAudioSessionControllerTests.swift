@@ -38,6 +38,26 @@ final class VoiceAudioSessionControllerTests: XCTestCase {
         XCTAssertEqual(session.lastPreferredInput, .builtInMic)
     }
 
+    func testConfigureNonCallKitSessionPrefersEchoCancelledInputWhenAvailable() {
+        let session = MockVoiceAudioSessionClient()
+        session.isEchoCancelledInputAvailable = true
+        let subject = VoiceAudioSessionController(sessionClient: session)
+
+        subject.configureNonCallKitSession(preferSpeaker: true)
+
+        XCTAssertEqual(session.lastPrefersEchoCancelledInput, true)
+    }
+
+    func testConfigureNonCallKitSessionSkipsEchoCancelledPreferenceWhenUnavailable() {
+        let session = MockVoiceAudioSessionClient()
+        session.isEchoCancelledInputAvailable = false
+        let subject = VoiceAudioSessionController(sessionClient: session)
+
+        subject.configureNonCallKitSession(preferSpeaker: true)
+
+        XCTAssertNil(session.lastPrefersEchoCancelledInput)
+    }
+
     func testOverrideRouteChangeIsMarkedAdaptable() {
         let session = MockVoiceAudioSessionClient()
         let subject = VoiceAudioSessionController(sessionClient: session)
@@ -106,5 +126,12 @@ private final class MockVoiceAudioSessionClient: VoiceAudioSessionClient {
         case .builtInMic:
             preferredInputDescription = "\(AVAudioSession.Port.builtInMic.rawValue):iPhone Microphone"
         }
+    }
+
+    var isEchoCancelledInputAvailable: Bool = true
+    private(set) var lastPrefersEchoCancelledInput: Bool?
+
+    func setPrefersEchoCancelledInput(_ enabled: Bool) throws {
+        lastPrefersEchoCancelledInput = enabled
     }
 }

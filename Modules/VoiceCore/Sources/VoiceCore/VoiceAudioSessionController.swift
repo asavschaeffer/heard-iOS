@@ -66,6 +66,8 @@ protocol VoiceAudioSessionClient: AnyObject {
     func setActive(_ active: Bool) throws
     func overrideOutputAudioPort(_ portOverride: AVAudioSession.PortOverride) throws
     func setPreferredInput(_ preference: VoiceAudioInputPreference) throws
+    var isEchoCancelledInputAvailable: Bool { get }
+    func setPrefersEchoCancelledInput(_ enabled: Bool) throws
 }
 
 final class SystemVoiceAudioSessionClient: VoiceAudioSessionClient {
@@ -119,6 +121,19 @@ final class SystemVoiceAudioSessionClient: VoiceAudioSessionClient {
         }
     }
 
+    var isEchoCancelledInputAvailable: Bool {
+        if #available(iOS 18.2, *) {
+            return session.isEchoCancelledInputAvailable
+        }
+        return false
+    }
+
+    func setPrefersEchoCancelledInput(_ enabled: Bool) throws {
+        if #available(iOS 18.2, *) {
+            try session.setPrefersEchoCancelledInput(enabled)
+        }
+    }
+
     static func routeSnapshot(from route: AVAudioSessionRouteDescription) -> VoiceAudioRouteSnapshot {
         VoiceAudioRouteSnapshot(
             inputs: portSnapshots(from: route.inputs),
@@ -160,6 +175,9 @@ final class VoiceAudioSessionController: VoiceAudioSessionControlling {
             try sessionClient.setCategory(.playAndRecord, mode: .voiceChat, options: options)
             try sessionClient.setPreferredIOBufferDuration(0.02)
             try sessionClient.setActive(true)
+            if sessionClient.isEchoCancelledInputAvailable {
+                try sessionClient.setPrefersEchoCancelledInput(true)
+            }
             if !preferSpeaker {
                 try sessionClient.setPreferredInput(.builtInMic)
             }
