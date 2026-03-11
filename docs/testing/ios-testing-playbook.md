@@ -271,6 +271,10 @@ Current status:
 - `KeyboardDismissUITests` is still experimental
 - repeated local evidence is mixed rather than decisively green
 - do not promote it or describe it as nearly ready until the documented thresholds are actually satisfied
+- inventory sheet swipe-down currently has two accepted experimental outcomes:
+  the focused field can blur, or the sheet can dismiss entirely
+- this is treated as a known UI behavior overlap, not as stable-lane coverage
+  semantics
 
 ## Preferred verification flows
 
@@ -292,6 +296,12 @@ Current status:
 1. `./scripts/test-ios.sh app-ui-gestures`
 2. `./scripts/test-ios.sh app-ui-gestures-repeat 10`
 3. `./scripts/xcresult-summary.sh --path <failing bundle>`
+
+Current note:
+- the inventory add/edit sheets currently conflate keyboard-dismiss and
+  sheet-dismiss on downward swipe
+- the experimental assertion accepts either outcome so the suite can keep
+  measuring regressions while that UI behavior remains unresolved
 
 ### Performance work
 
