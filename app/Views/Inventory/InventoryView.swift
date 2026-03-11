@@ -3,11 +3,13 @@ import SwiftData
 
 struct InventoryView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var navigationState: AppNavigationState
     @Query(sort: \Ingredient.name) private var ingredients: [Ingredient]
 
     @State private var searchText = ""
     @State private var showingAddSheet = false
-    @State private var showingCamera = false
+    @State private var showingCameraCapture = false
+    @State private var attachmentErrorMessage: String?
     @State private var groupBy: GroupBy = .location
     @State private var selectedIngredient: Ingredient?
 
@@ -19,6 +21,8 @@ struct InventoryView: View {
     var body: some View {
         NavigationStack {
             List {
+                scanWithChefSection
+
                 if filteredIngredients.isEmpty {
                     emptyStateView
                 } else {
@@ -43,7 +47,7 @@ struct InventoryView: View {
 
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     Button {
-                        showingCamera = true
+                        openInventoryCamera()
                     } label: {
                         Image(systemName: "camera")
                     }
@@ -60,13 +64,29 @@ struct InventoryView: View {
             .sheet(isPresented: $showingAddSheet) {
                 AddInventoryView()
             }
-            .sheet(isPresented: $showingCamera) {
-                CameraCaptureView()
+            .sheet(isPresented: $showingCameraCapture) {
+                inventoryCameraCaptureView
             }
             .sheet(item: $selectedIngredient) { ingredient in
                 InventoryDetailView(ingredient: ingredient)
             }
+            .alert("Attachment Error", isPresented: attachmentErrorPresented) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(attachmentErrorMessage ?? "Unable to prepare attachment.")
+            }
         }
+    }
+
+    private var attachmentErrorPresented: Binding<Bool> {
+        Binding(
+            get: { attachmentErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    attachmentErrorMessage = nil
+                }
+            }
+        )
     }
 
     // MARK: - Filtered Ingredients
@@ -149,6 +169,45 @@ struct InventoryView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.orange)
+
+            Button("Add From Photo") {
+                openInventoryCamera()
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private var scanWithChefSection: some View {
+        Section {
+            Button(action: openInventoryCamera) {
+                HStack(spacing: 12) {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+                        .frame(width: 40, height: 40)
+                        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Add From Photo")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+
+                        Text("Snap a picture, then Chef adds those ingredients in chat.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("inventory.scanWithChatButton")
         }
     }
 
@@ -156,6 +215,36 @@ struct InventoryView: View {
 
     private func deleteIngredient(_ ingredient: Ingredient) {
         modelContext.delete(ingredient)
+    }
+
+    private var inventoryCameraCaptureView: some View {
+        CameraCaptureFlowView(
+            allowVideo: false,
+            onPick: handleInventoryCapture,
+            onError: { attachmentErrorMessage = $0 }
+        )
+    }
+
+    private func openInventoryCamera() {
+        showingCameraCapture = true
+    }
+
+    private func handleInventoryCapture(_ image: UIImage?, _ videoURL: URL?) {
+        if let image {
+            showingCameraCapture = false
+            routeAcceptedAttachmentToChat(ChatAttachmentService.loadFromCameraImage(image))
+        } else {
+            showingCameraCapture = false
+        }
+    }
+
+    private func routeAcceptedAttachmentToChat(_ attachment: ChatAttachment) {
+        navigationState.openChatSubmission(
+            from: .inventory,
+            draftText: "Add these ingredients to my inventory.",
+            attachment: attachment,
+            shouldAutoSend: true
+        )
     }
 }
 
@@ -376,81 +465,8 @@ struct InventoryDetailView: View {
     }
 }
 
-// MARK: - Camera Capture View (Placeholder)
-
-struct CameraCaptureView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var captureMode: CaptureMode = .receipt
-
-    enum CaptureMode: String, CaseIterable {
-        case receipt = "Receipt"
-        case groceries = "Groceries"
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Picker("Mode", selection: $captureMode) {
-                    ForEach(CaptureMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding()
-
-                Spacer()
-
-                // Camera preview placeholder
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(0.8))
-                    .overlay {
-                        VStack {
-                            Image(systemName: "camera.viewfinder")
-                                .font(.system(size: 60))
-                                .foregroundStyle(.white.opacity(0.5))
-
-                            Text("Camera Preview")
-                                .foregroundStyle(.white.opacity(0.5))
-                                .padding(.top)
-                        }
-                    }
-                    .aspectRatio(3/4, contentMode: .fit)
-                    .padding()
-
-                Spacer()
-
-                // Capture button
-                Button {
-                    // Capture and process image
-                } label: {
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 70, height: 70)
-                        .overlay {
-                            Circle()
-                                .stroke(Color.gray, lineWidth: 3)
-                                .padding(4)
-                        }
-                }
-                .padding(.bottom, 30)
-            }
-            .background(Color.black)
-            .navigationTitle(captureMode == .receipt ? "Scan Receipt" : "Scan Groceries")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .foregroundStyle(.white)
-                }
-            }
-        }
-    }
-}
-
 #Preview {
     InventoryView()
+        .environmentObject(AppNavigationState())
         .modelContainer(for: [Ingredient.self, Recipe.self], inMemory: true)
 }

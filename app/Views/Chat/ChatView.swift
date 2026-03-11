@@ -7,6 +7,7 @@ import VoiceCore
 
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var navigationState: AppNavigationState
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var dictationController = DictationController()
     @StateObject private var settings = ChatSettings()
@@ -43,14 +44,22 @@ struct ChatView: View {
             .fullScreenCover(isPresented: fullScreenCallBinding) { callFullScreenCover }
             .onAppear {
                 viewModel.setModelContext(modelContext)
+                handlePendingChatSubmission()
             }
-            .photosPicker(isPresented: $showPhotosPicker, selection: $selectedItem, matching: .any(of: [.images, .videos]))
+            .photosPicker(
+                isPresented: $showPhotosPicker,
+                selection: $selectedItem,
+                matching: .any(of: [.images, .videos])
+            )
             .sheet(isPresented: $showDocumentPicker) { documentPicker }
             .sheet(isPresented: $showCameraPhotoPicker) { cameraPhotoPicker }
             .alert("Attachment Error", isPresented: attachmentErrorPresented) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(attachmentErrorMessage ?? "Unable to prepare attachment.")
+            }
+            .onChange(of: navigationState.pendingChatSubmission?.id) {
+                handlePendingChatSubmission()
             }
             .onChange(of: selectedItem) { handleSelectedItemChange() }
             .onChange(of: dictationController.transcript) { handleTranscriptChange() }
@@ -74,16 +83,24 @@ struct ChatView: View {
     }
     
     private var cameraPhotoPicker: some View {
-        CameraCapturePicker { image, videoURL in
-            if let videoURL, let attachment = try? ChatAttachmentService.loadFromCameraVideo(videoURL) {
-                selectedAttachment = attachment
-                print("[UI] Attachment selected from camera: kind=video file=\(attachment.filename ?? "unknown")")
-            } else if let image {
-                selectedAttachment = ChatAttachmentService.loadFromCameraImage(image)
-                print("[UI] Attachment selected from camera: kind=image")
-            }
-            showCameraPhotoPicker = false
-        }
+        CameraCaptureFlowView(
+            allowVideo: true,
+            onPick: { image, videoURL in
+                if let videoURL, let attachment = try? ChatAttachmentService.loadFromCameraVideo(videoURL) {
+                    selectedAttachment = attachment
+                    print("[UI] Attachment selected from camera: kind=video file=\(attachment.filename ?? "unknown")")
+                    showCameraPhotoPicker = false
+                } else if let image {
+                    let attachment = ChatAttachmentService.loadFromCameraImage(image)
+                    selectedAttachment = attachment
+                    print("[UI] Attachment selected from camera: kind=image")
+                    showCameraPhotoPicker = false
+                } else {
+                    showCameraPhotoPicker = false
+                }
+            },
+            onError: { attachmentErrorMessage = $0 }
+        )
     }
     
     private func handleSelectedItemChange() {
@@ -125,6 +142,40 @@ struct ChatView: View {
         } else {
             inputText = "\(dictationBaseText) \(trimmed)"
         }
+    }
+
+    private func handlePendingChatSubmission() {
+        guard let submission = navigationState.pendingChatSubmission else { return }
+        navigationState.consumePendingChatSubmission(id: submission.id)
+
+        if submission.shouldAutoSend {
+            sendMessage(submission.draftText, attachment: submission.attachment)
+            return
+        }
+
+        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            inputText = submission.draftText
+        }
+        selectedAttachment = submission.attachment
+    }
+
+    private func sendMessage(_ text: String, attachment: ChatAttachment?) {
+        showAttachmentRow = false
+        if dictationController.isRecording {
+            dictationController.stop()
+        }
+        if let attachment {
+            let imageBytes = attachment.imageData?.count ?? 0
+            print("[UI] Send tapped with attachment. kind=\(attachment.kind) imageBytes=\(imageBytes)")
+        } else {
+            print("[UI] Send tapped with text-only message")
+        }
+        viewModel.sendMessage(text, attachment: attachment)
+        inputText = ""
+        dictationBaseText = ""
+        dictationController.transcript = ""
+        composerResetToken = UUID()
+        selectedAttachment = nil
     }
     
     @ViewBuilder
@@ -179,22 +230,7 @@ struct ChatView: View {
                 },
                 onToggleDictation: handleDictationToggle,
                 onSend: { text in
-                    showAttachmentRow = false
-                    if dictationController.isRecording {
-                        dictationController.stop()
-                    }
-                    if let attachment = selectedAttachment {
-                        let imageBytes = attachment.imageData?.count ?? 0
-                        print("[UI] Send tapped with attachment. kind=\(attachment.kind) imageBytes=\(imageBytes)")
-                    } else {
-                        print("[UI] Send tapped with text-only message")
-                    }
-                    viewModel.sendMessage(text, attachment: selectedAttachment)
-                    inputText = ""
-                    dictationBaseText = ""
-                    dictationController.transcript = ""
-                    composerResetToken = UUID()
-                    selectedAttachment = nil
+                    sendMessage(text, attachment: selectedAttachment)
                 }
             )
         }
@@ -370,4 +406,5 @@ private struct AttachmentPreview: View {
 
 #Preview {
     ChatView()
+        .environmentObject(AppNavigationState())
 }
