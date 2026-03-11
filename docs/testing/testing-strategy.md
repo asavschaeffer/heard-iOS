@@ -265,6 +265,10 @@ Current status:
 - `KeyboardDismissUITests` remains experimental
 - repeat-run evidence is mixed rather than cleanly green
 - the class should not be described as promotion-ready until the documented local and CI thresholds are actually met
+- inventory-sheet swipe-down currently has overlapping outcomes in simulator
+  automation: focus may blur or the sheet may dismiss
+- that overlap is a known product-behavior follow-up, so the experimental suite
+  treats either outcome as success while the interaction remains unresolved
 
 ## Reliability rules
 

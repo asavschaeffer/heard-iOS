@@ -25,8 +25,17 @@ Current status:
 - the gesture suite is measurable with repeat tooling
 - it is not promotion-ready yet
 - failures must remain diagnosable from `.xcresult` before any stable-lane move
+- inventory-sheet swipe-down currently has two valid experimental outcomes:
+  field focus may blur, or the sheet may dismiss entirely
+- this behavior is owned and documented for now, but the UI should eventually
+  separate keyboard-dismiss and sheet-dismiss interactions more clearly
 
 Do not move a UI class into the stable lane until it passes repeated runs and produces actionable diagnostics when it fails.
+
+## Known follow-up
+
+- Resolve the inventory sheet gesture overlap so swipe-down-to-dismiss-keyboard
+  does not also act like swipe-down-to-dismiss-sheet in the same interaction path.
 
 ## Scenarios
 

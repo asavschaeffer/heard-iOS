@@ -159,6 +159,13 @@ AI and humans should inspect the `.xcresult` summary before reading raw logs. Cu
 
 Use `--latest` when you want one bundle. Use `--all` when you want a gate-level summary across the full stable run.
 
+Current experimental note:
+
+- the inventory gesture suite has exposed an unresolved overlap between
+  swipe-down-to-dismiss-keyboard and swipe-down-to-dismiss-sheet
+- that behavior is currently owned as experimental coverage and remains a
+  follow-up UI refinement rather than stable-gate behavior
+
 ## Setup & Requirements
 
 - **Xcode 17.0+** for the current shared test-plan and simulator workflow
