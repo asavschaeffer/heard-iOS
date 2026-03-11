@@ -7,6 +7,7 @@ private let logger = Logger(subsystem: "com.heardchef", category: "App")
 @main
 struct HeardChefApp: App {
     @StateObject private var warmup = AppWarmup()
+    @StateObject private var navigationState = AppNavigationState()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -43,10 +44,12 @@ struct HeardChefApp: App {
                     Color.clear
                 } else if TestSupport.shouldSkipWarmup {
                     MainTabView()
+                        .environmentObject(navigationState)
                         .environmentObject(warmup)
                 } else {
                     ZStack {
                         MainTabView()
+                            .environmentObject(navigationState)
 
                         if !warmup.isFinished {
                             LaunchLoadingView()
@@ -57,6 +60,7 @@ struct HeardChefApp: App {
                     .task {
                         warmup.runAll()
                     }
+                    .environmentObject(navigationState)
                     .environmentObject(warmup)
                 }
             }

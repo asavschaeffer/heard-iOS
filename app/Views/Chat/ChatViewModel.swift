@@ -104,9 +104,16 @@ class ChatViewModel: ObservableObject {
     }
 
     func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
-        self.geminiService = GeminiService(modelContext: context)
-        self.geminiService?.delegate = self
+        if modelContext == nil {
+            modelContext = context
+        }
+        if geminiService == nil {
+            // ChatView can reappear during sheet/tab transitions; preserve the same client so
+            // in-flight REST turns are not orphaned by a fresh GeminiService instance.
+            let service = GeminiService(modelContext: modelContext ?? context)
+            service.delegate = self
+            geminiService = service
+        }
         loadOrCreateThread()
     }
 
