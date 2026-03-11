@@ -65,6 +65,7 @@
 		ECE556762F5FB82700465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		ECE558BA2F5FC41E00465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		ECE5594F2F5FEF6200465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		ECE55A972F60D7E700465205 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		F00000012F60000100000001 /* VoiceCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VoiceCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F00000022F60000100000001 /* VoiceCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoiceCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10000022F70000100000001 /* heardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = heardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -273,6 +274,11 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		ECE55A9C2F60D7E700465205 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
 		F00000192F60000100000001 /* Modules */ = {
 			isa = PBXGroup;
 			children = (
@@ -442,8 +448,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
-					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
+					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = ECE5567A2F5FB82700465205 /* Products */;
@@ -464,6 +470,10 @@
 				{
 					ProductGroup = EC0D26012F390AEF0028674C /* Products */;
 					ProjectRef = EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = ECE55A9C2F60D7E700465205 /* Products */;
+					ProjectRef = ECE55A972F60D7E700465205 /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = EC06F6F12F4D06C400A6A1F9 /* Products */;
@@ -510,8 +520,8 @@
 					ProjectRef = EC7C41422F38EE55009FB9AF /* HeardChef.xcodeproj */;
 				},
 				{
-					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
-					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
+					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
 				},
 			);
 			projectRoot = "";
