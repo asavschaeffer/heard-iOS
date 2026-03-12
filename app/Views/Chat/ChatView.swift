@@ -43,6 +43,10 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { if !isPiP { navigationToolbar } }
             .fullScreenCover(isPresented: fullScreenCallBinding) { callFullScreenCover }
+            .task {
+                await Task.yield()
+                viewModel.prepareForFirstCall()
+            }
             .onAppear {
                 viewModel.setModelContext(modelContext)
                 handlePendingChatSubmission()
@@ -260,6 +264,7 @@ struct ChatView: View {
     private var navigationToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
+                viewModel.noteCallPresentationRequested()
                 callPresentationStyle = .fullScreen
                 isCallScreenPresented = true
             } label: {

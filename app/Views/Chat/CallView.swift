@@ -16,8 +16,9 @@ struct CallView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.callState.isVideoStreaming)
         .task {
-            await Task.yield()
             if !viewModel.callState.isPresented {
+                viewModel.noteCallScreenPresented()
+                await Task.yield()
                 viewModel.startVoiceSession()
             }
         }
