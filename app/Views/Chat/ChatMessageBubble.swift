@@ -33,12 +33,14 @@ struct ChatMessageBubble: View {
                         }
                         
                         if let linkMetadata = linkMetadata {
-                            LinkPreviewView(metadata: linkMetadata)
-                                .frame(maxWidth: 260)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .onTapGesture {
-                                    openLinkInSafari()
-                                }
+                            Button(action: openLinkInSafari) {
+                                LinkPreviewView(metadata: linkMetadata)
+                                    .frame(maxWidth: 260)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Open link preview")
+                                .accessibilityHint("Opens the linked webpage")
                                 .contextMenu {
                                     if let url = firstURL(in: message.text ?? "") {
                                         Button("Copy Link") {
@@ -75,10 +77,13 @@ struct ChatMessageBubble: View {
                     
                     // Red exclamation mark indicator for failed messages
                     if message.status == .failed && message.role.isUser {
-                        failureIndicator
-                            .onTapGesture {
-                                onRetry?(message)
-                            }
+                        Button {
+                            onRetry?(message)
+                        } label: {
+                            failureIndicator
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Retry message")
                     }
                 }
             }
@@ -149,25 +154,30 @@ struct ChatMessageBubble: View {
     private var attachmentView: some View {
         if message.mediaType == .image || (message.mediaType == nil && message.imageData != nil) {
             if let imageData = message.imageData, let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 200)
-                    .cornerRadius(12)
-                    .onTapGesture {
-                        openImagePreview(data: imageData)
-                    }
+                Button {
+                    openImagePreview(data: imageData)
+                } label: {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 200)
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open image attachment")
             }
         } else if message.mediaType == .video {
-            VideoAttachmentView(thumbnailData: message.imageData)
-                .onTapGesture {
-                    openVideoPreview()
-                }
+            Button(action: openVideoPreview) {
+                VideoAttachmentView(thumbnailData: message.imageData)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open video attachment")
         } else if message.mediaType == .document {
-            DocumentAttachmentView(filename: message.mediaFilename, utType: message.mediaUTType)
-                .onTapGesture {
-                    openDocumentPreview()
-                }
+            Button(action: openDocumentPreview) {
+                DocumentAttachmentView(filename: message.mediaFilename, utType: message.mediaUTType)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open document attachment")
         }
     }
 
