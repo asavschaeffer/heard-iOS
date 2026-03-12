@@ -25,6 +25,7 @@ struct ChatView: View {
     @State private var showCameraPhotoPicker = false
     @State private var attachmentErrorMessage: String?
     @State private var callPresentationStyle: CallPresentationStyle = .fullScreen
+    @State private var isCallScreenPresented = false
 
     var body: some View {
         NavigationStack {
@@ -57,6 +58,11 @@ struct ChatView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(attachmentErrorMessage ?? "Unable to prepare attachment.")
+            }
+            .onChange(of: viewModel.callState.isPresented) { _, isPresented in
+                if !isPresented {
+                    isCallScreenPresented = false
+                }
             }
             .onChange(of: navigationState.pendingChatSubmission?.id) {
                 handlePendingChatSubmission()
@@ -241,7 +247,10 @@ struct ChatView: View {
         if viewModel.callState.isPresented && callPresentationStyle == .pictureInPicture {
             PiPCallOverlayView(
                 viewModel: viewModel,
-                onExpand: { callPresentationStyle = .fullScreen },
+                onExpand: {
+                    callPresentationStyle = .fullScreen
+                    isCallScreenPresented = true
+                },
                 onToggleVideo: { viewModel.toggleVideoFromCallView() }
             )
             .transition(.opacity)
@@ -252,7 +261,7 @@ struct ChatView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 callPresentationStyle = .fullScreen
-                viewModel.startVoiceSession()
+                isCallScreenPresented = true
             } label: {
                 Image(systemName: "phone.fill")
             }
@@ -262,17 +271,21 @@ struct ChatView: View {
     private var callFullScreenCover: some View {
         CallView(
             viewModel: viewModel,
-            onMinimize: { callPresentationStyle = .pictureInPicture }
+            onMinimize: {
+                callPresentationStyle = .pictureInPicture
+                isCallScreenPresented = false
+            }
         )
     }
 
     private var fullScreenCallBinding: Binding<Bool> {
         Binding(
             get: {
-                viewModel.callState.isPresented && callPresentationStyle == .fullScreen
+                isCallScreenPresented && callPresentationStyle == .fullScreen
             },
             set: { newValue in
                 if !newValue {
+                    isCallScreenPresented = false
                     if viewModel.callState.isPresented {
                         callPresentationStyle = .pictureInPicture
                     } else {
