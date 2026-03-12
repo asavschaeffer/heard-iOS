@@ -10,7 +10,6 @@ final class AppWarmup: ObservableObject {
     enum Step: String, CaseIterable, Sendable {
         case audioSession = "Audio Session"
         case captureEngine = "Capture Engine"
-        case playbackEngine = "Playback Engine"
         case cameraAuthorization = "Camera Authorization"
         case speechRecognizer = "Speech Recognizer"
         case dataDetector = "Data Detector"
@@ -34,9 +33,6 @@ final class AppWarmup: ObservableObject {
 
             await WarmupWork.captureEngine()
             markDone(.captureEngine)
-
-            await WarmupWork.playbackEngine()
-            markDone(.playbackEngine)
         }
 
         // Camera framework
@@ -112,35 +108,6 @@ private enum WarmupWork {
                     engine.stop()
                 } catch {
                     print("[Warmup] Capture Engine warning: \(error.localizedDescription)")
-                }
-                continuation.resume()
-            }
-        }
-    }
-
-    static func playbackEngine() async {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                print("[Warmup] Playback Engine — loading")
-                let engine = AVAudioEngine()
-                let player = AVAudioPlayerNode()
-                engine.attach(player)
-
-                guard let outputFormat = AVAudioFormat(
-                    standardFormatWithSampleRate: 24_000,
-                    channels: 1
-                ) else {
-                    continuation.resume()
-                    return
-                }
-
-                engine.connect(player, to: engine.mainMixerNode, format: outputFormat)
-                engine.prepare()
-                do {
-                    try engine.start()
-                    engine.stop()
-                } catch {
-                    print("[Warmup] Playback Engine warning: \(error.localizedDescription)")
                 }
                 continuation.resume()
             }

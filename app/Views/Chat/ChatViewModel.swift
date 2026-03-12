@@ -79,6 +79,8 @@ class ChatViewModel: ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var reconnectDelay: TimeInterval = 1.0
     private let maxReconnectDelay: TimeInterval = 30.0
+    private var hasPrewarmedForFirstCall = false
+    private let callStartupTrace = CallStartupTrace()
 
     private struct PendingMessage {
         let message: ChatMessage
@@ -93,6 +95,12 @@ class ChatViewModel: ObservableObject {
         let coordinator = VoiceCallCoordinator(displayName: "Heard, Chef", callKitEnabled: initialCallKitEnabled)
         self.voiceCoordinator = coordinator
         coordinator.delegate = self
+        coordinator.onCallKitActivated = { [weak self] in
+            self?.callStartupTrace.mark(.callKitActivated)
+        }
+        coordinator.onPlaybackStarted = { [weak self] in
+            self?.callStartupTrace.mark(.playbackStarted)
+        }
         coordinator.onCapturedAudio = { [weak self] data in
             self?.geminiService?.sendAudio(data: data)
         }
@@ -115,6 +123,22 @@ class ChatViewModel: ObservableObject {
             geminiService = service
         }
         loadOrCreateThread()
+    }
+
+    func prepareForFirstCall() {
+        guard !hasPrewarmedForFirstCall else { return }
+        hasPrewarmedForFirstCall = true
+        voiceCoordinator.prewarmPlayback()
+        VoiceDiagnostics.audio("[Perf] Shared playback stack prepared for first call")
+    }
+
+    func noteCallPresentationRequested() {
+        callStartupTrace.begin()
+    }
+
+    func noteCallScreenPresented() {
+        callStartupTrace.ensureStarted()
+        callStartupTrace.mark(.callViewPresented)
     }
 
     private func loadOrCreateThread() {
@@ -306,6 +330,8 @@ class ChatViewModel: ObservableObject {
     // MARK: - Voice Session Management
 
     func startVoiceSession() {
+        callStartupTrace.ensureStarted()
+        callStartupTrace.mark(.voiceSessionStarted)
         let wasPresented = callState.isPresented
         voiceCoordinator.startCall()
         // TODO: Start Live Activity when Dynamic Island is implemented.
@@ -319,6 +345,7 @@ class ChatViewModel: ObservableObject {
     }
 
     func stopVoiceSession() {
+        callStartupTrace.finish(reason: "stopped")
         let wasPresented = callState.isPresented
         voiceCoordinator.stopCall()
         // TODO: End Live Activity when Dynamic Island is implemented.
@@ -901,6 +928,7 @@ class ChatViewModel: ObservableObject {
 
 extension ChatViewModel: GeminiServiceDelegate {
     func geminiServiceDidConnect(_ service: GeminiService) {
+        callStartupTrace.mark(.transportConnected)
         connectionState = .connected
         voiceCoordinator.transportDidConnect()
         resetReconnectBackoff()
@@ -929,6 +957,7 @@ extension ChatViewModel: GeminiServiceDelegate {
     }
 
     func geminiService(_ service: GeminiService, didReceiveError error: Error) {
+        callStartupTrace.fail(message: error.localizedDescription)
         connectionState = .error(error.localizedDescription)
         voiceCoordinator.transportDidFail(message: error.localizedDescription)
         isTyping = false
@@ -976,6 +1005,7 @@ extension ChatViewModel: GeminiServiceDelegate {
     }
 
     func geminiService(_ service: GeminiService, didReceiveAudio data: Data) {
+        callStartupTrace.mark(.firstAudioReceived)
         VoiceDiagnostics.gemini("[Gemini] Response audio received bytes=\(data.count)")
         finalizeDraftIfNeeded()
         voiceCoordinator.transportDidReceiveAudio(data)
@@ -1016,5 +1046,68 @@ extension ChatViewModel: VoiceCallCoordinatorDelegate {
 
     func voiceCallCoordinator(_ coordinator: VoiceCallCoordinator, didChangeCallKitEnabled isEnabled: Bool) {
         callKitEnabled = isEnabled
+    }
+}
+
+@MainActor
+private final class CallStartupTrace {
+    enum Phase: String {
+        case callViewPresented = "call-ui-presented"
+        case voiceSessionStarted = "voice-session-started"
+        case callKitActivated = "callkit-activated"
+        case transportConnected = "transport-connected"
+        case firstAudioReceived = "first-audio-received"
+        case playbackStarted = "playback-started"
+    }
+
+    private var startedAt: Date?
+    private var previousPhaseAt: Date?
+    private var recordedPhases: Set<Phase> = []
+
+    func begin() {
+        startedAt = .now
+        previousPhaseAt = startedAt
+        recordedPhases.removeAll()
+        VoiceDiagnostics.audio("[Perf] Call startup phase=begin totalMs=0 stepMs=0")
+    }
+
+    func ensureStarted() {
+        if startedAt == nil {
+            begin()
+        }
+    }
+
+    func mark(_ phase: Phase) {
+        guard let startedAt, !recordedPhases.contains(phase) else { return }
+
+        let now = Date.now
+        let totalMs = milliseconds(from: startedAt, to: now)
+        let stepMs = milliseconds(from: previousPhaseAt ?? startedAt, to: now)
+        VoiceDiagnostics.audio("[Perf] Call startup phase=\(phase.rawValue) totalMs=\(totalMs) stepMs=\(stepMs)")
+        previousPhaseAt = now
+        recordedPhases.insert(phase)
+
+        if phase == .playbackStarted {
+            finish(reason: "complete")
+        }
+    }
+
+    func fail(message: String) {
+        guard let startedAt else { return }
+        let totalMs = milliseconds(from: startedAt, to: .now)
+        VoiceDiagnostics.audio("[Perf] Call startup phase=failed totalMs=\(totalMs) message=\(message)")
+    }
+
+    func finish(reason: String) {
+        guard let startedAt else { return }
+        let totalMs = milliseconds(from: startedAt, to: .now)
+        VoiceDiagnostics.audio("[Perf] Call startup phase=finish totalMs=\(totalMs) reason=\(reason)")
+        self.startedAt = nil
+        previousPhaseAt = nil
+        recordedPhases.removeAll()
+    }
+
+    private func milliseconds(from start: Date, to end: Date) -> Int {
+        Int((end.timeIntervalSince(start) * 1000).rounded())
     }
 }

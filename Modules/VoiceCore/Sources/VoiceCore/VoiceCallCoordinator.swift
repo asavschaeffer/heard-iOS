@@ -25,6 +25,8 @@ public protocol VoiceCallCoordinatorDelegate: AnyObject {
 public final class VoiceCallCoordinator {
     public weak var delegate: VoiceCallCoordinatorDelegate?
     public var onCapturedAudio: ((Data) -> Void)?
+    public var onCallKitActivated: (() -> Void)?
+    public var onPlaybackStarted: (() -> Void)?
 
     private let displayName: String
     private let audioSessionController: VoiceAudioSessionControlling
@@ -177,6 +179,17 @@ public final class VoiceCallCoordinator {
         publishState()
     }
 
+    public func prewarmPlayback() {
+        let wasRunning = playbackEngine.isRunning
+        playbackEngine.prepareIfNeeded()
+        refreshLifecycleRuntime()
+        publishState()
+
+        if !wasRunning && playbackEngine.isRunning {
+            logAudioState("Playback stack prewarmed")
+        }
+    }
+
     func handleRouteChangeNotification(_ notification: Notification) {
         let event = audioSessionController.routeChangeEvent(from: notification)
         handleRouteChange(event)
@@ -247,6 +260,9 @@ public final class VoiceCallCoordinator {
         playbackEngine.onSpeakingChanged = { [weak self] isSpeaking in
             guard let self else { return }
             self.eventSink.record(isSpeaking ? .playbackStarted : .playbackStopped)
+            if isSpeaking {
+                self.onPlaybackStarted?()
+            }
             self.refreshLifecycleRuntime()
             self.publishState()
         }
@@ -258,6 +274,7 @@ public final class VoiceCallCoordinator {
 
         callKitManager?.onStartAudio = { [weak self] in
             self?.handleEvent(.callKitDidActivate)
+            self?.onCallKitActivated?()
         }
         callKitManager?.onStopAudio = { [weak self] in
             self?.handleEvent(.callKitDidDeactivate)
