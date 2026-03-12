@@ -15,8 +15,11 @@ struct CallView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.callState.isVideoStreaming)
-        .onAppear {
-            viewModel.startVoiceSession()
+        .task {
+            await Task.yield()
+            if !viewModel.callState.isPresented {
+                viewModel.startVoiceSession()
+            }
         }
     }
 
