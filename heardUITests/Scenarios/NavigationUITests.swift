@@ -12,13 +12,18 @@ final class NavigationUITests: HeardUITestCase {
 
         let editForm = element("inventory.edit.form", in: app)
         let cancelButton = app.buttons["inventory.edit.cancelButton"]
-        XCTAssertTrue(editForm.waitForExistence(timeout: 2))
-        XCTAssertTrue(cancelButton.waitForExistence(timeout: 2))
+        XCTAssertTrue(editForm.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(cancelButton.waitForExistence(timeout: Self.existenceTimeout))
 
         cancelButton.tap()
 
-        XCTAssertTrue(waitForNonExistence(of: editForm))
-        XCTAssertTrue(ingredientRow.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            waitForTransition(
+                from: "inventory.edit.form",
+                to: "inventory.row.ui_test_butter",
+                in: app
+            )
+        )
         XCTAssertTrue(app.tabBars.buttons["Inventory"].isSelected)
     }
 
@@ -33,25 +38,35 @@ final class NavigationUITests: HeardUITestCase {
 
         let detailView = element("recipe.detail.view", in: app)
         let closeButton = app.buttons["recipe.detail.closeButton"]
-        XCTAssertTrue(detailView.waitForExistence(timeout: 2))
-        XCTAssertTrue(closeButton.waitForExistence(timeout: 2))
+        XCTAssertTrue(detailView.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(closeButton.waitForExistence(timeout: Self.existenceTimeout))
 
         app.buttons["recipe.detail.editButton"].tap()
 
         let editForm = element("recipe.edit.form", in: app)
         let cancelButton = app.buttons["recipe.edit.cancelButton"]
-        XCTAssertTrue(editForm.waitForExistence(timeout: 2))
-        XCTAssertTrue(cancelButton.waitForExistence(timeout: 2))
+        XCTAssertTrue(editForm.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(cancelButton.waitForExistence(timeout: Self.existenceTimeout))
 
         cancelButton.tap()
 
-        XCTAssertTrue(waitForNonExistence(of: editForm))
-        XCTAssertTrue(detailView.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            waitForTransition(
+                from: "recipe.edit.form",
+                to: "recipe.detail.view",
+                in: app
+            )
+        )
 
         closeButton.tap()
 
-        XCTAssertTrue(waitForNonExistence(of: detailView))
-        XCTAssertTrue(recipeCard.waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            waitForTransition(
+                from: "recipe.detail.view",
+                to: "recipes.card.ui_test_pasta",
+                in: app
+            )
+        )
         XCTAssertTrue(app.tabBars.buttons["Recipes"].isSelected)
     }
 }

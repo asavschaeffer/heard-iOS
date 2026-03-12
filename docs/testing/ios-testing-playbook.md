@@ -64,6 +64,8 @@ Stable hosted coverage currently includes:
 - `AppLaunchSmokeTests`
 - `GeminiServiceSetupTests`
 
+Hosted configuration coverage explicitly validates multiple `GeminiService` audio setup payload variants without changing the runtime default profile.
+
 Experimental hosted coverage currently includes:
 
 - `AppStartupPerformanceTests`
@@ -198,15 +200,20 @@ Rules:
 
 ## Result-bundle workflow
 
-After any run:
+Preferred summary flow after any run:
 
-1. identify the bundle with `--latest`, `--path`, or `--all`
-2. read the `.xcresult` summary
-3. only then fall back to raw `xcodebuild` logs
+1. identify the logical run with `--latest-run` or `--run <id>`
+2. read the grouped `.xcresult` summary
+3. only then fall back to a single bundle with `--latest` or `--path`
+4. use `--all` only when you intentionally want historical directory aggregation
 
 Commands:
 
 ```sh
+./scripts/xcresult-summary.sh --latest-run
+./scripts/xcresult-summary.sh --latest-run --json
+./scripts/xcresult-summary.sh --run <run-id>
+./scripts/xcresult-summary.sh --run <run-id> --json
 ./scripts/xcresult-summary.sh --latest
 ./scripts/xcresult-summary.sh --latest --json
 ./scripts/xcresult-summary.sh --latest --markdown
@@ -215,14 +222,14 @@ Commands:
 ./scripts/xcresult-summary.sh --all --json
 ```
 
-Use JSON for automation and AI triage. Use markdown for CI or PR summaries.
+Use `--latest-run --json` for automation and AI triage by default. Use markdown for CI or PR summaries. Use `--all` only for historical directory-level inspection.
 
 ## AI failure triage workflow
 
 AI agents should follow this order:
 
 1. run the smallest relevant command
-2. inspect `./scripts/xcresult-summary.sh --json`
+2. inspect `./scripts/xcresult-summary.sh --latest-run --json`
 3. classify the failure
 4. decide the next command before rerunning
 

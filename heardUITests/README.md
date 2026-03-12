@@ -29,6 +29,10 @@ Experimental:
 
 Diagnostics:
 
+- `./scripts/xcresult-summary.sh --latest-run`
+- `./scripts/xcresult-summary.sh --latest-run --json`
+- `./scripts/xcresult-summary.sh --run <run-id>`
+- `./scripts/xcresult-summary.sh --run <run-id> --json`
 - `./scripts/xcresult-summary.sh --latest`
 - `./scripts/xcresult-summary.sh --latest --json`
 - `./scripts/xcresult-summary.sh --all`
@@ -38,4 +42,5 @@ Diagnostics:
 
 - UI tests stay on XCTest
 - `UIHarness.launchApp(scenario:)` is the required entrypoint for scenario seeding
+- `--latest-run` is the preferred summary mode for one logical verification pass; `--all` is historical aggregation
 - gesture-heavy coverage remains experimental until repeated runs and `.xcresult` diagnostics make it stable-lane worthy

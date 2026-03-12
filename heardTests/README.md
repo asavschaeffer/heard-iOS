@@ -16,6 +16,8 @@ Canonical guidance lives in [docs/testing/ios-testing-playbook.md](../docs/testi
 - `AppLaunchSmokeTests`
 - `GeminiServiceSetupTests`
 
+`GeminiServiceSetupTests` validates the hosted setup payload matrix for the current default audio profile plus explicitly modeled alternative profiles.
+
 ## Experimental hosted coverage
 
 - `AppStartupPerformanceTests`
@@ -25,6 +27,11 @@ Canonical guidance lives in [docs/testing/ios-testing-playbook.md](../docs/testi
 Stable hosted lane:
 
 - `./scripts/test-ios.sh app-smoke`
+
+Preferred summaries:
+
+- `./scripts/xcresult-summary.sh --latest-run --json`
+- `./scripts/xcresult-summary.sh --run <run-id> --json`
 
 Focused hosted perf:
 
