@@ -249,7 +249,7 @@ struct ChatView: View {
     }
     
     private var navigationToolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
+        ToolbarItem(placement: .topBarTrailing) {
             Button {
                 callPresentationStyle = .fullScreen
                 viewModel.startVoiceSession()
