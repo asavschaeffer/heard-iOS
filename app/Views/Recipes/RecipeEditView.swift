@@ -63,14 +63,14 @@ struct RecipeEditView: View {
             .navigationTitle(isEditing ? "Edit Recipe" : "New Recipe")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
                     .accessibilityIdentifier(isEditing ? "recipe.edit.cancelButton" : "recipe.add.cancelButton")
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button(isEditing ? "Save" : "Create") {
                         saveRecipe()
                     }
@@ -533,13 +533,13 @@ struct AddRecipeIngredientView: View {
             .navigationTitle("Add Ingredient")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Add") {
                         let ingredient = RecipeIngredient(
                             name: name,

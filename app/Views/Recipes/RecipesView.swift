@@ -32,7 +32,7 @@ struct RecipesView: View {
             .searchable(text: $searchText, prompt: "Search recipes")
             .navigationTitle("Recipes")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button {
                         withAnimation {
                             showMakeableOnly.toggle()
@@ -46,7 +46,7 @@ struct RecipesView: View {
                     .accessibilityIdentifier("recipes.filterButton")
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showingAddRecipe = true
                     } label: {

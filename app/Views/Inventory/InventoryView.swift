@@ -33,7 +33,7 @@ struct InventoryView: View {
             .searchable(text: $searchText, prompt: "Search ingredients")
             .navigationTitle("Inventory")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Menu {
                         Picker("Group By", selection: $groupBy) {
                             ForEach(GroupBy.allCases, id: \.self) { option in
@@ -45,7 +45,7 @@ struct InventoryView: View {
                     }
                 }
 
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         openInventoryCamera()
                     } label: {
@@ -413,14 +413,14 @@ struct InventoryDetailView: View {
             .navigationTitle("Edit Ingredient")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
                     .accessibilityIdentifier("inventory.edit.cancelButton")
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
                         saveChanges()
                         dismiss()

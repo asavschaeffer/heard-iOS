@@ -54,14 +54,14 @@ struct RecipeDetailView: View {
             .navigationTitle(recipe.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Close") {
                         dismiss()
                     }
                     .accessibilityIdentifier("recipe.detail.closeButton")
                 }
 
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         showingEditSheet = true
                     } label: {
