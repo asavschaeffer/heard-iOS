@@ -228,17 +228,16 @@ struct RecipeEditView: View {
     @ViewBuilder
     private var stepsSection: some View {
         Section {
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, _ in
+            ForEach(steps) { step in
+                @Bindable var step = step
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top) {
-                        Text("\(index + 1).")
+                        Text("\(step.orderIndex + 1).")
                             .foregroundStyle(.secondary)
                             .frame(width: 24)
 
-                        TextField("Step \(index + 1)", text: Binding(
-                            get: { steps[index].instruction },
-                            set: { steps[index].instruction = $0 }
-                        ), axis: .vertical)
+                        TextField("Step \(step.orderIndex + 1)", text: $step.instruction, axis: .vertical)
                         .lineLimit(1...5)
                     }
 
@@ -247,10 +246,7 @@ struct RecipeEditView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        TextField("min", value: Binding(
-                            get: { steps[index].durationMinutes },
-                            set: { steps[index].durationMinutes = $0 }
-                        ), format: .number)
+                        TextField("min", value: $step.durationMinutes, format: .number)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 50)

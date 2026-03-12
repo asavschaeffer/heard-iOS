@@ -126,12 +126,16 @@ struct RecipesView: View {
                     .font(.headline)
             }
 
-                ForEach(filteredRecipes) { recipe in
+            ForEach(filteredRecipes) { recipe in
+                Button {
+                    selectedRecipe = recipe
+                } label: {
                     RecipeCard(recipe: recipe, inventory: ingredients)
-                        .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
-                        .onTapGesture {
-                            selectedRecipe = recipe
-                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
+                .accessibilityLabel("Open recipe \(recipe.name)")
+                .accessibilityHint("Shows recipe details")
             }
         }
     }
@@ -153,11 +157,15 @@ struct RecipesView: View {
                 }
 
                 ForEach(makeable) { recipe in
-                    RecipeCard(recipe: recipe, inventory: ingredients)
-                        .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
-                        .onTapGesture {
-                            selectedRecipe = recipe
-                        }
+                    Button {
+                        selectedRecipe = recipe
+                    } label: {
+                        RecipeCard(recipe: recipe, inventory: ingredients)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
+                    .accessibilityLabel("Open recipe \(recipe.name)")
+                    .accessibilityHint("Shows recipe details")
                 }
             }
         }
@@ -173,11 +181,15 @@ struct RecipesView: View {
                 .padding(.top, makeable.isEmpty ? 0 : 20)
 
                 ForEach(needIngredients) { recipe in
-                    RecipeCard(recipe: recipe, inventory: ingredients)
-                        .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
-                        .onTapGesture {
-                            selectedRecipe = recipe
-                        }
+                    Button {
+                        selectedRecipe = recipe
+                    } label: {
+                        RecipeCard(recipe: recipe, inventory: ingredients)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("recipes.card.\(UITestSupport.identifierSlug(recipe.name))")
+                    .accessibilityLabel("Open recipe \(recipe.name)")
+                    .accessibilityHint("Shows recipe details")
                 }
             }
         }

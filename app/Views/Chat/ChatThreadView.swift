@@ -187,36 +187,14 @@ private struct ToolCallChipRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 8) {
-                Image(systemName: chip.iconName)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .frame(width: 14, height: 14, alignment: .center)
-                Text(chip.actionText)
-                    .font(.caption)
-                    .baselineOffset(0.8)
-                    .foregroundStyle(.primary)
-                if !chip.details.isEmpty {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            if chip.details.isEmpty {
+                chipLabel
+            } else {
+                Button(action: onToggleExpand) {
+                    chipLabel
                 }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(statusColor.opacity(0.12))
-            .clipShape(Capsule())
-            .opacity(chip.status == .pending ? (pulse ? 0.55 : 1.0) : 1.0)
-            .fixedSize(horizontal: true, vertical: false)
-            .contentShape(Capsule())
-            .onTapGesture {
-                onToggleExpand()
-            }
-            .onAppear {
-                guard chip.status == .pending else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                    pulse = true
-                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(chip.actionText), \(isExpanded ? "collapse details" : "expand details")")
             }
 
             if isExpanded, !chip.details.isEmpty {
@@ -249,6 +227,37 @@ private struct ToolCallChipRow: View {
             return .green
         case .error:
             return .red
+        }
+    }
+
+    private var chipLabel: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: chip.iconName)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .frame(width: 14, height: 14, alignment: .center)
+            Text(chip.actionText)
+                .font(.caption)
+                .baselineOffset(0.8)
+                .foregroundStyle(.primary)
+            if !chip.details.isEmpty {
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(statusColor.opacity(0.12))
+        .clipShape(Capsule())
+        .opacity(chip.status == .pending ? (pulse ? 0.55 : 1.0) : 1.0)
+        .fixedSize(horizontal: true, vertical: false)
+        .contentShape(Capsule())
+        .onAppear {
+            guard chip.status == .pending else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
         }
     }
 }

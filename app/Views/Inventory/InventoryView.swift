@@ -109,18 +109,22 @@ struct InventoryView: View {
                 if !items.isEmpty {
                     Section {
                         ForEach(items) { ingredient in
-                            IngredientRow(ingredient: ingredient)
-                                .accessibilityIdentifier("inventory.row.\(UITestSupport.identifierSlug(ingredient.name))")
-                                .onTapGesture {
-                                    selectedIngredient = ingredient
+                            Button {
+                                selectedIngredient = ingredient
+                            } label: {
+                                IngredientRow(ingredient: ingredient)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("inventory.row.\(UITestSupport.identifierSlug(ingredient.name))")
+                            .accessibilityLabel("Open \(ingredient.name)")
+                            .accessibilityHint("Shows ingredient details")
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    deleteIngredient(ingredient)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        deleteIngredient(ingredient)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
+                            }
                         }
                     } header: {
                         Label(location.displayName, systemImage: location.icon)
@@ -134,18 +138,22 @@ struct InventoryView: View {
                 if !items.isEmpty {
                     Section {
                         ForEach(items) { ingredient in
-                            IngredientRow(ingredient: ingredient)
-                                .accessibilityIdentifier("inventory.row.\(UITestSupport.identifierSlug(ingredient.name))")
-                                .onTapGesture {
-                                    selectedIngredient = ingredient
+                            Button {
+                                selectedIngredient = ingredient
+                            } label: {
+                                IngredientRow(ingredient: ingredient)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("inventory.row.\(UITestSupport.identifierSlug(ingredient.name))")
+                            .accessibilityLabel("Open \(ingredient.name)")
+                            .accessibilityHint("Shows ingredient details")
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    deleteIngredient(ingredient)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        deleteIngredient(ingredient)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
+                            }
                         }
                     } header: {
                         Label(category.displayName, systemImage: category.icon)
