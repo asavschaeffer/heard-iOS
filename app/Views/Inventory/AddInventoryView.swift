@@ -124,7 +124,7 @@ struct AddInventoryView: View {
                             .frame(maxWidth: .infinity)
                             .background(Color.orange.opacity(0.15))
                             .foregroundStyle(.orange)
-                            .cornerRadius(8)
+                            .clipShape(.rect(cornerRadius: 8))
                     }
                     .buttonStyle(.plain)
                 }

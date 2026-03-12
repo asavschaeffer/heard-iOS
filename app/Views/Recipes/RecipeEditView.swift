@@ -311,7 +311,7 @@ struct RecipeEditView: View {
                                 .padding(.vertical, 5)
                                 .background(Color.gray.opacity(0.15))
                                 .foregroundStyle(.secondary)
-                                .cornerRadius(6)
+                                .clipShape(.rect(cornerRadius: 6))
                         }
                         .buttonStyle(.plain)
                     }
@@ -437,7 +437,7 @@ struct TagChip: View {
         .padding(.vertical, 5)
         .background(Color.orange.opacity(0.15))
         .foregroundStyle(.orange)
-        .cornerRadius(6)
+        .clipShape(.rect(cornerRadius: 6))
     }
 }
 

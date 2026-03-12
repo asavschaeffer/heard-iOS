@@ -267,7 +267,7 @@ struct RecipeCard: View {
 
             // Tags
             if !recipe.tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(recipe.tags, id: \.self) { tag in
                             Text(tag)
@@ -276,15 +276,16 @@ struct RecipeCard: View {
                                 .padding(.vertical, 4)
                                 .background(Color.orange.opacity(0.15))
                                 .foregroundStyle(.orange)
-                                .cornerRadius(4)
+                                .clipShape(.rect(cornerRadius: 4))
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
             }
         }
         .padding()
         .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .clipShape(.rect(cornerRadius: 12))
         .shadow(color: Color.black.opacity(0.05), radius: 8, y: 2)
     }
 }
