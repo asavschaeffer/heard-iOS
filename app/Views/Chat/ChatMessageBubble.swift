@@ -161,7 +161,7 @@ struct ChatMessageBubble: View {
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: 200)
-                        .cornerRadius(12)
+                        .clipShape(.rect(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open image attachment")
@@ -356,7 +356,7 @@ private struct VideoAttachmentView: View {
                 .background(Color.black.opacity(0.4), in: Circle())
         }
         .frame(maxWidth: 220)
-        .cornerRadius(12)
+        .clipShape(.rect(cornerRadius: 12))
     }
 }
 
@@ -380,7 +380,7 @@ private struct DocumentAttachmentView: View {
         }
         .padding(10)
         .background(Color(.systemGray6))
-        .cornerRadius(10)
+        .clipShape(.rect(cornerRadius: 10))
     }
 
     private var typeLabel: String {

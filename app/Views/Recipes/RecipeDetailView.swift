@@ -117,7 +117,7 @@ struct RecipeDetailView: View {
             }
 
             if !recipe.tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(recipe.tags, id: \.self) { tag in
                             Text(tag)
@@ -126,10 +126,11 @@ struct RecipeDetailView: View {
                                 .padding(.vertical, 5)
                                 .background(Color.orange.opacity(0.15))
                                 .foregroundStyle(.orange)
-                                .cornerRadius(6)
+                                .clipShape(.rect(cornerRadius: 6))
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
             }
         }
     }
@@ -222,7 +223,9 @@ struct RecipeDetailView: View {
                 .fontWeight(.semibold)
 
             let steps = recipe.orderedSteps
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+            ForEach(steps.indices, id: \.self) { index in
+                let step = steps[index]
+
                 HStack(alignment: .top, spacing: 12) {
                     Text("\(index + 1)")
                         .font(.caption)
@@ -273,7 +276,7 @@ struct StatBadge: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(Color.orange.opacity(0.1))
-        .cornerRadius(8)
+        .clipShape(.rect(cornerRadius: 8))
     }
 }
 

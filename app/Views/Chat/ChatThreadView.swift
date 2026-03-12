@@ -14,7 +14,8 @@ struct ChatThreadView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                    ForEach(messages.indices, id: \.self) { index in
+                        let message = messages[index]
                         messageView(for: message, at: index)
                     }
 
@@ -199,7 +200,8 @@ private struct ToolCallChipRow: View {
 
             if isExpanded, !chip.details.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(chip.details.enumerated()), id: \.offset) { _, detail in
+                    ForEach(chip.details.indices, id: \.self) { index in
+                        let detail = chip.details[index]
                         VStack(alignment: .leading, spacing: 2) {
                             Text(detail.key)
                                 .font(.caption2.weight(.semibold))
