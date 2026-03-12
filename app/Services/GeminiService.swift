@@ -9,9 +9,56 @@ enum SessionMode {
     case audio
 }
 
+struct GeminiAudioSetupProfile: Equatable, Sendable {
+    let startOfSpeechSensitivity: String
+    let endOfSpeechSensitivity: String
+    let prefixPaddingMs: Int
+    let silenceDurationMs: Int
+    let includesProactivity: Bool
+
+    static let echoRejectingDefault = GeminiAudioSetupProfile(
+        startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
+        endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+        prefixPaddingMs: 40,
+        silenceDurationMs: 500,
+        includesProactivity: false
+    )
+
+    static let noLowStartSensitivityWithProactivity = GeminiAudioSetupProfile(
+        startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+        endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+        prefixPaddingMs: 40,
+        silenceDurationMs: 500,
+        includesProactivity: true
+    )
+
+    static let fasterTurnTaking300ms = GeminiAudioSetupProfile(
+        startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
+        endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+        prefixPaddingMs: 40,
+        silenceDurationMs: 300,
+        includesProactivity: false
+    )
+
+    var automaticActivityDetection: [String: Any] {
+        [
+            "startOfSpeechSensitivity": startOfSpeechSensitivity,
+            "endOfSpeechSensitivity": endOfSpeechSensitivity,
+            "prefixPaddingMs": prefixPaddingMs,
+            "silenceDurationMs": silenceDurationMs
+        ]
+    }
+
+    var proactivityPayload: [String: Any]? {
+        guard includesProactivity else { return nil }
+        return ["proactiveAudio": true]
+    }
+}
+
 struct SessionConfig {
     let mode: SessionMode
     let model: String
+    let audioSetupProfile: GeminiAudioSetupProfile?
 
     // For Live API (voice/video calls) - requires audio input, outputs audio or text
     static let liveAudioModel = "gemini-2.5-flash-native-audio-preview-12-2025"
@@ -20,11 +67,14 @@ struct SessionConfig {
     static let defaultTextModel = "gemini-2.5-flash"
 
     static func text(model: String = defaultTextModel) -> SessionConfig {
-        SessionConfig(mode: .text, model: model)
+        SessionConfig(mode: .text, model: model, audioSetupProfile: nil)
     }
 
-    static func audio(model: String = liveAudioModel) -> SessionConfig {
-        SessionConfig(mode: .audio, model: model)
+    static func audio(
+        model: String = liveAudioModel,
+        profile: GeminiAudioSetupProfile = .echoRejectingDefault
+    ) -> SessionConfig {
+        SessionConfig(mode: .audio, model: model, audioSetupProfile: profile)
     }
 }
 
@@ -266,6 +316,7 @@ class GeminiService: NSObject {
 
         switch config.mode {
         case .audio:
+            let profile = config.audioSetupProfile ?? .echoRejectingDefault
             setup["generationConfig"] = [
                 "responseModalities": ["AUDIO"],
                 "speechConfig": [
@@ -277,13 +328,11 @@ class GeminiService: NSObject {
                 ]
             ]
             setup["realtimeInputConfig"] = [
-                "automaticActivityDetection": [
-                    "startOfSpeechSensitivity": "START_SENSITIVITY_LOW",
-                    "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
-                    "prefixPaddingMs": 40,
-                    "silenceDurationMs": 500
-                ]
+                "automaticActivityDetection": profile.automaticActivityDetection
             ]
+            if let proactivity = profile.proactivityPayload {
+                setup["proactivity"] = proactivity
+            }
             setup["outputAudioTranscription"] = [String: Any]()
             setup["inputAudioTranscription"] = [String: Any]()
         case .text:

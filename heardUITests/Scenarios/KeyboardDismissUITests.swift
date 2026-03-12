@@ -17,14 +17,14 @@ final class KeyboardDismissUITests: HeardUITestCase {
 
         let nameField = element("inventory.add.nameField", in: app)
         let focusProbe = element("inventory.add.nameField.focusState", in: app)
-        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
-        XCTAssertTrue(focusProbe.waitForExistence(timeout: 2))
+        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(focusProbe.waitForExistence(timeout: Self.existenceTimeout))
         nameField.tap()
 
         assertFocusProbe(focusProbe, equals: focusedValue)
 
         let form = element("inventory.add.form", in: app)
-        XCTAssertTrue(form.waitForExistence(timeout: 2))
+        XCTAssertTrue(form.waitForExistence(timeout: Self.existenceTimeout))
         form.swipeDown()
 
         assertFocusLostOrSheetDismissed(focusProbe: focusProbe, form: form)
@@ -35,19 +35,19 @@ final class KeyboardDismissUITests: HeardUITestCase {
 
         app.tabBars.buttons["Inventory"].tap()
         let ingredientRow = element("inventory.row.ui_test_butter", in: app)
-        XCTAssertTrue(ingredientRow.waitForExistence(timeout: 2))
+        XCTAssertTrue(ingredientRow.waitForExistence(timeout: Self.existenceTimeout))
         ingredientRow.tap()
 
         let nameField = element("inventory.edit.nameField", in: app)
         let focusProbe = element("inventory.edit.nameField.focusState", in: app)
-        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
-        XCTAssertTrue(focusProbe.waitForExistence(timeout: 2))
+        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(focusProbe.waitForExistence(timeout: Self.existenceTimeout))
         nameField.tap()
 
         assertFocusProbe(focusProbe, equals: focusedValue)
 
         let form = element("inventory.edit.form", in: app)
-        XCTAssertTrue(form.waitForExistence(timeout: 2))
+        XCTAssertTrue(form.waitForExistence(timeout: Self.existenceTimeout))
         form.swipeDown()
 
         assertFocusLostOrSheetDismissed(focusProbe: focusProbe, form: form)
@@ -58,20 +58,20 @@ final class KeyboardDismissUITests: HeardUITestCase {
 
         app.tabBars.buttons["Recipes"].tap()
         let recipeCard = element("recipes.card.ui_test_pasta", in: app)
-        XCTAssertTrue(recipeCard.waitForExistence(timeout: 2))
+        XCTAssertTrue(recipeCard.waitForExistence(timeout: Self.existenceTimeout))
         recipeCard.tap()
         app.buttons["recipe.detail.editButton"].tap()
 
         let nameField = element("recipe.edit.nameField", in: app)
         let focusProbe = element("recipe.edit.nameField.focusState", in: app)
-        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
-        XCTAssertTrue(focusProbe.waitForExistence(timeout: 2))
+        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(focusProbe.waitForExistence(timeout: Self.existenceTimeout))
         nameField.tap()
 
         assertFocusProbe(focusProbe, equals: focusedValue)
 
         let form = element("recipe.edit.form", in: app)
-        XCTAssertTrue(form.waitForExistence(timeout: 2))
+        XCTAssertTrue(form.waitForExistence(timeout: Self.existenceTimeout))
         form.swipeDown()
 
         assertFocusLostOrSheetDismissed(focusProbe: focusProbe, form: form)
@@ -94,7 +94,7 @@ final class KeyboardDismissUITests: HeardUITestCase {
             object: probe
         )
 
-        let result = XCTWaiter.wait(for: [expectation], timeout: 4)
+        let result = XCTWaiter.wait(for: [expectation], timeout: Self.focusTransitionTimeout)
         XCTAssertEqual(result, .completed, "Expected focus probe to become \(expectedLabel).", file: file, line: line)
     }
 
@@ -104,7 +104,7 @@ final class KeyboardDismissUITests: HeardUITestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        let deadline = Date().addingTimeInterval(4)
+        let deadline = Date().addingTimeInterval(Self.focusTransitionTimeout)
 
         // Inventory sheets currently treat a downward swipe as either
         // keyboard dismissal or full sheet dismissal depending on how the

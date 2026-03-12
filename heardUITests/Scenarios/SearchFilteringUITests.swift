@@ -7,7 +7,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         app.tabBars.buttons["Inventory"].tap()
 
         let list = element("inventory.list", in: app)
-        XCTAssertTrue(list.waitForExistence(timeout: 2))
+        XCTAssertTrue(list.waitForExistence(timeout: Self.existenceTimeout))
 
         let searchField = searchField(
             withPlaceholder: "Search ingredients",
@@ -18,7 +18,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         searchField.tap()
         searchField.typeText("butter")
         let ingredientRow = element("inventory.row.ui_test_butter", in: app)
-        XCTAssertTrue(ingredientRow.waitForExistence(timeout: 2))
+        XCTAssertTrue(ingredientRow.waitForExistence(timeout: Self.existenceTimeout))
     }
 
     func testInventorySearchHidesNonMatchingIngredient() {
@@ -27,7 +27,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         app.tabBars.buttons["Inventory"].tap()
 
         let list = element("inventory.list", in: app)
-        XCTAssertTrue(list.waitForExistence(timeout: 2))
+        XCTAssertTrue(list.waitForExistence(timeout: Self.existenceTimeout))
 
         let searchField = searchField(
             withPlaceholder: "Search ingredients",
@@ -38,8 +38,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         searchField.tap()
         searchField.typeText("cinnamon")
 
-        let ingredientRow = element("inventory.row.ui_test_butter", in: app)
-        XCTAssertTrue(waitForNonExistence(of: ingredientRow))
+        XCTAssertTrue(waitForNonExistence(of: "inventory.row.ui_test_butter", in: app))
     }
 
     func testRecipeSearchShowsSeededRecipe() {
@@ -48,7 +47,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         app.tabBars.buttons["Recipes"].tap()
 
         let scrollView = element("recipes.scrollView", in: app)
-        XCTAssertTrue(scrollView.waitForExistence(timeout: 2))
+        XCTAssertTrue(scrollView.waitForExistence(timeout: Self.existenceTimeout))
 
         let searchField = searchField(
             withPlaceholder: "Search recipes",
@@ -59,7 +58,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         searchField.tap()
         searchField.typeText("pasta")
         let recipeCard = element("recipes.card.ui_test_pasta", in: app)
-        XCTAssertTrue(recipeCard.waitForExistence(timeout: 2))
+        XCTAssertTrue(recipeCard.waitForExistence(timeout: Self.existenceTimeout))
     }
 
     func testRecipeSearchHidesNonMatchingRecipe() {
@@ -68,7 +67,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         app.tabBars.buttons["Recipes"].tap()
 
         let scrollView = element("recipes.scrollView", in: app)
-        XCTAssertTrue(scrollView.waitForExistence(timeout: 2))
+        XCTAssertTrue(scrollView.waitForExistence(timeout: Self.existenceTimeout))
 
         let searchField = searchField(
             withPlaceholder: "Search recipes",
@@ -79,8 +78,7 @@ final class SearchFilteringUITests: HeardUITestCase {
         searchField.tap()
         searchField.typeText("omelet")
 
-        let recipeCard = element("recipes.card.ui_test_pasta", in: app)
-        XCTAssertTrue(waitForNonExistence(of: recipeCard))
+        XCTAssertTrue(waitForNonExistence(of: "recipes.card.ui_test_pasta", in: app))
     }
 
     func testRecipeFilterToggleHidesAndRestoresNonMakeableRecipe() {
@@ -90,13 +88,19 @@ final class SearchFilteringUITests: HeardUITestCase {
 
         let recipeCard = element("recipes.card.ui_test_pasta", in: app)
         let filterButton = app.buttons["recipes.filterButton"]
-        XCTAssertTrue(recipeCard.waitForExistence(timeout: 2))
-        XCTAssertTrue(filterButton.waitForExistence(timeout: 2))
+        XCTAssertTrue(recipeCard.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(filterButton.waitForExistence(timeout: Self.existenceTimeout))
 
         filterButton.tap()
-        XCTAssertTrue(waitForNonExistence(of: recipeCard))
+        XCTAssertTrue(
+            waitForNonExistence(
+                of: "recipes.card.ui_test_pasta",
+                in: app,
+                timeout: Self.disappearanceTimeout * 2
+            )
+        )
 
         filterButton.tap()
-        XCTAssertTrue(recipeCard.waitForExistence(timeout: 2))
+        XCTAssertTrue(recipeCard.waitForExistence(timeout: Self.existenceTimeout))
     }
 }

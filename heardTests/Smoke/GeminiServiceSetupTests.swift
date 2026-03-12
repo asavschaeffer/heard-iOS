@@ -5,32 +5,59 @@ import Testing
 @Suite(.tags(.hosted, .configuration))
 @MainActor
 struct GeminiServiceSetupTests {
-    // TODO: Test proactiveAudio WITHOUT LOW start sensitivity — untested combination
-    //       that may give better barge-in than current config while still rejecting echo.
-    //       See docs/testing/audio-calibration-testing.md for full test matrix.
+    struct AudioSetupExpectation: Sendable {
+        let name: String
+        let profile: GeminiAudioSetupProfile
+        let expectedProactivity: Bool
+    }
 
-    // TODO: Add a test for silenceDurationMs at 300 (faster turn-taking variant)
-    //       to verify payload shape if we decide to reduce the current 500ms value.
+    private static let audioSetupExpectations = [
+        AudioSetupExpectation(
+            name: "echo rejecting default",
+            profile: .echoRejectingDefault,
+            expectedProactivity: false
+        ),
+        AudioSetupExpectation(
+            name: "proactive audio without low start sensitivity",
+            profile: .noLowStartSensitivityWithProactivity,
+            expectedProactivity: true
+        ),
+        AudioSetupExpectation(
+            name: "faster turn taking at 300ms silence",
+            profile: .fasterTurnTaking300ms,
+            expectedProactivity: false
+        )
+    ]
 
-    @Test
-    func audioSetupPayloadConfiguresVadForEchoRejection() throws {
+    @Test(arguments: Self.audioSetupExpectations)
+    func audioSetupPayloadProfiles(expected: AudioSetupExpectation) throws {
         let service = makeService()
 
-        let payload = service.makeSetupPayload(config: .audio())
+        let payload = service.makeSetupPayload(config: .audio(profile: expected.profile))
         let setup = try #require(payload["setup"] as? [String: Any])
+        let generationConfig = try #require(setup["generationConfig"] as? [String: Any])
         let realtimeInputConfig = try #require(setup["realtimeInputConfig"] as? [String: Any])
         let aad = try #require(
             realtimeInputConfig["automaticActivityDetection"] as? [String: Any]
         )
 
-        // LOW start sensitivity rejects residual echo past iOS AEC
-        #expect(aad["startOfSpeechSensitivity"] as? String == "START_SENSITIVITY_LOW")
-        // End-of-speech tuned to avoid echo decay being misread as speech
-        #expect(aad["endOfSpeechSensitivity"] as? String == "END_SENSITIVITY_LOW")
-        #expect(aad["prefixPaddingMs"] as? Int == 40)
-        #expect(aad["silenceDurationMs"] as? Int == 500)
-        // proactiveAudio disabled — stacked with LOW start sensitivity it suppresses barge-in
-        #expect(setup["proactivity"] == nil)
+        #expect(
+            generationConfig["responseModalities"] as? [String] == ["AUDIO"],
+            "Audio profile \(expected.name) should request audio responses."
+        )
+        #expect(aad["startOfSpeechSensitivity"] as? String == expected.profile.startOfSpeechSensitivity)
+        #expect(aad["endOfSpeechSensitivity"] as? String == expected.profile.endOfSpeechSensitivity)
+        #expect(aad["prefixPaddingMs"] as? Int == expected.profile.prefixPaddingMs)
+        #expect(aad["silenceDurationMs"] as? Int == expected.profile.silenceDurationMs)
+        #expect((setup["proactivity"] != nil) == expected.expectedProactivity)
+        if expected.expectedProactivity {
+            let proactivity = try #require(setup["proactivity"] as? [String: Any])
+            #expect(proactivity["proactiveAudio"] as? Bool == true)
+        } else {
+            #expect(setup["proactivity"] == nil)
+        }
+        #expect(setup["outputAudioTranscription"] as? [String: Any] != nil)
+        #expect(setup["inputAudioTranscription"] as? [String: Any] != nil)
     }
 
     @Test

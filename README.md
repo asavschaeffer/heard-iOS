@@ -134,11 +134,14 @@ Stable hosted coverage currently includes:
 
 Non-UI tests are moving to Swift Testing. UI tests and `measure`-based performance tests remain on XCTest.
 
+`GeminiServiceSetupTests` now covers an explicit matrix of hosted audio setup payload variants while keeping `SessionConfig.audio()` mapped to the current runtime default.
+
 Use [docs/testing/ios-testing-playbook.md](docs/testing/ios-testing-playbook.md) as the testing source of truth. It documents:
 
 - the shared `heard-stable` and `heard-experimental` Xcode test plans
 - simulator resolution and the canonical `iPhone 17 Pro` / `iOS 26.2` target
-- `.xcresult` triage commands and AI failure classification
+- logical-run `.xcresult` triage via `--latest-run` and `--run <id>`
+- historical directory aggregation via `--all`
 - stable vs experimental coverage and promotion rules
 
 ## Setup & Requirements
@@ -192,9 +195,10 @@ The repo is past the highest-risk voice infrastructure phase.
   - stable vs experimental hosted plans under `app/TestPlans/`
   - `.xcresult` summaries as the default diagnostics interface
   - gate-level `.xcresult` aggregation for CI and AI triage
-  - `VoiceCorePerformanceTests` and `AppStartupPerformanceTests` in the experimental lane
-  - gesture-heavy UI regressions stay opt-in until repeated local and CI evidence proves them stable enough for default CI
-  - physical-device validation for route-sensitive truth
+- `VoiceCorePerformanceTests` and `AppStartupPerformanceTests` in the experimental lane
+- gesture-heavy UI regressions stay opt-in until repeated local and CI evidence proves them stable enough for default CI
+- physical-device validation for route-sensitive truth
+- run-grouped `.xcresult` manifests under `.deriveddata/codex-tests/Logs/TestRuns/` for AI-friendly triage
 - The current short-term focus is reliability closure, documentation accuracy, and repeated verification, not another voice rewrite.
 
 ## Roadmap
