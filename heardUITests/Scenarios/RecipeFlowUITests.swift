@@ -1,10 +1,6 @@
 import XCTest
 
-final class RecipeFlowUITests: XCTestCase {
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
+final class RecipeFlowUITests: HeardUITestCase {
     func testOpenSeededRecipeShowsDetailView() {
         let app = UIHarness.launchApp(scenario: .editorFlows)
 
@@ -89,10 +85,6 @@ final class RecipeFlowUITests: XCTestCase {
         XCTAssertTrue(waitForNonExistence(of: recipeCard))
     }
 
-    private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-    }
-
     private func recipeDeleteButton(in app: XCUIApplication) -> XCUIElement {
         let identifiedButton = app.buttons["recipe.edit.deleteButton"].firstMatch
         return identifiedButton.exists ? identifiedButton : app.buttons["Delete Recipe"].firstMatch
@@ -101,30 +93,5 @@ final class RecipeFlowUITests: XCTestCase {
     private func confirmDeleteButton(in app: XCUIApplication) -> XCUIElement {
         let identifiedButton = app.buttons["recipe.edit.confirmDeleteButton"].firstMatch
         return identifiedButton.exists ? identifiedButton : app.buttons["Delete"].firstMatch
-    }
-
-    private func replaceText(in element: XCUIElement, with text: String) {
-        element.tap()
-
-        let currentValue = (element.value as? String) ?? ""
-        if !currentValue.isEmpty, currentValue != element.placeholderValue {
-            element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: currentValue.count))
-        }
-
-        element.typeText(text)
-    }
-
-    private func waitForNonExistence(
-        of element: XCUIElement,
-        timeout: TimeInterval = 2,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> Bool {
-        let predicate = NSPredicate(format: "exists == false")
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
-        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
-        let didDisappear = result == .completed
-        XCTAssertTrue(didDisappear, "Expected element to disappear.", file: file, line: line)
-        return didDisappear
     }
 }

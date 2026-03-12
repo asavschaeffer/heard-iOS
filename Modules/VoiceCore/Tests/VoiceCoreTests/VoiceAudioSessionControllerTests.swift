@@ -1,64 +1,71 @@
-import XCTest
+import Testing
 @preconcurrency import AVFoundation
 @testable import VoiceCore
 
+@Suite(.tags(.voicecore))
 @MainActor
-final class VoiceAudioSessionControllerTests: XCTestCase {
-    func testConfigureActiveCallKitSessionForSpeakerOverridesSpeakerAndClearsPreferredInput() {
+struct VoiceAudioSessionControllerTests {
+    @Test
+    func configureActiveCallKitSessionForSpeakerOverridesSpeakerAndClearsPreferredInput() {
         let session = MockVoiceAudioSessionClient()
         let subject = VoiceAudioSessionController(sessionClient: session)
 
         subject.configureActiveCallKitSession(preferSpeaker: true)
 
-        XCTAssertEqual(session.lastCategory, .playAndRecord)
-        XCTAssertEqual(session.lastMode, .voiceChat)
-        XCTAssertEqual(session.lastOverride, .speaker)
-        XCTAssertEqual(session.lastPreferredInput, VoiceAudioInputPreference.none)
+        #expect(session.lastCategory == .playAndRecord)
+        #expect(session.lastMode == .voiceChat)
+        #expect(session.lastOverride == .speaker)
+        #expect(session.lastPreferredInput == VoiceAudioInputPreference.none)
     }
 
-    func testConfigureActiveCallKitSessionForReceiverPrefersBuiltInMic() {
+    @Test
+    func configureActiveCallKitSessionForReceiverPrefersBuiltInMic() {
         let session = MockVoiceAudioSessionClient()
         let subject = VoiceAudioSessionController(sessionClient: session)
 
         subject.configureActiveCallKitSession(preferSpeaker: false)
 
-        XCTAssertEqual(session.lastOverride, AVAudioSession.PortOverride.none)
-        XCTAssertEqual(session.lastPreferredInput, .builtInMic)
+        #expect(session.lastOverride == AVAudioSession.PortOverride.none)
+        #expect(session.lastPreferredInput == .builtInMic)
     }
 
-    func testConfigureNonCallKitSessionForReceiverAvoidsDefaultToSpeaker() {
+    @Test
+    func configureNonCallKitSessionForReceiverAvoidsDefaultToSpeaker() {
         let session = MockVoiceAudioSessionClient()
         let subject = VoiceAudioSessionController(sessionClient: session)
 
         subject.configureNonCallKitSession(preferSpeaker: false)
 
-        XCTAssertEqual(session.lastCategory, .playAndRecord)
-        XCTAssertEqual(session.lastMode, .voiceChat)
-        XCTAssertFalse(session.lastOptions?.contains(.defaultToSpeaker) ?? true)
-        XCTAssertEqual(session.lastPreferredInput, .builtInMic)
+        #expect(session.lastCategory == .playAndRecord)
+        #expect(session.lastMode == .voiceChat)
+        #expect(session.lastOptions?.contains(.defaultToSpeaker) == false)
+        #expect(session.lastPreferredInput == .builtInMic)
     }
 
-    func testConfigureNonCallKitSessionPrefersEchoCancelledInputWhenAvailable() {
+    @Test
+    func configureNonCallKitSessionPrefersEchoCancelledInputWhenAvailable() {
         let session = MockVoiceAudioSessionClient()
         session.isEchoCancelledInputAvailable = true
         let subject = VoiceAudioSessionController(sessionClient: session)
 
         subject.configureNonCallKitSession(preferSpeaker: true)
 
-        XCTAssertEqual(session.lastPrefersEchoCancelledInput, true)
+        #expect(session.lastPrefersEchoCancelledInput == true)
     }
 
-    func testConfigureNonCallKitSessionSkipsEchoCancelledPreferenceWhenUnavailable() {
+    @Test
+    func configureNonCallKitSessionSkipsEchoCancelledPreferenceWhenUnavailable() {
         let session = MockVoiceAudioSessionClient()
         session.isEchoCancelledInputAvailable = false
         let subject = VoiceAudioSessionController(sessionClient: session)
 
         subject.configureNonCallKitSession(preferSpeaker: true)
 
-        XCTAssertNil(session.lastPrefersEchoCancelledInput)
+        #expect(session.lastPrefersEchoCancelledInput == nil)
     }
 
-    func testOverrideRouteChangeIsMarkedAdaptable() {
+    @Test
+    func overrideRouteChangeIsMarkedAdaptable() {
         let session = MockVoiceAudioSessionClient()
         let subject = VoiceAudioSessionController(sessionClient: session)
         let notification = Notification(
@@ -69,9 +76,9 @@ final class VoiceAudioSessionControllerTests: XCTestCase {
 
         let event = subject.routeChangeEvent(from: notification)
 
-        XCTAssertEqual(event.reason, .override)
-        XCTAssertEqual(event.reasonDescription, "override")
-        XCTAssertTrue(event.shouldAdapt)
+        #expect(event.reason == .override)
+        #expect(event.reasonDescription == "override")
+        #expect(event.shouldAdapt)
     }
 }
 

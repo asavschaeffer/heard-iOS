@@ -18,7 +18,7 @@ Usage: scripts/test-ios.sh <command> [count]
 Commands:
   voicecore          Run VoiceCore module tests only
   app-build          Run heard build-for-testing only
-  app-smoke          Run stable heard smoke tests only
+  app-smoke          Run the stable heard hosted test lane
   app-ui             Run stable heard UI tests only
   app-ui-gestures    Run opt-in gesture-based heard UI tests
   app-ui-gestures-repeat [count]
@@ -67,10 +67,50 @@ resolve_destination() {
         return
     fi
 
+    local devices_json
+    devices_json="$(xcrun simctl list devices available --json)"
+
     local simulator_id
     simulator_id="$(
-        xcrun simctl list devices available |
-            awk -F '[()]' '/iPhone/ && ($0 ~ /Booted/ || $0 ~ /Shutdown/) { print $2; exit }'
+        jq -r '
+            def runtime_version:
+                capture("iOS-(?<versions>[0-9-]+)$").versions
+                | split("-")
+                | map(tonumber);
+
+            [
+                .devices
+                | to_entries[]
+                | select(.key | contains("iOS"))
+                | .key as $runtime
+                | .value[]
+                | select(.isAvailable == true)
+                | {
+                    runtime: $runtime,
+                    version: ($runtime | runtime_version),
+                    name: .name,
+                    udid: .udid
+                }
+            ] as $devices
+            | (
+                $devices
+                | map(select(.name == "iPhone 17 Pro" and .version == [26, 2]))
+                | if length > 0 then .[0].udid else empty end
+            )
+            // (
+                $devices
+                | map(select(.name == "iPhone 17 Pro"))
+                | sort_by(.version)
+                | if length > 0 then .[-1].udid else empty end
+            )
+            // (
+                $devices
+                | map(select(.name | startswith("iPhone")))
+                | sort_by(.version, .name)
+                | if length > 0 then .[-1].udid else empty end
+            )
+            // empty
+        ' <<<"$devices_json"
     )"
 
     if [ -z "$simulator_id" ]; then
@@ -342,6 +382,7 @@ main() {
 
     local destination
     destination="$(resolve_destination)"
+    printf 'Using simulator destination: %s\n' "$destination"
     boot_simulator_if_needed "$destination"
 
     case "$command" in

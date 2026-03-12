@@ -1,10 +1,12 @@
-import XCTest
+import Testing
 @preconcurrency import AVFoundation
 @testable import VoiceCore
 
+@Suite(.tags(.voicecore))
 @MainActor
-final class VoiceCaptureEngineTests: XCTestCase {
-    func testProcessAudioBufferEmitsPCMWhenCaptureIsAllowed() async {
+struct VoiceCaptureEngineTests {
+    @Test
+    func processAudioBufferEmitsPCMWhenCaptureIsAllowed() async {
         let engine = VoiceCaptureEngine()
         let inputFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
@@ -15,12 +17,6 @@ final class VoiceCaptureEngineTests: XCTestCase {
         engine.prepareConverterForTesting(inputFormat: inputFormat)
         engine.shouldSendAudio = { true }
 
-        let expectation = expectation(description: "audio data emitted")
-        engine.onAudioData = { data in
-            XCTAssertFalse(data.isEmpty)
-            expectation.fulfill()
-        }
-
         let buffer = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: 4_800)!
         buffer.frameLength = 4_800
         let channel = buffer.floatChannelData![0]
@@ -28,25 +24,34 @@ final class VoiceCaptureEngineTests: XCTestCase {
             channel[index] = 0.5
         }
 
-        engine.processAudioBufferForTesting(buffer)
+        var receivedChunks = [Data]()
+        engine.onAudioData = { data in
+            receivedChunks.append(data)
+        }
 
-        await fulfillment(of: [expectation], timeout: 1.0)
-        XCTAssertEqual(engine.metrics.chunkCount, 1)
-        XCTAssertGreaterThan(engine.metrics.byteCount, 0)
+        engine.processAudioBufferForTesting(buffer)
+        await flushMainActorTasks()
+
+        #expect(receivedChunks.count == 1)
+        #expect(receivedChunks.first?.isEmpty == false)
+        #expect(engine.metrics.chunkCount == 1)
+        #expect(engine.metrics.byteCount > 0)
     }
 
-    func testRepeatedSilentStopsDisableVoiceProcessingInput() {
+    @Test
+    func repeatedSilentStopsDisableVoiceProcessingInput() {
         let engine = VoiceCaptureEngine()
 
         _ = engine.stop()
         _ = engine.stop()
         _ = engine.stop()
 
-        XCTAssertEqual(engine.consecutiveSilentStops, 3)
-        XCTAssertFalse(engine.useVoiceProcessingInput)
+        #expect(engine.consecutiveSilentStops == 3)
+        #expect(engine.useVoiceProcessingInput == false)
     }
 
-    func testZeroChunkFallbackRequestsRestartAfterThreshold() async {
+    @Test
+    func zeroChunkFallbackRequestsRestartAfterThreshold() async {
         let engine = VoiceCaptureEngine()
         engine.shouldSendAudio = { true }
         let inputFormat = AVAudioFormat(
@@ -58,16 +63,23 @@ final class VoiceCaptureEngineTests: XCTestCase {
         let buffer = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: 32)!
         buffer.frameLength = 32
 
-        let expectation = expectation(description: "fallback requested")
+        var didRequestFallback = false
         engine.onVoiceProcessingFallbackRequested = {
-            expectation.fulfill()
+            didRequestFallback = true
         }
 
         for _ in 0..<150 {
             engine.processAudioBufferForTesting(buffer)
         }
+        await flushMainActorTasks()
 
-        await fulfillment(of: [expectation], timeout: 1.0)
-        XCTAssertFalse(engine.useVoiceProcessingInput)
+        #expect(didRequestFallback)
+        #expect(engine.useVoiceProcessingInput == false)
+    }
+
+    private func flushMainActorTasks(iterations: Int = 5) async {
+        for _ in 0..<iterations {
+            await Task.yield()
+        }
     }
 }

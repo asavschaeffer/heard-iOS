@@ -1,7 +1,7 @@
 # Heard, Chef
 
 ![Status](https://img.shields.io/badge/status-in%20development-yellow)
-![Swift](https://img.shields.io/badge/swift-5.9-orange)
+![Swift](https://img.shields.io/badge/swift%20toolchain-6.2-orange)
 ![Xcode](https://img.shields.io/badge/xcode-17%2B-blue)
 
 > **"Heard, chef!"** - this AI definitely will not say "you're absolutely right!"
@@ -111,7 +111,7 @@ Supporting docs:
 
 ### Testing Workflow
 
-The iOS test system now has a stable default lane and an opt-in experimental lane.
+The iOS test setup keeps one stable default lane and one explicit experimental lane.
 
 Stable commands:
 
@@ -127,48 +127,24 @@ Experimental commands:
 - `./scripts/test-ios.sh app-ui-gestures-repeat 10`
 - `./scripts/test-ios.sh experimental`
 
-Result-bundle diagnostics:
+Stable hosted coverage currently includes:
 
-- `./scripts/xcresult-summary.sh --latest`
-- `./scripts/xcresult-summary.sh --latest --json`
-- `./scripts/xcresult-summary.sh --latest --markdown`
-- `./scripts/xcresult-summary.sh --all`
-- `./scripts/xcresult-summary.sh --all --json`
+- `AppLaunchSmokeTests`
+- `GeminiServiceSetupTests`
 
-Current shared hosted plans live at:
+Non-UI tests are moving to Swift Testing. UI tests and `measure`-based performance tests remain on XCTest.
 
-- `app/TestPlans/heard-stable.xctestplan`
-- `app/TestPlans/heard-experimental.xctestplan`
+Use [docs/testing/ios-testing-playbook.md](docs/testing/ios-testing-playbook.md) as the testing source of truth. It documents:
 
-Current UI-test scenarios are explicit:
-
-- `editor_flows`
-- `search_filtering`
-- `keyboard_dismiss`
-- `empty_state`
-- `attachments_basic`
-
-AI and humans should inspect the `.xcresult` summary before reading raw logs. Current failure classes are:
-
-- build failure
-- module logic failure
-- app-host smoke failure
-- stable UI regression
-- experimental gesture instability
-- performance regression
-
-Use `--latest` when you want one bundle. Use `--all` when you want a gate-level summary across the full stable run.
-
-Current experimental note:
-
-- the inventory gesture suite has exposed an unresolved overlap between
-  swipe-down-to-dismiss-keyboard and swipe-down-to-dismiss-sheet
-- that behavior is currently owned as experimental coverage and remains a
-  follow-up UI refinement rather than stable-gate behavior
+- the shared `heard-stable` and `heard-experimental` Xcode test plans
+- simulator resolution and the canonical `iPhone 17 Pro` / `iOS 26.2` target
+- `.xcresult` triage commands and AI failure classification
+- stable vs experimental coverage and promotion rules
 
 ## Setup & Requirements
 
-- **Xcode 17.0+** for the current shared test-plan and simulator workflow
+- **Xcode 17.x** with the Apple Swift 6.2 toolchain
+- **Swift language mode:** Swift 5
 - **Deployment target:** iOS 17.0+
 - **Canonical test simulator:** iPhone 17 Pro on iOS 26.2, or the nearest installed current runtime
 - **API Key:** Google Gemini API Key (multimodal live access).
