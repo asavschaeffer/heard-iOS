@@ -1,27 +1,12 @@
 import XCTest
 
-final class KeyboardDismissUITests: XCTestCase {
+final class KeyboardDismissUITests: HeardUITestCase {
     private let focusedValue = "focused"
     private let blurredValue = "blurred"
-    private var didAttachFailureScreenshot = false
 
     override func setUpWithError() throws {
-        continueAfterFailure = false
-        didAttachFailureScreenshot = false
+        try super.setUpWithError()
         try requireGestureCoverage()
-    }
-
-    override func record(_ issue: XCTIssue) {
-        if !didAttachFailureScreenshot {
-            didAttachFailureScreenshot = true
-            let screenshot = XCUIScreen.main.screenshot()
-            let attachment = XCTAttachment(screenshot: screenshot)
-            attachment.name = "\(name)-failure"
-            attachment.lifetime = .keepAlways
-            add(attachment)
-        }
-
-        super.record(issue)
     }
 
     func testAddIngredientSheetDismissesKeyboardOnSwipeDown() {
@@ -90,10 +75,6 @@ final class KeyboardDismissUITests: XCTestCase {
         form.swipeDown()
 
         assertFocusLostOrSheetDismissed(focusProbe: focusProbe, form: form)
-    }
-
-    private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
     private func requireGestureCoverage() throws {

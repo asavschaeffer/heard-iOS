@@ -110,6 +110,11 @@
 			path = ../heardUITests;
 			sourceTree = "<group>";
 		};
+		F30000012F90000100000001 /* ../TestSupport */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ../TestSupport;
+			sourceTree = "<group>";
+		};
 		F20000012F80000100000001 /* TestPlans */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = TestPlans;
@@ -188,6 +193,7 @@
 				ECE5464D2F5F98EB00465205 /* ../heardTests */,
 				F10000032F70000100000001 /* ../heardUITests */,
 				F00000192F60000100000001 /* Modules */,
+				F30000012F90000100000001 /* ../TestSupport */,
 				EC5CB97C2F36AF4900904A9F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -329,6 +335,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				ECE5464D2F5F98EB00465205 /* ../heardTests */,
+				F30000012F90000100000001 /* ../TestSupport */,
 			);
 			name = heardTests;
 			packageProductDependencies = (
@@ -374,6 +381,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				F00000042F60000100000001 /* ../Modules/VoiceCore/Tests/VoiceCoreTests */,
+				F30000012F90000100000001 /* ../TestSupport */,
 			);
 			name = VoiceCoreTests;
 			packageProductDependencies = (

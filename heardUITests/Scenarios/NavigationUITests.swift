@@ -1,10 +1,6 @@
 import XCTest
 
-final class NavigationUITests: XCTestCase {
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
+final class NavigationUITests: HeardUITestCase {
     func testInventoryDetailDismissReturnsToInventoryList() {
         let app = UIHarness.launchApp(scenario: .editorFlows)
 
@@ -57,23 +53,5 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(waitForNonExistence(of: detailView))
         XCTAssertTrue(recipeCard.waitForExistence(timeout: 2))
         XCTAssertTrue(app.tabBars.buttons["Recipes"].isSelected)
-    }
-
-    private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-    }
-
-    private func waitForNonExistence(
-        of element: XCUIElement,
-        timeout: TimeInterval = 2,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> Bool {
-        let predicate = NSPredicate(format: "exists == false")
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
-        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
-        let didDisappear = result == .completed
-        XCTAssertTrue(didDisappear, "Expected element to disappear.", file: file, line: line)
-        return didDisappear
     }
 }

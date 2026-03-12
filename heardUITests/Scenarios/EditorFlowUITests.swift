@@ -1,10 +1,6 @@
 import XCTest
 
-final class EditorFlowUITests: XCTestCase {
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
+final class EditorFlowUITests: HeardUITestCase {
     func testAddIngredientSheetOpensNameField() {
         let app = UIHarness.launchApp(scenario: .editorFlows)
 
@@ -40,9 +36,5 @@ final class EditorFlowUITests: XCTestCase {
 
         let nameField = element("recipe.edit.nameField", in: app)
         XCTAssertTrue(nameField.waitForExistence(timeout: 2))
-    }
-
-    private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 }

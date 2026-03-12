@@ -1,30 +1,33 @@
-import XCTest
+import Testing
 @testable import VoiceCore
 
+@Suite(.tags(.voicecore))
 @MainActor
-final class VoicePlaybackEngineTests: XCTestCase {
-    func testSimulatedQueueDrainClearsSpeakingState() {
+struct VoicePlaybackEngineTests {
+    @Test
+    func simulatedQueueDrainClearsSpeakingState() {
         let engine = VoicePlaybackEngine()
 
         engine.simulateScheduledBufferForTesting()
 
-        XCTAssertEqual(engine.enqueuedBufferCount, 1)
-        XCTAssertTrue(engine.isSpeaking)
+        #expect(engine.enqueuedBufferCount == 1)
+        #expect(engine.isSpeaking)
 
         engine.simulatePlaybackCompletionForTesting()
 
-        XCTAssertEqual(engine.enqueuedBufferCount, 0)
-        XCTAssertFalse(engine.isSpeaking)
+        #expect(engine.enqueuedBufferCount == 0)
+        #expect(engine.isSpeaking == false)
     }
 
-    func testStopClearsQueuedPlaybackState() {
+    @Test
+    func stopClearsQueuedPlaybackState() {
         let engine = VoicePlaybackEngine()
 
         engine.simulateScheduledBufferForTesting()
         engine.stop(clearQueue: true)
 
-        XCTAssertEqual(engine.enqueuedBufferCount, 0)
-        XCTAssertFalse(engine.isSpeaking)
-        XCTAssertFalse(engine.isRunning)
+        #expect(engine.enqueuedBufferCount == 0)
+        #expect(engine.isSpeaking == false)
+        #expect(engine.isRunning == false)
     }
 }

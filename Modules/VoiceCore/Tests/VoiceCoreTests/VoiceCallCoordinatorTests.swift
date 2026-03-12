@@ -1,64 +1,73 @@
-import XCTest
+import Testing
 @preconcurrency import AVFoundation
 @testable import VoiceCore
 
+@Suite(.tags(.voicecore))
 @MainActor
-final class VoiceCallCoordinatorTests: XCTestCase {
-    func testStartCallWithCallKitQueuesPendingStartAndInvokesCallKit() {
+struct VoiceCallCoordinatorTests {
+    @Test
+    func startCallWithCallKitQueuesPendingStartAndInvokesCallKit() {
         let harness = CoordinatorHarness(callKitEnabled: true)
 
         harness.coordinator.startCall()
 
-        XCTAssertTrue(harness.coordinator.state.isPresented)
-        XCTAssertTrue(harness.coordinator.state.pendingVoiceStart)
-        XCTAssertEqual(harness.callKit.startCallCount, 1)
-        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "starting(callKit,disconnected,awaitingCallKit,awaitingTransport)")
+        #expect(harness.coordinator.state.isPresented)
+        #expect(harness.coordinator.state.pendingVoiceStart)
+        #expect(harness.callKit.startCallCount == 1)
+        expectCallLifecycleState(
+            harness.coordinator,
+            equals: "starting(callKit,disconnected,awaitingCallKit,awaitingTransport)"
+        )
     }
 
-    func testTransportConnectStartsDirectCaptureAndClearsPendingStart() {
+    @Test
+    func transportConnectStartsDirectCaptureAndClearsPendingStart() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 
         harness.coordinator.startCall()
-        XCTAssertTrue(harness.coordinator.state.pendingVoiceStart)
+        #expect(harness.coordinator.state.pendingVoiceStart)
 
         harness.coordinator.transportDidConnect()
 
-        XCTAssertEqual(harness.capture.startCount, 1)
-        XCTAssertFalse(harness.coordinator.state.pendingVoiceStart)
-        XCTAssertTrue(harness.coordinator.state.isListening)
-        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "active(direct,connected)")
+        #expect(harness.capture.startCount == 1)
+        #expect(harness.coordinator.state.pendingVoiceStart == false)
+        #expect(harness.coordinator.state.isListening)
+        expectCallLifecycleState(harness.coordinator, equals: "active(direct,connected)")
     }
 
-    func testUnmuteRestartsCaptureWhenCallIsActive() {
+    @Test
+    func unmuteRestartsCaptureWhenCallIsActive() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 
         harness.coordinator.transportDidConnect()
         harness.coordinator.startCall()
-        XCTAssertEqual(harness.capture.startCount, 1)
+        #expect(harness.capture.startCount == 1)
 
         harness.coordinator.toggleMute()
         harness.capture.isRunning = false
 
         harness.coordinator.toggleMute()
 
-        XCTAssertEqual(harness.capture.startCount, 2)
-        XCTAssertFalse(harness.coordinator.state.isMicrophoneMuted)
-        XCTAssertEqual(harness.coordinator.callLifecycleState.runtimeContext?.isMuted, false)
+        #expect(harness.capture.startCount == 2)
+        #expect(harness.coordinator.state.isMicrophoneMuted == false)
+        #expect(harness.coordinator.callLifecycleState.runtimeContext?.isMuted == false)
     }
 
-    func testSpeakerToggleUsesCallKitSessionControllerWhenCallKitOwnsAudio() {
+    @Test
+    func speakerToggleUsesCallKitSessionControllerWhenCallKitOwnsAudio() {
         let harness = CoordinatorHarness(callKitEnabled: true)
 
         harness.coordinator.startCall()
         harness.callKit.onStartAudio?()
         harness.coordinator.toggleSpeaker()
 
-        XCTAssertEqual(harness.audioSession.callKitSpeakerOverrides, [nil, true])
-        XCTAssertTrue(harness.coordinator.state.isSpeakerPreferred)
-        XCTAssertEqual(harness.coordinator.routeLifecycleState.baseContext.speakerPreferred, true)
+        #expect(harness.audioSession.callKitSpeakerOverrides == [nil, true])
+        #expect(harness.coordinator.state.isSpeakerPreferred)
+        #expect(harness.coordinator.routeLifecycleState.baseContext.speakerPreferred == true)
     }
 
-    func testOverrideRouteChangeRebuildsGraphsForCallKitFallbackPath() {
+    @Test
+    func overrideRouteChangeRebuildsGraphsForCallKitFallbackPath() {
         let harness = CoordinatorHarness(callKitEnabled: true)
 
         harness.coordinator.transportDidConnect()
@@ -77,44 +86,57 @@ final class VoiceCallCoordinatorTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(harness.capture.stopCount, 1)
-        XCTAssertEqual(harness.capture.startCount, 2)
-        XCTAssertEqual(harness.playback.stopCount, 1)
-        XCTAssertEqual(harness.playback.prepareCount, 1)
-        XCTAssertEqual(harness.coordinator.routeLifecycleState.debugLabel, "stable(speaker=false, reason=override)")
+        #expect(harness.capture.stopCount == 1)
+        #expect(harness.capture.startCount == 2)
+        #expect(harness.playback.stopCount == 1)
+        #expect(harness.playback.prepareCount == 1)
+        expectRouteLifecycleState(
+            harness.coordinator,
+            equals: "stable(speaker=false, reason=override)"
+        )
     }
 
-    func testStartCallWithoutCallKitButConnectedTransportTransitionsDirectlyToActive() {
+    @Test
+    func startCallWithoutCallKitButConnectedTransportTransitionsDirectlyToActive() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 
         harness.coordinator.transportDidConnect()
         harness.coordinator.startCall()
 
-        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "active(direct,connected)")
-        XCTAssertEqual(harness.audioSession.directSpeakerPreferences, [true, true])
-        XCTAssertEqual(harness.capture.startCount, 1)
+        expectCallLifecycleState(harness.coordinator, equals: "active(direct,connected)")
+        #expect(harness.audioSession.directSpeakerPreferences == [true, true])
+        #expect(harness.capture.startCount == 1)
     }
 
-    func testTransportFailureTransitionsToFailedState() {
+    @Test
+    func transportFailureTransitionsToFailedState() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 
         harness.coordinator.startCall()
         harness.coordinator.transportDidFail(message: "socket")
 
-        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "failed(direct,error(socket),awaitingTransport, message=socket)")
+        expectCallLifecycleState(
+            harness.coordinator,
+            equals: "failed(direct,error(socket),awaitingTransport, message=socket)"
+        )
     }
 
-    func testTransportWillConnectFromFailureTransitionsToReconnecting() {
+    @Test
+    func transportWillConnectFromFailureTransitionsToReconnecting() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 
         harness.coordinator.startCall()
         harness.coordinator.transportDidFail(message: "socket")
         harness.coordinator.transportWillConnect()
 
-        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "reconnecting(direct,connecting,awaitingTransport)")
+        expectCallLifecycleState(
+            harness.coordinator,
+            equals: "reconnecting(direct,connecting,awaitingTransport)"
+        )
     }
 
-    func testCallKitDeactivateTransitionsBackToWaitingForActivation() {
+    @Test
+    func callKitDeactivateTransitionsBackToWaitingForActivation() {
         let harness = CoordinatorHarness(callKitEnabled: true)
 
         harness.coordinator.transportDidConnect()
@@ -124,11 +146,15 @@ final class VoiceCallCoordinatorTests: XCTestCase {
 
         harness.callKit.onStopAudio?()
 
-        XCTAssertEqual(harness.capture.stopCount, 1)
-        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "starting(callKit,connected,awaitingCallKit,fallbackInput)")
+        #expect(harness.capture.stopCount == 1)
+        expectCallLifecycleState(
+            harness.coordinator,
+            equals: "starting(callKit,connected,awaitingCallKit,fallbackInput)"
+        )
     }
 
-    func testCallKitTransactionFailureDisablesCallKitAndFallsBackToDirectAudio() {
+    @Test
+    func callKitTransactionFailureDisablesCallKitAndFallsBackToDirectAudio() {
         let harness = CoordinatorHarness(callKitEnabled: true, disableCallKitAfterError: true)
 
         harness.coordinator.transportDidConnect()
@@ -136,13 +162,17 @@ final class VoiceCallCoordinatorTests: XCTestCase {
         harness.callKit.onStartAudio?()
         harness.callKit.onTransactionError?(MockError())
 
-        XCTAssertFalse(harness.coordinator.callKitEnabled)
-        XCTAssertEqual(harness.audioSession.directSpeakerPreferences.last, false)
-        XCTAssertEqual(harness.coordinator.callLifecycleState.debugLabel, "active(direct,connected,fallbackInput)")
-        XCTAssertEqual(harness.delegate.callKitEnabledChanges, [false])
+        #expect(harness.coordinator.callKitEnabled == false)
+        #expect(harness.audioSession.directSpeakerPreferences.last == false)
+        expectCallLifecycleState(
+            harness.coordinator,
+            equals: "active(direct,connected,fallbackInput)"
+        )
+        #expect(harness.delegate.callKitEnabledChanges == [false])
     }
 
-    func testRouteChangeDebounceTransitionsRouteStateToBlocked() {
+    @Test
+    func routeChangeDebounceTransitionsRouteStateToBlocked() {
         let harness = CoordinatorHarness(callKitEnabled: true)
 
         harness.coordinator.transportDidConnect()
@@ -163,11 +193,12 @@ final class VoiceCallCoordinatorTests: XCTestCase {
         harness.playback.isRunning = true
         harness.coordinator.handleRouteChange(event)
 
-        XCTAssertEqual(harness.coordinator.routeLifecycleState.debugLabel, "blocked(reason=debounced)")
-        XCTAssertTrue(harness.eventSink.events.contains(.routeAdaptationSkipped(reason: "debounced")))
+        expectRouteLifecycleState(harness.coordinator, equals: "blocked(reason=debounced)")
+        #expect(harness.eventSink.events.contains(.routeAdaptationSkipped(reason: "debounced")))
     }
 
-    func testInterruptionEndedWithoutResumeLeavesCaptureStopped() {
+    @Test
+    func interruptionEndedWithoutResumeLeavesCaptureStopped() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 
         harness.coordinator.transportDidConnect()
@@ -191,18 +222,19 @@ final class VoiceCallCoordinatorTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(harness.capture.stopCount, 1)
-        XCTAssertFalse(harness.coordinator.state.isListening)
-        XCTAssertFalse(harness.capture.isRunning)
+        #expect(harness.capture.stopCount == 1)
+        #expect(harness.coordinator.state.isListening == false)
+        #expect(harness.capture.isRunning == false)
     }
 
-    func testEventSinkRecordsCallStateTransitionsForCallStart() {
+    @Test
+    func eventSinkRecordsCallStateTransitionsForCallStart() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 
         harness.coordinator.transportDidConnect()
         harness.coordinator.startCall()
 
-        XCTAssertTrue(harness.eventSink.events.contains {
+        #expect(harness.eventSink.events.contains {
             if case .stateTransition(let from, let to) = $0 {
                 return from == .idle && to.debugLabel == "active(direct,connected)"
             }
@@ -210,7 +242,8 @@ final class VoiceCallCoordinatorTests: XCTestCase {
         })
     }
 
-    func testEventSinkRecordsRouteAdaptationLifecycle() {
+    @Test
+    func eventSinkRecordsRouteAdaptationLifecycle() {
         let harness = CoordinatorHarness(callKitEnabled: true)
 
         harness.coordinator.transportDidConnect()
@@ -228,8 +261,12 @@ final class VoiceCallCoordinatorTests: XCTestCase {
             )
         )
 
-        XCTAssertTrue(harness.eventSink.events.contains(.routeAdaptationStarted(resumeCapture: true, resumePlayback: true)))
-        XCTAssertTrue(harness.eventSink.events.contains(.routeAdaptationFinished))
+        #expect(
+            harness.eventSink.events.contains(
+                .routeAdaptationStarted(resumeCapture: true, resumePlayback: true)
+            )
+        )
+        #expect(harness.eventSink.events.contains(.routeAdaptationFinished))
     }
 }
 

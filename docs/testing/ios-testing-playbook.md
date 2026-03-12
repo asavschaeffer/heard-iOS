@@ -1,118 +1,31 @@
 # iOS Testing Playbook
 
-## Overview
+This document is the source of truth for how iOS tests are organized, run, and interpreted in this repo.
 
-This document is the source of truth for how to run, interpret, and choose iOS tests in this repo.
+## Goals
 
-Current automated surfaces:
+The test setup must work cleanly in four places:
 
-- `VoiceCoreTests` for deterministic logic
-- `heardTests` for hosted smoke and hosted experimental perf
-- `heardUITests` for simulator-driven interaction coverage
+- Xcode while iterating locally
+- `./scripts/test-ios.sh` for deterministic CLI verification
+- CI for the default merge gate
+- AI workflows that need an explicit command matrix and machine-readable diagnostics
 
-Manual validation still remains required for hardware-truth behaviors such as Bluetooth routing, receiver audio, interruptions, and camera fidelity.
+## Framework policy
 
-## Canonical simulator target
+Use the native framework that matches the surface under test:
 
-Default local target:
+- Swift Testing for non-UI unit, integration, and hosted tests
+- XCTest for UI tests
+- XCTest for performance tests that use `measure`
 
-- device: `iPhone 17 Pro`
-- runtime: `iOS 26.2`
+Current toolchain assumptions:
 
-If `iOS 26.2` is not available, use the nearest current iPhone simulator explicitly instead of relying on Xcode defaults.
+- Xcode 17.x
+- Apple Swift 6.2 toolchain
+- project source currently builds in Swift 5 language mode
 
-## Command matrix
-
-Use `./scripts/test-ios.sh` by default.
-
-### Stable commands
-
-```sh
-./scripts/test-ios.sh voicecore
-./scripts/test-ios.sh app-build
-./scripts/test-ios.sh app-smoke
-./scripts/test-ios.sh app-ui
-./scripts/test-ios.sh stable
-./scripts/test-ios.sh all
-```
-
-Meaning:
-
-- `voicecore`: non-performance `VoiceCoreTests`
-- `app-build`: hosted app build-for-testing
-- `app-smoke`: stable hosted smoke only
-- `app-ui`: stable hosted UI classes only
-- `stable` and `all`: default full merge gate
-
-### Experimental commands
-
-```sh
-./scripts/test-ios.sh app-ui-gestures
-./scripts/test-ios.sh app-ui-gestures-repeat 10
-./scripts/test-ios.sh experimental
-```
-
-Meaning:
-
-- `app-ui-gestures`: gesture-only UI suite
-- `app-ui-gestures-repeat 10`: repeated gesture stability run with simulator restart between runs
-- `experimental`: VoiceCore perf plus the hosted experimental plan
-
-### Result-bundle commands
-
-```sh
-./scripts/xcresult-summary.sh --latest
-./scripts/xcresult-summary.sh --latest --json
-./scripts/xcresult-summary.sh --latest --markdown
-./scripts/xcresult-summary.sh --path <bundle>
-./scripts/xcresult-summary.sh --all
-./scripts/xcresult-summary.sh --all --json
-```
-
-Use the JSON mode for automation and AI triage. Use markdown when writing into CI summaries or PR notes. Use `--all` when you want a gate-level summary across multiple bundles.
-
-## Supported environment variables
-
-These are the supported testing knobs:
-
-- `UITEST_SCENARIO`
-- `HEARD_ENABLE_GESTURE_UI_TESTS`
-- `IOS_SIMULATOR_ID`
-- `IOS_SIMULATOR_DESTINATION`
-- `DERIVED_DATA_PATH`
-
-Do not introduce one-off test flags without documenting them here.
-
-## Xcode workflow
-
-### Schemes and plans
-
-Use:
-
-- `VoiceCore` scheme for module logic and VoiceCore perf work
-- `heard` scheme with `heard-stable` for smoke and stable UI work
-- `heard` scheme with `heard-experimental` for gesture and hosted perf work
-
-Shared plans:
-
-- `app/TestPlans/heard-stable.xctestplan`
-- `app/TestPlans/heard-experimental.xctestplan`
-
-### When to use each plan
-
-Use `heard-stable` when:
-
-- validating a product regression before commit
-- iterating on smoke tests
-- iterating on stable CRUD, navigation, or search UI flows
-
-Use `heard-experimental` when:
-
-- measuring gesture flake
-- running hosted performance checks
-- investigating simulator-sensitive failures without risking the stable gate
-
-## Test ownership
+## Automated surfaces
 
 ### `VoiceCoreTests`
 
@@ -126,7 +39,12 @@ Use for:
 - audio session policy
 - capture and playback behavior
 - route state transitions
-- deterministic performance hot paths
+- deterministic async behavior
+
+Current framework split:
+
+- Swift Testing for logic tests
+- XCTest for `VoiceCorePerformanceTests`
 
 ### `heardTests`
 
@@ -136,11 +54,19 @@ Location:
 
 Use for:
 
-- app-host smoke
-- hosted test-mode sanity
+- app-host boot sanity
+- test-mode sanity
+- lightweight hosted configuration and wiring checks
 - hosted performance checks that stay out of the stable lane
 
-Keep this target smoke-first. Do not treat it as a second logic test suite.
+Stable hosted coverage currently includes:
+
+- `AppLaunchSmokeTests`
+- `GeminiServiceSetupTests`
+
+Experimental hosted coverage currently includes:
+
+- `AppStartupPerformanceTests`
 
 ### `heardUITests`
 
@@ -148,19 +74,112 @@ Location:
 
 - `heardUITests/`
 
-Stable coverage currently includes:
+Use for:
 
-- editor open flows
-- inventory create, edit, and delete
-- recipe open, edit, and delete
-- inventory and recipe navigation continuity
-- inventory and recipe search/filter coverage
+- simulator-driven CRUD flows
+- navigation regressions
+- search and filtering regressions
+- destructive confirmation flows
+- experimental gesture regressions
 
-Experimental coverage currently includes:
+Stable UI coverage currently includes:
 
-- keyboard swipe dismissal
+- `EditorFlowUITests`
+- `InventoryFlowUITests`
+- `RecipeFlowUITests`
+- `NavigationUITests`
+- `SearchFilteringUITests`
+
+Experimental UI coverage currently includes:
+
+- `KeyboardDismissUITests`
+
+## Stable and experimental lanes
+
+### Stable lane
+
+Commands:
+
+```sh
+./scripts/test-ios.sh voicecore
+./scripts/test-ios.sh app-build
+./scripts/test-ios.sh app-smoke
+./scripts/test-ios.sh app-ui
+./scripts/test-ios.sh stable
+./scripts/test-ios.sh all
+```
+
+Meaning:
+
+- `voicecore`: non-performance `VoiceCoreTests`
+- `app-build`: shared hosted build-for-testing path
+- `app-smoke`: stable hosted lane for `heardTests`
+- `app-ui`: stable `heardUITests` classes only
+- `stable` and `all`: default full merge gate
+
+### Experimental lane
+
+Commands:
+
+```sh
+./scripts/test-ios.sh app-ui-gestures
+./scripts/test-ios.sh app-ui-gestures-repeat 10
+./scripts/test-ios.sh experimental
+```
+
+Meaning:
+
+- `app-ui-gestures`: gesture-only UI suite
+- `app-ui-gestures-repeat 10`: repeated gesture reliability run
+- `experimental`: VoiceCore perf plus the hosted experimental plan
+
+Performance tests remain experimental until the repo has enough repeated-run evidence to treat them as budgets rather than instrumentation.
+
+## Xcode-native workflow
+
+Use:
+
+- `VoiceCore` scheme for module logic and VoiceCore perf
+- `heard` scheme with `heard-stable` for default hosted and stable UI work
+- `heard` scheme with `heard-experimental` for gesture and hosted perf work
+
+Shared plans:
+
+- `app/TestPlans/heard-stable.xctestplan`
+- `app/TestPlans/heard-experimental.xctestplan`
+
+The Xcode-native default path is the shared `heard-stable` plan plus the standalone `VoiceCore` scheme.
+
+## Canonical simulator target
+
+Preferred default target:
+
+- device: `iPhone 17 Pro`
+- runtime: `iOS 26.2`
+
+`scripts/test-ios.sh` resolves the simulator in this order:
+
+1. `IOS_SIMULATOR_DESTINATION`
+2. `IOS_SIMULATOR_ID`
+3. exact `iPhone 17 Pro` on `iOS 26.2`
+4. `iPhone 17 Pro` on the newest installed iOS runtime
+5. newest available iPhone simulator
+
+The script prints the destination it selected before running tests.
+
+## Supported environment variables
+
+- `UITEST_SCENARIO`
+- `HEARD_ENABLE_GESTURE_UI_TESTS`
+- `IOS_SIMULATOR_ID`
+- `IOS_SIMULATOR_DESTINATION`
+- `DERIVED_DATA_PATH`
+
+Do not introduce one-off test flags without documenting them here.
 
 ## UI-test scenarios
+
+Every UI test should launch through `UIHarness.launchApp(scenario:)`.
 
 Current scenario names:
 
@@ -170,62 +189,33 @@ Current scenario names:
 - `empty_state`
 - `attachments_basic`
 
-Scenario rules:
+Rules:
 
-- each class should request its scenario explicitly through `UIHarness.launchApp(scenario:)`
-- scenarios seed deterministic in-memory data only
+- each class requests the scenario it needs explicitly
+- scenario data stays deterministic and in-memory only
 - scenario data is reset before each app launch
-- future UI flows should reuse or extend scenario fixtures rather than ad hoc launch data
-
-## Perf coverage
-
-Current perf tests:
-
-- `VoiceCorePerformanceTests`
-- `AppStartupPerformanceTests`
-
-Current policy:
-
-- perf tests are experimental only
-- stable `voicecore` skips `VoiceCorePerformanceTests`
-- stable `heard` skips `AppStartupPerformanceTests`
-- `./scripts/test-ios.sh experimental` includes VoiceCore perf plus the hosted experimental plan
-- current perf values are reference-only because run-to-run variance is still high
-
-Treat current values as instrumentation, not budgets. Review repeated-run spread and relative standard deviation before calling a regression or setting thresholds.
+- new UI coverage should extend scenario fixtures rather than ad hoc launch data
 
 ## Result-bundle workflow
 
 After any run:
 
-1. identify the bundle with `--latest` or `--path`
-2. read the summary
-3. only then read raw logs if the summary is insufficient
+1. identify the bundle with `--latest`, `--path`, or `--all`
+2. read the `.xcresult` summary
+3. only then fall back to raw `xcodebuild` logs
 
-Use `--all` when the command produced more than one bundle and you need one machine-readable view of the full run.
-
-### What the summary gives you
-
-- action title
-- bundle path
-- gate path when using `--all`
-- device and runtime
-- pass, fail, skip, and total counts
-- failed and skipped test identifiers
-- failure issue messages
-- per-test durations
-- attachment filenames when present
-
-### Example
+Commands:
 
 ```sh
-./scripts/test-ios.sh app-ui
 ./scripts/xcresult-summary.sh --latest
 ./scripts/xcresult-summary.sh --latest --json
-
-./scripts/test-ios.sh stable
+./scripts/xcresult-summary.sh --latest --markdown
+./scripts/xcresult-summary.sh --path <bundle>
+./scripts/xcresult-summary.sh --all
 ./scripts/xcresult-summary.sh --all --json
 ```
+
+Use JSON for automation and AI triage. Use markdown for CI or PR summaries.
 
 ## AI failure triage workflow
 
@@ -240,7 +230,7 @@ Failure classes:
 
 - compile/build failure
 - module logic failure
-- app-host smoke failure
+- app-host failure
 - stable UI regression
 - experimental gesture instability
 - performance regression
@@ -249,10 +239,10 @@ Expected next action by class:
 
 - compile/build failure: fix project or compile issues first
 - module logic failure: stay in `VoiceCoreTests`
-- smoke failure: inspect `heardTests`, `HeardChefApp`, and test-mode wiring
+- app-host failure: inspect `heardTests`, `HeardChefApp`, and hosted wiring
 - stable UI regression: inspect identifiers, scenario seeding, and navigation assumptions
-- experimental gesture instability: use `app-ui-gestures-repeat` and attachments before changing the test
-- performance regression: rerun the focused perf class and compare observed values before changing budgets
+- experimental gesture instability: use repeated runs and `.xcresult` attachments before changing coverage
+- performance regression: rerun the focused perf class before changing any budget language
 
 ## Promotion rule for experimental tests
 
@@ -260,29 +250,25 @@ Only promote an experimental test into the stable lane when:
 
 - it passes repeated local runs
 - it passes repeated CI runs
-- it requires no undocumented simulator setting changes
-- the result bundle gives actionable failure diagnostics
-- adding it keeps the default stable path green and fast enough
+- it needs no undocumented simulator setup
+- failures are diagnosable from `.xcresult`
+- adding it keeps the stable path trustworthy and fast enough
 
-At the moment, this rule mainly applies to `KeyboardDismissUITests`.
+This currently applies most directly to `KeyboardDismissUITests`.
 
-Current status:
+Current note:
 
-- `KeyboardDismissUITests` is still experimental
-- repeated local evidence is mixed rather than decisively green
-- do not promote it or describe it as nearly ready until the documented thresholds are actually satisfied
-- inventory sheet swipe-down currently has two accepted experimental outcomes:
-  the focused field can blur, or the sheet can dismiss entirely
-- this is treated as a known UI behavior overlap, not as stable-lane coverage
-  semantics
+- the inventory add/edit sheets still allow two valid experimental swipe-down outcomes:
+  - the focused field blurs
+  - the sheet dismisses entirely
+- this remains an owned experimental behavior overlap, not stable-lane semantics
 
 ## Preferred verification flows
 
 ### VoiceCore logic change
 
 1. `./scripts/test-ios.sh voicecore`
-2. if needed, focused `xcodebuild` for one VoiceCore test file
-3. if app integration changed, `./scripts/test-ios.sh app-smoke`
+2. if app integration changed, `./scripts/test-ios.sh app-smoke`
 
 ### Stable app interaction change
 
@@ -297,17 +283,11 @@ Current status:
 2. `./scripts/test-ios.sh app-ui-gestures-repeat 10`
 3. `./scripts/xcresult-summary.sh --path <failing bundle>`
 
-Current note:
-- the inventory add/edit sheets currently conflate keyboard-dismiss and
-  sheet-dismiss on downward swipe
-- the experimental assertion accepts either outcome so the suite can keep
-  measuring regressions while that UI behavior remains unresolved
-
 ### Performance work
 
 1. `xcodebuild ... -only-testing:VoiceCoreTests/VoiceCorePerformanceTests`
 2. `xcodebuild ... -testPlan heard-experimental -only-testing:heardTests/AppStartupPerformanceTests`
-3. compare repeated-run spread before treating any value like a budget
+3. compare repeated-run spread before treating a value like a budget
 
 ## Manual validation reminders
 

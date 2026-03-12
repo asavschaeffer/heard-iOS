@@ -1,12 +1,16 @@
-import XCTest
+import Testing
 @testable import heard
 
-final class AppLaunchSmokeTests: XCTestCase {
-    func testXCTestDetectionIsEnabled() {
-        XCTAssertTrue(TestSupport.isRunningTests)
+@Suite(.tags(.hosted, .smoke))
+@MainActor
+struct AppLaunchSmokeTests {
+    @Test
+    func xCTestDetectionIsEnabled() {
+        #expect(TestSupport.isRunningTests)
     }
 
-    func testAppCreatesSharedModelContainerInTestMode() {
+    @Test
+    func appCreatesSharedModelContainerInTestMode() {
         let app = HeardChefApp()
         _ = app.sharedModelContainer
     }
