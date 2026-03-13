@@ -42,5 +42,6 @@ Diagnostics:
 
 - UI tests stay on XCTest
 - `UIHarness.launchApp(scenario:)` is the required entrypoint for scenario seeding
+- `HEARD_SKIP_WARMUP=0` enables the real launch overlay path for dedicated launch coverage
 - `--latest-run` is the preferred summary mode for one logical verification pass; `--all` is historical aggregation
 - gesture-heavy coverage remains experimental until repeated runs and `.xcresult` diagnostics make it stable-lane worthy

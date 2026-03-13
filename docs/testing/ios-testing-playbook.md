@@ -172,6 +172,7 @@ The script prints the destination it selected before running tests.
 ## Supported environment variables
 
 - `UITEST_SCENARIO`
+- `HEARD_SKIP_WARMUP`
 - `HEARD_ENABLE_GESTURE_UI_TESTS`
 - `IOS_SIMULATOR_ID`
 - `IOS_SIMULATOR_DESTINATION`
