@@ -61,6 +61,40 @@ struct GeminiServiceSetupTests {
     }
 
     @Test
+    func activityHandlingAndTurnCoverageAppearInPayloadWhenSet() throws {
+        let service = makeService()
+
+        let profile = GeminiAudioSetupProfile(
+            startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
+            endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+            prefixPaddingMs: 40,
+            silenceDurationMs: 500,
+            includesProactivity: false,
+            activityHandling: "NO_INTERRUPTION",
+            turnCoverage: "TURN_INCLUDES_ALL_INPUT"
+        )
+
+        let payload = service.makeSetupPayload(config: .audio(profile: profile))
+        let setup = try #require(payload["setup"] as? [String: Any])
+        let realtimeInputConfig = try #require(setup["realtimeInputConfig"] as? [String: Any])
+
+        #expect(realtimeInputConfig["activityHandling"] as? String == "NO_INTERRUPTION")
+        #expect(realtimeInputConfig["turnCoverage"] as? String == "TURN_INCLUDES_ALL_INPUT")
+    }
+
+    @Test
+    func activityHandlingAndTurnCoverageOmittedWhenNil() throws {
+        let service = makeService()
+
+        let payload = service.makeSetupPayload(config: .audio(profile: .echoRejectingDefault))
+        let setup = try #require(payload["setup"] as? [String: Any])
+        let realtimeInputConfig = try #require(setup["realtimeInputConfig"] as? [String: Any])
+
+        #expect(realtimeInputConfig["activityHandling"] == nil)
+        #expect(realtimeInputConfig["turnCoverage"] == nil)
+    }
+
+    @Test
     func textSetupPayloadDoesNotIncludeAudioOnlyRealtimeConfig() throws {
         let service = makeService()
 

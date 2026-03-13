@@ -15,6 +15,8 @@ struct GeminiAudioSetupProfile: Equatable, Sendable {
     let prefixPaddingMs: Int
     let silenceDurationMs: Int
     let includesProactivity: Bool
+    var activityHandling: String? = nil
+    var turnCoverage: String? = nil
 
     static let echoRejectingDefault = GeminiAudioSetupProfile(
         startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
@@ -350,9 +352,16 @@ class GeminiService: NSObject {
                     ]
                 ]
             ]
-            setup["realtimeInputConfig"] = [
+            var realtimeInputConfig: [String: Any] = [
                 "automaticActivityDetection": profile.automaticActivityDetection
             ]
+            if let activityHandling = profile.activityHandling {
+                realtimeInputConfig["activityHandling"] = activityHandling
+            }
+            if let turnCoverage = profile.turnCoverage {
+                realtimeInputConfig["turnCoverage"] = turnCoverage
+            }
+            setup["realtimeInputConfig"] = realtimeInputConfig
             if let proactivity = profile.proactivityPayload {
                 setup["proactivity"] = proactivity
             }

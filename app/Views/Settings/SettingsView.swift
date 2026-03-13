@@ -67,6 +67,20 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Allow Interrupts", isOn: $settings.vadActivityHandlingInterrupts)
+                        Text("When ON, your speech interrupts Gemini mid-sentence (default). When OFF, Gemini finishes its response even if you start talking — useful if speaker bleed is causing false interrupts.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Activity-Only Turns", isOn: $settings.vadTurnCoverageOnlyActivity)
+                        Text("When ON, only audio during detected speech is sent to the model (default). When OFF, all audio including silence and background noise is included — useful for ambient context but noisier.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("Voice Calibration")
                 } footer: {
