@@ -128,6 +128,8 @@ class GeminiService: NSObject {
     private var webSocketSessionSequence = 0
     private var activeWebSocketSessionID = "ws-0"
     private var pendingDisconnectReason = "none"
+    private var ignoreSocketErrorsUntilNextConnect = false
+    private var hasLoggedIgnoredSocketErrorForCurrentDisconnect = false
 
     // Pending requests tracking with timeout
     private var pendingMessageID: UUID?
@@ -137,6 +139,10 @@ class GeminiService: NSObject {
 
     private let requestTimeout: TimeInterval = 30.0
     private let acceptanceTimeout: TimeInterval = 12.0
+    
+    var hasActiveSocketSession: Bool {
+        webSocketTask != nil || urlSession != nil || activeConfig != nil || isConnected
+    }
     private let streamHeartbeatTimeout: TimeInterval = 20.0
 
     private var hasAccepted = false
@@ -186,6 +192,8 @@ class GeminiService: NSObject {
         webSocketSessionSequence += 1
         activeWebSocketSessionID = "ws-\(webSocketSessionSequence)"
         pendingDisconnectReason = "none"
+        ignoreSocketErrorsUntilNextConnect = false
+        hasLoggedIgnoredSocketErrorForCurrentDisconnect = false
         logSocketEvent(
             "connect requested",
             extra: "mode=\(describe(mode: activeConfig?.mode)) model=\(activeConfig?.model ?? "none") existingTask=\(webSocketTask != nil)"
@@ -213,6 +221,8 @@ class GeminiService: NSObject {
                     await MainActor.run {
                         self.delegate?.geminiService(self, didReceiveError: GeminiError.connectionFailed)
                         self.pendingDisconnectReason = "acceptance-timeout"
+                        self.ignoreSocketErrorsUntilNextConnect = true
+                        self.hasLoggedIgnoredSocketErrorForCurrentDisconnect = false
                         self.webSocketTask?.cancel(with: .goingAway, reason: nil)
                         self.resetTrackingState()
                     }
@@ -225,6 +235,8 @@ class GeminiService: NSObject {
 
     func disconnect(reason: String = "manual") {
         pendingDisconnectReason = reason
+        ignoreSocketErrorsUntilNextConnect = true
+        hasLoggedIgnoredSocketErrorForCurrentDisconnect = false
         logSocketEvent("disconnect requested", extra: "reason=\(reason)")
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
@@ -813,23 +825,32 @@ class GeminiService: NSObject {
     private func receiveMessage() {
         webSocketTask?.receive { result in
             Task { @MainActor in
-                switch result {
-                case .success(let message):
-                    self.handleMessage(message)
-                    self.receiveMessage()
-
-                case .failure(let error):
-                    self.logSocketEvent("receive error", extra: "error=\(error.localizedDescription)")
-                    self.delegate?.geminiService(self, didReceiveError: error)
-                    self.acceptanceTask?.cancel()
-                    self.acceptanceTask = nil
-                    self.timeoutTask?.cancel()
-                    self.timeoutTask = nil
-                    self.heartbeatTask?.cancel()
-                    self.heartbeatTask = nil
-                    self.resetTrackingState()
-                }
+                self.handleReceiveResult(result)
             }
+        }
+    }
+
+    func handleReceiveResult(_ result: Result<URLSessionWebSocketTask.Message, Error>) {
+        switch result {
+        case .success(let message):
+            handleMessage(message)
+            receiveMessage()
+
+        case .failure(let error):
+            if shouldIgnoreSocketError(error) {
+                logIgnoredSocketErrorIfNeeded(prefix: "receive", error: error)
+                return
+            }
+
+            logSocketEvent("receive error", extra: "error=\(error.localizedDescription)")
+            delegate?.geminiService(self, didReceiveError: error)
+            acceptanceTask?.cancel()
+            acceptanceTask = nil
+            timeoutTask?.cancel()
+            timeoutTask = nil
+            heartbeatTask?.cancel()
+            heartbeatTask = nil
+            resetTrackingState()
         }
     }
 
@@ -1783,10 +1804,12 @@ class GeminiService: NSObject {
         task.send(.string(string)) { [weak self] error in
             if let error = error {
                 Task { @MainActor [weak self] in
-                    self?.logSocketEvent("send error", extra: "error=\(error.localizedDescription)")
-                }
-                Task { @MainActor [weak self] in
                     guard let self else { return }
+                    if self.shouldIgnoreSocketError(error) {
+                        self.logIgnoredSocketErrorIfNeeded(prefix: "send", error: error)
+                        return
+                    }
+                    self.logSocketEvent("send error", extra: "error=\(error.localizedDescription)")
                     self.delegate?.geminiService(self, didReceiveError: error)
                 }
             }
@@ -1811,6 +1834,18 @@ class GeminiService: NSObject {
             outboundTurnByMessageID[messageID] = turnID
         }
         return turnID
+    }
+
+    private func shouldIgnoreSocketError(_ error: any Error) -> Bool {
+        _ = error
+        guard ignoreSocketErrorsUntilNextConnect else { return false }
+        return true
+    }
+
+    private func logIgnoredSocketErrorIfNeeded(prefix: String, error: any Error) {
+        guard !hasLoggedIgnoredSocketErrorForCurrentDisconnect else { return }
+        hasLoggedIgnoredSocketErrorForCurrentDisconnect = true
+        debugLog("[Gemini] Ignoring \(prefix) error during expected disconnect: \(error.localizedDescription)")
     }
 }
 

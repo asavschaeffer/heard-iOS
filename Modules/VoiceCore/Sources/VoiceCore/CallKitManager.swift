@@ -27,6 +27,8 @@ final class CallKitManager: NSObject {
     var onStopAudio: (() -> Void)?
     var onMuteChanged: ((Bool) -> Void)?
     var onTransactionError: ((Error) -> Void)?
+    var onStartTransactionAccepted: (() -> Void)?
+    var onProviderPerformStart: (() -> Void)?
 
     private func logCallKitEvent(_ event: String, audioSession: AVAudioSession? = nil, extra: String = "") {
         let session = audioSession ?? AVAudioSession.sharedInstance()
@@ -62,7 +64,7 @@ final class CallKitManager: NSObject {
         let transaction = CXTransaction(action: startAction)
         currentCall = CallKitCall(id: callId, displayName: displayName)
         logCallKitEvent("startCall requested", extra: "target=\(displayName)")
-        request(transaction: transaction)
+        request(transaction: transaction, isStartCall: true)
     }
 
     func endCall() {
@@ -70,7 +72,7 @@ final class CallKitManager: NSObject {
         let endAction = CXEndCallAction(call: callId)
         let transaction = CXTransaction(action: endAction)
         logCallKitEvent("endCall requested")
-        request(transaction: transaction)
+        request(transaction: transaction, isStartCall: false)
     }
 
     func reportConnected() {
@@ -79,7 +81,7 @@ final class CallKitManager: NSObject {
         provider.reportOutgoingCall(with: callId, connectedAt: Date())
     }
 
-    private func request(transaction: CXTransaction) {
+    private func request(transaction: CXTransaction, isStartCall: Bool) {
         callController.request(transaction) { error in
             if let error {
                 let details = Self.describeTransactionError(error)
@@ -90,6 +92,9 @@ final class CallKitManager: NSObject {
             } else {
                 Task { @MainActor in
                     self.logCallKitEvent("transaction request accepted")
+                    if isStartCall {
+                        self.onStartTransactionAccepted?()
+                    }
                 }
             }
         }
@@ -143,6 +148,7 @@ extension CallKitManager: CXProviderDelegate {
 
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         logCallKitEvent("provider perform start", extra: "actionCallID=\(action.callUUID.uuidString)")
+        onProviderPerformStart?()
         provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
         action.fulfill()
     }

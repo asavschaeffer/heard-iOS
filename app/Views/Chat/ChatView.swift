@@ -6,6 +6,12 @@ import UniformTypeIdentifiers
 import VoiceCore
 
 struct ChatView: View {
+    private enum CallDismissalReason {
+        case none
+        case minimize
+        case endCall
+    }
+
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var navigationState: AppNavigationState
     @StateObject private var viewModel = ChatViewModel()
@@ -26,6 +32,7 @@ struct ChatView: View {
     @State private var attachmentErrorMessage: String?
     @State private var callPresentationStyle: CallPresentationStyle = .fullScreen
     @State private var isCallScreenPresented = false
+    @State private var callDismissalReason: CallDismissalReason = .none
 
     var body: some View {
         NavigationStack {
@@ -252,8 +259,13 @@ struct ChatView: View {
             PiPCallOverlayView(
                 viewModel: viewModel,
                 onExpand: {
+                    callDismissalReason = .none
                     callPresentationStyle = .fullScreen
                     isCallScreenPresented = true
+                },
+                onEndCall: {
+                    callDismissalReason = .endCall
+                    viewModel.stopVoiceSession()
                 },
                 onToggleVideo: { viewModel.toggleVideoFromCallView() }
             )
@@ -277,8 +289,13 @@ struct ChatView: View {
         CallView(
             viewModel: viewModel,
             onMinimize: {
+                callDismissalReason = .minimize
                 callPresentationStyle = .pictureInPicture
                 isCallScreenPresented = false
+            },
+            onEndCall: {
+                callDismissalReason = .endCall
+                viewModel.stopVoiceSession()
             }
         )
     }
@@ -291,9 +308,11 @@ struct ChatView: View {
             set: { newValue in
                 if !newValue {
                     isCallScreenPresented = false
-                    if viewModel.callState.isPresented {
+                    let dismissalReason = callDismissalReason
+                    callDismissalReason = .none
+                    if dismissalReason == .minimize {
                         callPresentationStyle = .pictureInPicture
-                    } else {
+                    } else if dismissalReason == .none && viewModel.callState.isPresented && !viewModel.isStoppingCall {
                         viewModel.stopVoiceSession()
                     }
                 }

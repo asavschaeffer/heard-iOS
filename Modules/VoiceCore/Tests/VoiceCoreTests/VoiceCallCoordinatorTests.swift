@@ -268,6 +268,37 @@ struct VoiceCallCoordinatorTests {
         )
         #expect(harness.eventSink.events.contains(.routeAdaptationFinished))
     }
+
+    @Test
+    func callKitTimingCallbacksFireInOrder() {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+        var phases: [String] = []
+        harness.coordinator.onCallKitStartRequested = { phases.append("requested") }
+        harness.coordinator.onCallKitTransactionAccepted = { phases.append("accepted") }
+        harness.coordinator.onCallKitPerformStart = { phases.append("performed") }
+        harness.coordinator.onCallKitActivated = { phases.append("activated") }
+
+        harness.coordinator.startCall()
+        harness.callKit.onStartTransactionAccepted?()
+        harness.callKit.onProviderPerformStart?()
+        harness.callKit.onStartAudio?()
+
+        #expect(phases == ["requested", "accepted", "performed", "activated"])
+    }
+
+    @Test
+    func prewarmingPlaybackDoesNotEmitPlaybackStartedCallback() {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+        var playbackStartedCount = 0
+        harness.coordinator.onPlaybackStarted = {
+            playbackStartedCount += 1
+        }
+
+        harness.coordinator.prewarmPlayback()
+
+        #expect(harness.playback.prepareCount == 1)
+        #expect(playbackStartedCount == 0)
+    }
 }
 
 @MainActor
@@ -327,6 +358,8 @@ private final class MockCallKitManager: VoiceCallKitControlling {
     var onStopAudio: (() -> Void)?
     var onMuteChanged: ((Bool) -> Void)?
     var onTransactionError: ((Error) -> Void)?
+    var onStartTransactionAccepted: (() -> Void)?
+    var onProviderPerformStart: (() -> Void)?
 
     private(set) var startCallCount = 0
     private(set) var endCallCount = 0

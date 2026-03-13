@@ -7,6 +7,8 @@ protocol VoiceCallKitControlling: AnyObject {
     var onStopAudio: (() -> Void)? { get set }
     var onMuteChanged: ((Bool) -> Void)? { get set }
     var onTransactionError: ((Error) -> Void)? { get set }
+    var onStartTransactionAccepted: (() -> Void)? { get set }
+    var onProviderPerformStart: (() -> Void)? { get set }
 
     func startCall(displayName: String)
     func endCall()
@@ -25,6 +27,9 @@ public protocol VoiceCallCoordinatorDelegate: AnyObject {
 public final class VoiceCallCoordinator {
     public weak var delegate: VoiceCallCoordinatorDelegate?
     public var onCapturedAudio: ((Data) -> Void)?
+    public var onCallKitStartRequested: (() -> Void)?
+    public var onCallKitTransactionAccepted: (() -> Void)?
+    public var onCallKitPerformStart: (() -> Void)?
     public var onCallKitActivated: (() -> Void)?
     public var onPlaybackStarted: (() -> Void)?
 
@@ -168,9 +173,9 @@ public final class VoiceCallCoordinator {
         logAudioState("Gemini delegate connected")
     }
 
-    public func transportDidDisconnect() {
+    public func transportDidDisconnect(autoReconnect: Bool) {
         handleEvent(.transportDisconnected)
-        logAudioState("Gemini delegate disconnected", extra: "autoReconnect=true")
+        logAudioState("Gemini delegate disconnected", extra: "autoReconnect=\(autoReconnect)")
     }
 
     public func transportDidReceiveAudio(_ data: Data) {
@@ -275,6 +280,12 @@ public final class VoiceCallCoordinator {
         callKitManager?.onStartAudio = { [weak self] in
             self?.handleEvent(.callKitDidActivate)
             self?.onCallKitActivated?()
+        }
+        callKitManager?.onStartTransactionAccepted = { [weak self] in
+            self?.onCallKitTransactionAccepted?()
+        }
+        callKitManager?.onProviderPerformStart = { [weak self] in
+            self?.onCallKitPerformStart?()
         }
         callKitManager?.onStopAudio = { [weak self] in
             self?.handleEvent(.callKitDidDeactivate)
@@ -619,6 +630,7 @@ public final class VoiceCallCoordinator {
         for effect in effects {
             switch effect {
             case .startCallKitCall(let displayName):
+                onCallKitStartRequested?()
                 callKitManager?.startCall(displayName: displayName)
 
             case .endCallKitCall:

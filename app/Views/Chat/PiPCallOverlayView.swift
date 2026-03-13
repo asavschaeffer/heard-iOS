@@ -34,6 +34,7 @@ enum CornerPlacement: Equatable {
 struct PiPCallOverlayView: View {
     @ObservedObject var viewModel: ChatViewModel
     let onExpand: () -> Void
+    let onEndCall: () -> Void
     let onToggleVideo: () -> Void
 
     @State private var placement: CornerPlacement = .topTrailing
@@ -52,6 +53,7 @@ struct PiPCallOverlayView: View {
             CallBarView(
                 viewModel: viewModel,
                 onExpand: onExpand,
+                onEndCall: onEndCall,
                 onToggleVideo: onToggleVideo
             )
             .frame(width: barWidth)
@@ -92,6 +94,7 @@ struct PiPCallOverlayView: View {
 private struct CallBarView: View {
     @ObservedObject var viewModel: ChatViewModel
     let onExpand: () -> Void
+    let onEndCall: () -> Void
     let onToggleVideo: () -> Void
 
     var body: some View {
@@ -154,7 +157,7 @@ private struct CallBarView: View {
             .disabled(viewModel.connectionState != .connected)
 
             Button {
-                viewModel.stopVoiceSession()
+                onEndCall()
             } label: {
                 Image(systemName: "phone.down.fill")
                     .font(.caption)
