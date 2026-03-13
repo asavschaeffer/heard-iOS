@@ -44,6 +44,7 @@ public final class VoiceCallCoordinator {
     private var audioObservers: [NSObjectProtocol] = []
     private var latestTransportState: VoiceTransportState = .disconnected
     private var currentAudioLevel: Float = 0
+    private var initialCallKitCaptureTask: Task<Void, Never>?
 
     public private(set) var state = VoiceCallUIState()
     public private(set) var callKitEnabled: Bool
@@ -110,6 +111,7 @@ public final class VoiceCallCoordinator {
     }
 
     deinit {
+        initialCallKitCaptureTask?.cancel()
         audioObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
@@ -224,6 +226,7 @@ public final class VoiceCallCoordinator {
                 shouldAdapt: event.shouldAdapt
             )
         )
+        completeInitialCallKitCaptureIfNeeded(startCapture: shouldStartCaptureNow)
     }
 
     func handleInterruption(_ event: VoiceInterruptionEvent) {
@@ -440,7 +443,9 @@ public final class VoiceCallCoordinator {
             }
             if !nextRuntime.isMuted && !nextRuntime.captureStartedFromCallKit {
                 nextRuntime.captureAllowed = true
-                effects.append(.startCapture)
+                if !callKitEnabled || (!nextRuntime.waitingForCallKitActivation && !nextRuntime.waitingForRouteStabilization) {
+                    effects.append(.startCapture)
+                }
             }
             return (.active(ActiveContext(runtime: nextRuntime)), effects)
 
@@ -466,10 +471,8 @@ public final class VoiceCallCoordinator {
             nextRuntime.useVoiceProcessingInput = false
             nextRuntime.captureAllowed = !nextRuntime.isMuted
             nextRuntime.waitingForCallKitActivation = false
+            nextRuntime.waitingForRouteStabilization = true
             effects.append(.configureCallKitSession(preferSpeaker: nil))
-            if !nextRuntime.isMuted {
-                effects.append(.startCapture)
-            }
             return nextRuntime.transportState == .connected
                 ? (.active(ActiveContext(runtime: nextRuntime)), effects)
                 : (.starting(StartContext(runtime: nextRuntime)), effects)
@@ -480,6 +483,7 @@ public final class VoiceCallCoordinator {
             nextRuntime.captureAllowed = false
             nextRuntime.captureStartedFromCallKit = false
             nextRuntime.waitingForCallKitActivation = callKitEnabled
+            nextRuntime.waitingForRouteStabilization = false
             effects.append(.stopCapture)
             return nextRuntime.transportState == .connected
                 ? (.starting(StartContext(runtime: nextRuntime)), effects)
@@ -493,6 +497,7 @@ public final class VoiceCallCoordinator {
             nextRuntime.useVoiceProcessingInput = false
             nextRuntime.captureAllowed = !nextRuntime.isMuted
             nextRuntime.waitingForCallKitActivation = false
+            nextRuntime.waitingForRouteStabilization = false
             effects.append(.configureFallbackSession(preferSpeaker: nextRuntime.speakerPreferred))
             if disablesCallKit {
                 effects.append(.disableCallKit)
@@ -645,6 +650,7 @@ public final class VoiceCallCoordinator {
                 syncSpeakerPreferenceFromSession()
                 let label = preferSpeaker.map { $0 ? "speaker" : "receiver/system" } ?? "preserve"
                 logAudioState("CallKit session configured", extra: "mode=voiceChat speakerOverride=\(label)")
+                scheduleInitialCallKitCaptureFallbackIfNeeded()
 
             case .configureFallbackSession(let preferSpeaker):
                 if let shouldUseVoiceProcessingInput = callLifecycleState.runtimeContext?.useVoiceProcessingInput {
@@ -666,6 +672,8 @@ public final class VoiceCallCoordinator {
                 startCaptureIfNeeded()
 
             case .stopCapture:
+                initialCallKitCaptureTask?.cancel()
+                initialCallKitCaptureTask = nil
                 stopCapture()
 
             case .restartCaptureForFallback:
@@ -716,6 +724,8 @@ public final class VoiceCallCoordinator {
                 delegate?.voiceCallCoordinator(self, didChangeCallKitEnabled: isEnabled)
 
             case .completeStop:
+                initialCallKitCaptureTask?.cancel()
+                initialCallKitCaptureTask = nil
                 applyCallState(.idle)
             }
         }
@@ -736,6 +746,7 @@ public final class VoiceCallCoordinator {
             isPlaybackActive: playbackEngine.isRunning || playbackEngine.isSpeaking,
             useVoiceProcessingInput: captureEngine.useVoiceProcessingInput,
             waitingForCallKitActivation: callKitEnabled,
+            waitingForRouteStabilization: false,
             waitingForTransport: latestTransportState != .connected,
             speakerPreferred: state.isSpeakerPreferred
         )
@@ -751,6 +762,7 @@ public final class VoiceCallCoordinator {
             isPlaybackActive: playbackEngine.isRunning || playbackEngine.isSpeaking,
             useVoiceProcessingInput: captureEngine.useVoiceProcessingInput,
             waitingForCallKitActivation: false,
+            waitingForRouteStabilization: false,
             waitingForTransport: false,
             speakerPreferred: state.isSpeakerPreferred
         )
@@ -814,6 +826,49 @@ public final class VoiceCallCoordinator {
             eventSink.record(.captureStarted)
         }
         refreshLifecycleRuntime()
+        publishState()
+    }
+
+    private func scheduleInitialCallKitCaptureFallbackIfNeeded() {
+        guard callLifecycleState.runtimeContext?.waitingForRouteStabilization == true else { return }
+        initialCallKitCaptureTask?.cancel()
+        initialCallKitCaptureTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            while !Task.isCancelled {
+                self.completeInitialCallKitCaptureIfNeeded(startCapture: self.shouldStartCaptureNow)
+                if self.callLifecycleState.runtimeContext?.waitingForRouteStabilization != true {
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+        }
+    }
+
+    private func completeInitialCallKitCaptureIfNeeded(startCapture: Bool) {
+        guard var runtime = callLifecycleState.runtimeContext, runtime.waitingForRouteStabilization else { return }
+        guard callLifecycleState.isPresented else { return }
+        guard !isRouteAdapting else { return }
+        guard runtime.transportState == .connected, runtime.waitingForTransport == false else { return }
+
+        runtime.waitingForRouteStabilization = false
+        applyCallState(callLifecycleState.replacingRuntime(runtime), recordTransition: false)
+        initialCallKitCaptureTask?.cancel()
+        initialCallKitCaptureTask = nil
+
+        if startCapture {
+            startCaptureIfNeeded()
+        } else {
+            refreshLifecycleRuntime()
+            publishState()
+        }
+    }
+
+    private var isRouteAdapting: Bool {
+        if case .adapting = routeLifecycleState {
+            return true
+        }
+        return false
     }
 
     private func stopCapture() {
@@ -824,6 +879,7 @@ public final class VoiceCallCoordinator {
         }
         currentAudioLevel = 0
         refreshLifecycleRuntime()
+        publishState()
         logAudioState(
             hadEngine ? "Capture stopped" : "Capture stop requested with no active engine",
             extra: "callbacks=\(metrics.callbackCount) chunks=\(metrics.chunkCount) bytes=\(metrics.byteCount)"
@@ -837,6 +893,7 @@ public final class VoiceCallCoordinator {
             eventSink.record(.playbackStopped)
         }
         refreshLifecycleRuntime()
+        publishState()
     }
 
     private func disableCallKitForSession() {
@@ -861,7 +918,10 @@ public final class VoiceCallCoordinator {
         next.audioLevel = callLifecycleState.isPresented ? currentAudioLevel : 0
         next.isMicrophoneMuted = runtime?.isMuted ?? false
         next.isSpeakerPreferred = runtime?.speakerPreferred ?? audioSessionController.syncSpeakerPreference()
-        next.pendingVoiceStart = runtime?.waitingForCallKitActivation == true || runtime?.waitingForTransport == true
+        next.pendingVoiceStart =
+            runtime?.waitingForCallKitActivation == true ||
+            runtime?.waitingForRouteStabilization == true ||
+            runtime?.waitingForTransport == true
         next.captureStartedFromCallKit = runtime?.captureStartedFromCallKit ?? false
         next.useVoiceProcessingInput = runtime?.useVoiceProcessingInput ?? captureEngine.useVoiceProcessingInput
         next.isCaptureRunning = captureEngine.isRunning

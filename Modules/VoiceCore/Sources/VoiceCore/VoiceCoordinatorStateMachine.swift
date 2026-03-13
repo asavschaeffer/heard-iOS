@@ -14,6 +14,7 @@ struct VoiceCallRuntimeContext: Equatable {
     var isPlaybackActive: Bool
     var useVoiceProcessingInput: Bool
     var waitingForCallKitActivation: Bool
+    var waitingForRouteStabilization: Bool
     var waitingForTransport: Bool
     var speakerPreferred: Bool
 }
@@ -115,6 +116,9 @@ extension VoiceCallRuntimeContext {
         var parts: [String] = [ownership.rawValue, transportState.debugLabel]
         if waitingForCallKitActivation {
             parts.append("awaitingCallKit")
+        }
+        if waitingForRouteStabilization {
+            parts.append("awaitingRoute")
         }
         if waitingForTransport {
             parts.append("awaitingTransport")
