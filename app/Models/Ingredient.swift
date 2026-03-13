@@ -529,24 +529,3 @@ extension Ingredient {
     }
 }
 
-// MARK: - LLM Schema Description
-
-extension Ingredient {
-    static var schemaDescription: String {
-        """
-        Ingredient schema:
-        - name: String (required) - The ingredient name, e.g. "Eggs", "Chicken breast"
-        - quantity: Number (required) - Amount, must be > 0
-        - unit: String (required) - One of: \(Unit.allValidStrings.joined(separator: ", "))
-        - category: String (optional) - One of: \(IngredientCategory.allValidStrings.joined(separator: ", "))
-        - location: String (optional) - One of: \(StorageLocation.allValidStrings.joined(separator: ", "))
-        - expiryDate: ISO8601 date string (optional) - When the ingredient expires
-        - notes: String (optional) - Additional notes
-
-        When adding ingredients:
-        - If an ingredient with the same name exists, quantities will be merged
-        - Names are matched case-insensitively ("eggs" matches "Eggs")
-        - Singular/plural forms are matched ("egg" matches "eggs")
-        """
-    }
-}
