@@ -6,17 +6,17 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $navigationState.selectedTab) {
-            ChatView()
-                .tabItem {
-                    Label("Heard", systemImage: "waveform.circle.fill")
-                }
-                .tag(AppNavigationState.Tab.chat)
-
             InventoryView()
                 .tabItem {
                     Label("Inventory", systemImage: "refrigerator.fill")
                 }
                 .tag(AppNavigationState.Tab.inventory)
+
+            ChatView()
+                .tabItem {
+                    Label("Chat", systemImage: "waveform.circle.fill")
+                }
+                .tag(AppNavigationState.Tab.chat)
 
             RecipesView()
                 .tabItem {
