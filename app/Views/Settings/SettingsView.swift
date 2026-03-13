@@ -99,6 +99,38 @@ struct SettingsView: View {
                 } footer: {
                     Text("Changes apply on next voice call")
                 }
+
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Base System Prompt")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        TextEditor(text: $settings.baseSystemPrompt)
+                            .frame(minHeight: 260)
+                            .autocorrectionDisabled(true)
+                            .textInputAutocapitalization(.never)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Live Audio Addendum")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        TextEditor(text: $settings.liveAudioPrompt)
+                            .frame(minHeight: 140)
+                            .autocorrectionDisabled(true)
+                            .textInputAutocapitalization(.never)
+                    }
+
+                    Button("Reset Prompt Defaults") {
+                        settings.resetPromptConfiguration()
+                    }
+                } header: {
+                    Text("Beta Prompt Editing")
+                } footer: {
+                    Text("These fields map directly to the Gemini system instruction. Text chat changes apply on the next request; voice changes apply on the next voice call. Reset to defaults if tool calling or recipe formatting drifts.")
+                }
             }
             .navigationTitle("Settings")
         }

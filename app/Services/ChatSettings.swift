@@ -1,6 +1,58 @@
 import Foundation
 import Combine
 
+struct GeminiPromptConfiguration: Equatable, Sendable {
+    var baseSystemPrompt: String
+    var liveAudioPrompt: String
+
+    func prompt(for mode: SessionMode) -> String {
+        switch mode {
+        case .text:
+            return baseSystemPrompt
+        case .audio:
+            if baseSystemPrompt.isEmpty {
+                return liveAudioPrompt
+            }
+            if liveAudioPrompt.isEmpty {
+                return baseSystemPrompt
+            }
+            return baseSystemPrompt + "\n\n" + liveAudioPrompt
+        }
+    }
+
+    static let defaultConfiguration = GeminiPromptConfiguration(
+        baseSystemPrompt: """
+        You are "Heard, Chef!" - a practical, knowledgeable sous chef who manages pantry + recipes efficiently.
+
+        Core behavior:
+        - Be concise, warm, and direct.
+        - Acknowledge actions naturally with "Heard" or "Heard, chef" when appropriate.
+        - Prefer taking reasonable action over blocking on minor missing details.
+        - Ask clarifying questions only when a decision cannot be safely inferred.
+        - Never refuse recipe creation just because some quantities/units are missing.
+        - If a tool call fails, explain the issue simply and propose the fastest fix.
+        - Avoid overhyped language and avoid "it's not X, it's Y" phrasing.
+
+        Recipe guidance:
+        - Quantities/units for salt, pepper, oils, butter, herbs, and spices are optional.
+        - Accept vague quantity phrases ("some", "a handful", "to taste") without blocking.
+        - Store freeform context (variations, pairing notes, tips) in recipe notes.
+
+        \(Ingredient.schemaDescription)
+
+        \(Recipe.schemaDescription)
+        """,
+        liveAudioPrompt: """
+        Live audio call behavior:
+        - Reply in spoken audio when audio output is available.
+        - Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls.
+        - Start with a short spoken acknowledgement or answer instead of a long preamble.
+        - Ask at most one brief spoken clarification question when needed.
+        - If you use tools, do the work and then give a brief spoken result.
+        """
+    )
+}
+
 final class ChatSettings: ObservableObject {
     @Published var showReadReceipts: Bool {
         didSet {
@@ -56,23 +108,23 @@ final class ChatSettings: ObservableObject {
         }
     }
 
+    @Published var baseSystemPrompt: String {
+        didSet {
+            UserDefaults.standard.set(baseSystemPrompt, forKey: Keys.baseSystemPrompt)
+        }
+    }
+
+    @Published var liveAudioPrompt: String {
+        didSet {
+            UserDefaults.standard.set(liveAudioPrompt, forKey: Keys.liveAudioPrompt)
+        }
+    }
+
     init() {
         let defaults = UserDefaults.standard
+        Self.registerDefaults(defaults)
 
         self.showReadReceipts = defaults.bool(forKey: Keys.showReadReceipts)
-
-        // VAD defaults: register once so `bool(forKey:)` / `integer(forKey:)` return correct defaults
-        defaults.register(defaults: [
-            Keys.vadStartSensitivityLow: true,
-            Keys.vadEndSensitivityLow: true,
-            Keys.vadPrefixPaddingMs: 40,
-            Keys.vadSilenceDurationMs: 300,
-            Keys.vadProactiveAudio: false,
-            Keys.vadActivityHandlingInterrupts: true,
-            Keys.vadTurnCoverageOnlyActivity: true,
-            Keys.selectedVoice: GeminiVoice.aoede.rawValue
-        ])
-
         self.vadStartSensitivityLow = defaults.bool(forKey: Keys.vadStartSensitivityLow)
         self.vadEndSensitivityLow = defaults.bool(forKey: Keys.vadEndSensitivityLow)
         self.vadPrefixPaddingMs = defaults.integer(forKey: Keys.vadPrefixPaddingMs)
@@ -81,6 +133,10 @@ final class ChatSettings: ObservableObject {
         self.vadActivityHandlingInterrupts = defaults.bool(forKey: Keys.vadActivityHandlingInterrupts)
         self.vadTurnCoverageOnlyActivity = defaults.bool(forKey: Keys.vadTurnCoverageOnlyActivity)
         self.selectedVoice = defaults.string(forKey: Keys.selectedVoice) ?? GeminiVoice.aoede.rawValue
+        self.baseSystemPrompt = defaults.string(forKey: Keys.baseSystemPrompt)
+            ?? GeminiPromptConfiguration.defaultConfiguration.baseSystemPrompt
+        self.liveAudioPrompt = defaults.string(forKey: Keys.liveAudioPrompt)
+            ?? GeminiPromptConfiguration.defaultConfiguration.liveAudioPrompt
     }
 
     func audioSetupProfile() -> GeminiAudioSetupProfile {
@@ -99,16 +155,7 @@ final class ChatSettings: ObservableObject {
     /// Reads current VAD settings directly from UserDefaults (no instance needed).
     static func currentAudioProfile() -> GeminiAudioSetupProfile {
         let defaults = UserDefaults.standard
-        defaults.register(defaults: [
-            Keys.vadStartSensitivityLow: true,
-            Keys.vadEndSensitivityLow: true,
-            Keys.vadPrefixPaddingMs: 40,
-            Keys.vadSilenceDurationMs: 300,
-            Keys.vadProactiveAudio: false,
-            Keys.vadActivityHandlingInterrupts: true,
-            Keys.vadTurnCoverageOnlyActivity: true,
-            Keys.selectedVoice: GeminiVoice.aoede.rawValue
-        ])
+        registerDefaults(defaults)
         let interrupts = defaults.bool(forKey: Keys.vadActivityHandlingInterrupts)
         let activityOnly = defaults.bool(forKey: Keys.vadTurnCoverageOnlyActivity)
         return GeminiAudioSetupProfile(
@@ -125,6 +172,37 @@ final class ChatSettings: ObservableObject {
         )
     }
 
+    static func currentPromptConfiguration() -> GeminiPromptConfiguration {
+        let defaults = UserDefaults.standard
+        registerDefaults(defaults)
+        return GeminiPromptConfiguration(
+            baseSystemPrompt: defaults.string(forKey: Keys.baseSystemPrompt)
+                ?? GeminiPromptConfiguration.defaultConfiguration.baseSystemPrompt,
+            liveAudioPrompt: defaults.string(forKey: Keys.liveAudioPrompt)
+                ?? GeminiPromptConfiguration.defaultConfiguration.liveAudioPrompt
+        )
+    }
+
+    func resetPromptConfiguration() {
+        baseSystemPrompt = GeminiPromptConfiguration.defaultConfiguration.baseSystemPrompt
+        liveAudioPrompt = GeminiPromptConfiguration.defaultConfiguration.liveAudioPrompt
+    }
+
+    private static func registerDefaults(_ defaults: UserDefaults) {
+        defaults.register(defaults: [
+            Keys.vadStartSensitivityLow: true,
+            Keys.vadEndSensitivityLow: true,
+            Keys.vadPrefixPaddingMs: 40,
+            Keys.vadSilenceDurationMs: 300,
+            Keys.vadProactiveAudio: false,
+            Keys.vadActivityHandlingInterrupts: true,
+            Keys.vadTurnCoverageOnlyActivity: true,
+            Keys.selectedVoice: GeminiVoice.aoede.rawValue,
+            Keys.baseSystemPrompt: GeminiPromptConfiguration.defaultConfiguration.baseSystemPrompt,
+            Keys.liveAudioPrompt: GeminiPromptConfiguration.defaultConfiguration.liveAudioPrompt
+        ])
+    }
+
     private enum Keys {
         static let showReadReceipts = "showReadReceipts"
         static let vadStartSensitivityLow = "vadStartSensitivityLow"
@@ -135,5 +213,7 @@ final class ChatSettings: ObservableObject {
         static let vadActivityHandlingInterrupts = "vadActivityHandlingInterrupts"
         static let vadTurnCoverageOnlyActivity = "vadTurnCoverageOnlyActivity"
         static let selectedVoice = "selectedVoice"
+        static let baseSystemPrompt = "baseSystemPrompt"
+        static let liveAudioPrompt = "liveAudioPrompt"
     }
 }

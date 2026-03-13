@@ -122,6 +122,21 @@ struct GeminiServiceSetupTests {
     }
 
     @Test
+    func injectedPromptConfigurationOverridesDefaultSystemPrompts() {
+        let promptConfiguration = GeminiPromptConfiguration(
+            baseSystemPrompt: "Base prompt for testing",
+            liveAudioPrompt: "Audio addendum for testing"
+        )
+        let service = makeService(promptConfiguration: promptConfiguration)
+
+        #expect(service.makeSystemPrompt(for: .text) == "Base prompt for testing")
+        #expect(
+            service.makeSystemPrompt(for: .audio)
+                == "Base prompt for testing\n\nAudio addendum for testing"
+        )
+    }
+
+    @Test
     func customVoiceNameAppearsInAudioPayload() throws {
         let service = makeService()
 
@@ -138,8 +153,13 @@ struct GeminiServiceSetupTests {
         #expect(prebuiltVoiceConfig["voiceName"] as? String == "Puck")
     }
 
-    private func makeService() -> GeminiService {
+    private func makeService(
+        promptConfiguration: GeminiPromptConfiguration = .defaultConfiguration
+    ) -> GeminiService {
         let context = HeardChefApp().sharedModelContainer.mainContext
-        return GeminiService(modelContext: context)
+        return GeminiService(
+            modelContext: context,
+            promptConfigurationProvider: { promptConfiguration }
+        )
     }
 }

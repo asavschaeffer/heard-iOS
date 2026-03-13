@@ -233,6 +233,7 @@ class GeminiService: NSObject {
 
     private var hasAccepted = false
     private var lastStreamChunkAt: Date?
+    private let promptConfigurationProvider: @MainActor () -> GeminiPromptConfiguration
 
     // API Configuration
     private let apiKey: String
@@ -248,8 +249,12 @@ class GeminiService: NSObject {
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext) {
+    init(
+        modelContext: ModelContext,
+        promptConfigurationProvider: @escaping @MainActor () -> GeminiPromptConfiguration = ChatSettings.currentPromptConfiguration
+    ) {
         self.modelContext = modelContext
+        self.promptConfigurationProvider = promptConfigurationProvider
 
         // Get API key from Info.plist (populated via Secrets.xcconfig) or environment
         let plistKey = Bundle.main.object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String
@@ -451,47 +456,7 @@ class GeminiService: NSObject {
     }
 
     func makeSystemPrompt(for mode: SessionMode) -> String {
-        switch mode {
-        case .audio:
-            return baseSystemPrompt + "\n\n" + liveAudioPrompt
-        case .text:
-            return baseSystemPrompt
-        }
-    }
-
-    private var baseSystemPrompt: String {
-        """
-        You are "Heard, Chef!" - a practical, knowledgeable sous chef who manages pantry + recipes efficiently.
-
-        Core behavior:
-        - Be concise, warm, and direct.
-        - Acknowledge actions naturally with "Heard" or "Heard, chef" when appropriate.
-        - Prefer taking reasonable action over blocking on minor missing details.
-        - Ask clarifying questions only when a decision cannot be safely inferred.
-        - Never refuse recipe creation just because some quantities/units are missing.
-        - If a tool call fails, explain the issue simply and propose the fastest fix.
-        - Avoid overhyped language and avoid "it's not X, it's Y" phrasing.
-
-        Recipe guidance:
-        - Quantities/units for salt, pepper, oils, butter, herbs, and spices are optional.
-        - Accept vague quantity phrases ("some", "a handful", "to taste") without blocking.
-        - Store freeform context (variations, pairing notes, tips) in recipe notes.
-
-        \(Ingredient.schemaDescription)
-
-        \(Recipe.schemaDescription)
-        """
-    }
-
-    private var liveAudioPrompt: String {
-        """
-        Live audio call behavior:
-        - Reply in spoken audio when audio output is available.
-        - Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls.
-        - Start with a short spoken acknowledgement or answer instead of a long preamble.
-        - Ask at most one brief spoken clarification question when needed.
-        - If you use tools, do the work and then give a brief spoken result.
-        """
+        promptConfigurationProvider().prompt(for: mode)
     }
 
     // MARK: - Pending Request Tracking
