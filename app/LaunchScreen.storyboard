@@ -17,20 +17,41 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launch-chef" translatesAutoresizingMaskIntoConstraints="NO" id="JvR-Ia-5MZ">
-                                <rect key="frame" x="54.5" y="332" width="220" height="220"/>
+                                <rect key="frame" x="86.5" y="332" width="220" height="220"/>
                                 <constraints>
                                     <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="220" id="KVD-3S-0eh"/>
-                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="300" id="Q2E-L2-g5u"/>
+                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="280" id="Q2E-L2-g5u"/>
                                     <constraint firstAttribute="height" secondItem="JvR-Ia-5MZ" secondAttribute="width" multiplier="1:1" id="QIt-qf-iKj"/>
                                 </constraints>
                             </imageView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launch-bubble" translatesAutoresizingMaskIntoConstraints="NO" id="bh8-Rw-ZgI">
+                                <rect key="frame" x="200.5" y="238" width="190" height="172.5"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="190" id="1WR-y7-y5z"/>
+                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="240" id="6Zc-Dh-btJ"/>
+                                    <constraint firstAttribute="height" secondItem="bh8-Rw-ZgI" secondAttribute="width" multiplier="49:54" id="qaa-5t-s1N"/>
+                                </constraints>
+                            </imageView>
+                            <progressView opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="250" verticalHuggingPriority="750" progressViewStyle="default" progress="0.22" translatesAutoresizingMaskIntoConstraints="NO" id="0F2-u4-iVa">
+                                <rect key="frame" x="96.5" y="568" width="200" height="2"/>
+                                <color key="progressTintColor" red="1" green="0.58431372550000003" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                <color key="trackTintColor" red="0.92941176470000002" green="0.90196078430000002" blue="0.87450980390000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </progressView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" constant="-28" id="K1f-jS-7wN"/>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.36" priority="750" id="O7H-FD-yD8"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="K1f-jS-7wN"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.34" priority="750" id="O7H-FD-yD8"/>
+                            <constraint firstItem="0F2-u4-iVa" firstAttribute="top" secondItem="JvR-Ia-5MZ" secondAttribute="bottom" constant="18" id="WgJ-oS-U0R"/>
+                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="centerY" secondItem="JvR-Ia-5MZ" secondAttribute="centerY" constant="-112" id="Xhi-xU-zOI"/>
+                            <constraint firstItem="0F2-u4-iVa" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="bkr-KT-Z26"/>
+                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="centerX" secondItem="JvR-Ia-5MZ" secondAttribute="centerX" constant="96" id="dVN-hN-mUP"/>
                             <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="16" id="hMQ-4A-XhW"/>
+                            <constraint firstItem="0F2-u4-iVa" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.34" priority="750" id="iFZ-L9-8uu"/>
+                            <constraint firstItem="0F2-u4-iVa" firstAttribute="width" relation="greaterThanOrEqual" constant="200" id="q2x-u5-I5a"/>
+                            <constraint firstItem="0F2-u4-iVa" firstAttribute="width" relation="lessThanOrEqual" constant="240" id="uwG-Rn-5A8"/>
+                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.3" priority="750" id="xUi-BU-64Q"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -40,7 +61,8 @@
         </scene>
     </scenes>
     <resources>
-        <image name="launch-chef" width="1080" height="1080"/>
+        <image name="launch-bubble" width="600" height="545"/>
+        <image name="launch-chef" width="660" height="660"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

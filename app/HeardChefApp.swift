@@ -49,8 +49,10 @@ struct HeardChefApp: App {
                         .environmentObject(warmup)
                 } else {
                     ZStack {
-                        MainTabView()
-                            .environmentObject(navigationState)
+                        if warmup.isFinished {
+                            MainTabView()
+                                .environmentObject(navigationState)
+                        }
 
                         if showsLaunchOverlay {
                             LaunchLoadingView {
