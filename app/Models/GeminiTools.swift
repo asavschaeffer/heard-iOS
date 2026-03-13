@@ -27,21 +27,30 @@ struct PropertySchema {
     let enumValues: [String]?
     let properties: [String: PropertySchema]?
     let required: [String]?
+    private let _items: Box<PropertySchema>?
+
+    var items: PropertySchema? { _items?.value }
+
+    /// Reference wrapper to allow recursive value types.
+    private final class Box<T> {
+        let value: T
+        init(_ value: T) { self.value = value }
+    }
 
     static func string(_ description: String) -> PropertySchema {
-        PropertySchema(type: "string", description: description, enumValues: nil, properties: nil, required: nil)
+        PropertySchema(type: "string", description: description, enumValues: nil, properties: nil, required: nil, _items: nil)
     }
 
     static func number(_ description: String) -> PropertySchema {
-        PropertySchema(type: "number", description: description, enumValues: nil, properties: nil, required: nil)
+        PropertySchema(type: "number", description: description, enumValues: nil, properties: nil, required: nil, _items: nil)
     }
 
     static func boolean(_ description: String) -> PropertySchema {
-        PropertySchema(type: "boolean", description: description, enumValues: nil, properties: nil, required: nil)
+        PropertySchema(type: "boolean", description: description, enumValues: nil, properties: nil, required: nil, _items: nil)
     }
 
     static func stringEnum(_ description: String, values: [String]) -> PropertySchema {
-        PropertySchema(type: "string", description: description, enumValues: values, properties: nil, required: nil)
+        PropertySchema(type: "string", description: description, enumValues: values, properties: nil, required: nil, _items: nil)
     }
 
     static func object(_ description: String, properties: [String: PropertySchema], required: [String] = []) -> PropertySchema {
@@ -50,7 +59,19 @@ struct PropertySchema {
             description: description,
             enumValues: nil,
             properties: properties,
-            required: required.isEmpty ? nil : required
+            required: required.isEmpty ? nil : required,
+            _items: nil
+        )
+    }
+
+    static func array(_ description: String, items: PropertySchema) -> PropertySchema {
+        PropertySchema(
+            type: "array",
+            description: description,
+            enumValues: nil,
+            properties: nil,
+            required: nil,
+            _items: Box(items)
         )
     }
 }
@@ -61,7 +82,7 @@ enum InventoryTools {
 
     static let add = FunctionDeclaration(
         name: "add_ingredient",
-        description: "Add an ingredient. Merges quantities if exists.",
+        description: "Add an ingredient to the pantry. Merges quantity if one with the same name already exists (matched case-insensitively, singular/plural).",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Ingredient name"),
@@ -78,7 +99,7 @@ enum InventoryTools {
 
     static let remove = FunctionDeclaration(
         name: "remove_ingredient",
-        description: "Remove ingredient or reduce quantity.",
+        description: "Remove an ingredient from the pantry, or reduce its quantity. Omit quantity to remove entirely.",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Name to remove"),
@@ -90,7 +111,7 @@ enum InventoryTools {
 
     static let update = FunctionDeclaration(
         name: "update_ingredient",
-        description: "Update existing ingredient properties. Only include fields to change.",
+        description: "Update properties of an existing pantry ingredient. Only include fields to change.",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Current name"),
@@ -113,7 +134,7 @@ enum InventoryTools {
 
     static let list = FunctionDeclaration(
         name: "list_ingredients",
-        description: "List ingredients, optionally filtered.",
+        description: "List all pantry ingredients, optionally filtered by category or location.",
         parameters: ParameterSchema(
             properties: [
                 "category": .stringEnum("Filter category", values: IngredientCategory.allValidStrings),
@@ -125,7 +146,7 @@ enum InventoryTools {
 
     static let search = FunctionDeclaration(
         name: "search_ingredients",
-        description: "Search ingredients by name (partial match).",
+        description: "Search pantry ingredients by name (partial match).",
         parameters: ParameterSchema(
             properties: [
                 "query": .string("Search term")
@@ -136,7 +157,7 @@ enum InventoryTools {
 
     static let check = FunctionDeclaration(
         name: "get_ingredient",
-        description: "Check specifics of one ingredient.",
+        description: "Get full details of a single pantry ingredient by name.",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Name to check")
@@ -156,20 +177,36 @@ enum RecipeTools {
 
     static let create = FunctionDeclaration(
         name: "create_recipe",
-        description: "Create a new recipe.",
+        description: "Create a new recipe. Ingredient names are matched to pantry inventory by normalized name.",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Recipe name"),
-                "description": .string("Description"),
-                "notes": .string("Freeform notes: variations, tips, pairings, substitutions (Optional)"),
-                "cookingTemperature": .string("Cooking temperature, e.g. 350F, 180C, medium-high (Optional)"),
-                "ingredients": .string("JSON array: [{name, quantity?, unit?, preparation?}]"),
-                "steps": .string("JSON array: [string] or [{instruction, durationMinutes?}]"),
-                "prepTime": .number("Minutes"),
-                "cookTime": .number("Minutes"),
-                "servings": .number("Servings"),
+                "description": .string("Brief description of the dish"),
+                "notes": .string("Freeform notes: variations, tips, pairings, substitutions"),
+                "cookingTemperature": .string("Cooking temperature, e.g. 350F, 180C, medium-high"),
+                "ingredients": .array("List of ingredients", items: .object(
+                    "An ingredient",
+                    properties: [
+                        "name": .string("Ingredient name"),
+                        "quantity": .number("Amount needed"),
+                        "unit": .stringEnum("Unit", values: Unit.allValidStrings),
+                        "preparation": .string("How to prepare, e.g. diced, minced")
+                    ],
+                    required: ["name"]
+                )),
+                "steps": .array("Cooking steps in order", items: .object(
+                    "A step",
+                    properties: [
+                        "instruction": .string("What to do"),
+                        "durationMinutes": .number("Timer for this step")
+                    ],
+                    required: ["instruction"]
+                )),
+                "prepTime": .number("Prep time in minutes"),
+                "cookTime": .number("Cook time in minutes"),
+                "servings": .number("Number of servings"),
                 "difficulty": .stringEnum("Difficulty", values: RecipeDifficulty.allValidStrings),
-                "tags": .string("JSON array of tags")
+                "tags": .array("Lowercase tags, e.g. italian, vegetarian, quick", items: .string("A tag"))
             ],
             required: ["name", "ingredients", "steps"]
         )
@@ -179,7 +216,7 @@ enum RecipeTools {
     
     static let update = FunctionDeclaration(
         name: "update_recipe",
-        description: "Update an existing recipe. Only provide fields to change.",
+        description: "Update an existing recipe. Only provide fields to change. Ingredients and steps replace the full list when provided.",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Name of recipe to update"),
@@ -187,13 +224,29 @@ enum RecipeTools {
                 "description": .string("New description"),
                 "notes": .string("New notes. Use empty string to clear."),
                 "cookingTemperature": .string("New cooking temperature. Use empty string to clear."),
-                "ingredients": .string("New JSON array (replaces old list)"),
-                "steps": .string("New JSON array (replaces old list)"),
-                "prepTime": .number("New prep time"),
-                "cookTime": .number("New cook time"),
+                "ingredients": .array("New ingredients (replaces full list)", items: .object(
+                    "An ingredient",
+                    properties: [
+                        "name": .string("Ingredient name"),
+                        "quantity": .number("Amount needed"),
+                        "unit": .stringEnum("Unit", values: Unit.allValidStrings),
+                        "preparation": .string("How to prepare, e.g. diced, minced")
+                    ],
+                    required: ["name"]
+                )),
+                "steps": .array("New steps (replaces full list)", items: .object(
+                    "A step",
+                    properties: [
+                        "instruction": .string("What to do"),
+                        "durationMinutes": .number("Timer for this step")
+                    ],
+                    required: ["instruction"]
+                )),
+                "prepTime": .number("New prep time in minutes"),
+                "cookTime": .number("New cook time in minutes"),
                 "servings": .number("New servings"),
                 "difficulty": .stringEnum("New difficulty", values: RecipeDifficulty.allValidStrings),
-                "tags": .string("New tags JSON")
+                "tags": .array("New lowercase tags", items: .string("A tag"))
             ],
             required: ["name"]
         )
@@ -201,7 +254,7 @@ enum RecipeTools {
 
     static let list = FunctionDeclaration(
         name: "list_recipes",
-        description: "List recipes summary.",
+        description: "List all saved recipes (name, tags, total time). Optionally filter by tag.",
         parameters: ParameterSchema(
             properties: [
                 "tag": .string("Filter by tag")
@@ -212,7 +265,7 @@ enum RecipeTools {
 
     static let search = FunctionDeclaration(
         name: "search_recipes",
-        description: "Search recipes by name/tag.",
+        description: "Search recipes by name or tag (partial match).",
         parameters: ParameterSchema(
             properties: [
                 "query": .string("Search term")
@@ -223,7 +276,7 @@ enum RecipeTools {
 
     static let suggest = FunctionDeclaration(
         name: "suggest_recipes",
-        description: "Suggest recipes from inventory.",
+        description: "Suggest recipes that can be made with current pantry inventory, ranked by ingredient match.",
         parameters: ParameterSchema(
             properties: [
                 "maxMissingIngredients": .number("Max missing (default 3)"),
@@ -234,7 +287,7 @@ enum RecipeTools {
     )
     static let get = FunctionDeclaration(
         name: "get_recipe",
-        description: "Get the full recipe including ingredients and steps.",
+        description: "Get full recipe details including ingredients, steps, and notes.",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Exact recipe name")
@@ -256,7 +309,7 @@ enum RecipeTools {
 
     static let delete = FunctionDeclaration(
         name: "delete_recipe",
-        description: "Delete a recipe.",
+        description: "Permanently delete a recipe by name.",
         parameters: ParameterSchema(
             properties: [
                 "name": .string("Name to delete")
@@ -286,34 +339,34 @@ struct GeminiTools {
                 "parameters": [
                     "type": decl.parameters.type,
                     "properties": decl.parameters.properties.reduce(into: [String: Any]()) { result, pair in
-                        var propDict: [String: Any] = [
-                            "type": pair.value.type,
-                            "description": pair.value.description
-                        ]
-                        if let enumVals = pair.value.enumValues {
-                            propDict["enum"] = enumVals
-                        }
-                        if let nestedProperties = pair.value.properties {
-                            propDict["properties"] = nestedProperties.reduce(into: [String: Any]()) { nestedResult, nestedPair in
-                                var nestedDict: [String: Any] = [
-                                    "type": nestedPair.value.type,
-                                    "description": nestedPair.value.description
-                                ]
-                                if let nestedEnum = nestedPair.value.enumValues {
-                                    nestedDict["enum"] = nestedEnum
-                                }
-                                nestedResult[nestedPair.key] = nestedDict
-                            }
-                        }
-                        if let nestedRequired = pair.value.required {
-                            propDict["required"] = nestedRequired
-                        }
-                        result[pair.key] = propDict
+                        result[pair.key] = serializeProperty(pair.value)
                     },
                     "required": decl.parameters.required
                 ] as [String: Any]
             ]
         }
+    }
+
+    private static func serializeProperty(_ schema: PropertySchema) -> [String: Any] {
+        var dict: [String: Any] = [
+            "type": schema.type,
+            "description": schema.description
+        ]
+        if let enumVals = schema.enumValues {
+            dict["enum"] = enumVals
+        }
+        if let nestedProperties = schema.properties {
+            dict["properties"] = nestedProperties.reduce(into: [String: Any]()) { result, pair in
+                result[pair.key] = serializeProperty(pair.value)
+            }
+        }
+        if let nestedRequired = schema.required {
+            dict["required"] = nestedRequired
+        }
+        if let items = schema.items {
+            dict["items"] = serializeProperty(items)
+        }
+        return dict
     }
 
     static func tool(named name: String) -> FunctionDeclaration? {
@@ -366,6 +419,60 @@ struct FunctionCall {
 
     func bool(_ key: String) -> Bool? {
         arguments[key] as? Bool
+    }
+
+    func arrayOfDicts(_ key: String) -> [[String: Any]]? {
+        arguments[key] as? [[String: Any]]
+    }
+
+    func parsedArrayOfDicts(_ key: String) -> [[String: Any]]? {
+        if let native = arrayOfDicts(key) {
+            return native
+        }
+
+        guard let jsonString = string(key),
+              let data = jsonString.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return nil
+        }
+
+        return parsed
+    }
+
+    func stringArray(_ key: String) -> [String]? {
+        arguments[key] as? [String]
+    }
+
+    func parsedStringArray(_ key: String) -> [String]? {
+        if let native = stringArray(key) {
+            return native
+        }
+
+        guard let jsonString = string(key),
+              let data = jsonString.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [String] else {
+            return nil
+        }
+
+        return parsed
+    }
+
+    func anyArray(_ key: String) -> [Any]? {
+        arguments[key] as? [Any]
+    }
+
+    func parsedAnyArray(_ key: String) -> [Any]? {
+        if let native = anyArray(key) {
+            return native
+        }
+
+        guard let jsonString = string(key),
+              let data = jsonString.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any] else {
+            return nil
+        }
+
+        return parsed
     }
 
     func date(_ key: String) -> Date? {

@@ -682,38 +682,3 @@ extension Recipe {
     }
 }
 
-// MARK: - LLM Schema Description
-
-extension Recipe {
-    /// A description of the data model for LLM system prompts.
-    static var schemaDescription: String {
-        """
-        Recipe schema:
-        - name: String (required) - Recipe name
-        - description: String (optional) - Brief description of the dish
-        - notes: String (optional) - Freeform text for variations, tips, pairings, substitutions, or chef's notes
-        - cookingTemperature: String (optional) - Target cooking temperature like "350F", "180C", or "medium-high"
-        - prepTime: Number (optional) - Preparation time in minutes
-        - cookTime: Number (optional) - Cooking time in minutes
-        - servings: Number (optional) - Number of servings
-        - difficulty: String (optional) - One of: \(RecipeDifficulty.allValidStrings.joined(separator: ", "))
-        - tags: Array of strings (optional) - Tags like "italian", "vegetarian", "quick"
-
-        RecipeIngredient schema:
-        - name: String (required) - Ingredient name
-        - quantity: Number (optional) - Amount needed
-        - unit: String (optional) - One of: \(Unit.allValidStrings.joined(separator: ", "))
-        - preparation: String (optional) - How to prepare, e.g. "diced", "minced"
-
-        RecipeStep schema:
-        - instruction: String (required) - What to do
-        - durationMinutes: Number (optional) - Timer for this step
-
-        When creating recipes:
-        - Names are matched case-insensitively
-        - Ingredients are matched to inventory using normalized names
-        - Tags should be lowercase
-        - Use notes for useful freeform context that doesn't fit structured fields
-        """
-    }
-}

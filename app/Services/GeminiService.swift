@@ -1551,11 +1551,9 @@ class GeminiService: NSObject {
             return .error(id: call.id, name: call.name, message: "Missing recipe name")
         }
 
-        // Parse ingredients from JSON string
-        guard let ingredientsJSON = call.string("ingredients"),
-              let ingredientsData = ingredientsJSON.data(using: .utf8),
-              let ingredientsArray = try? JSONSerialization.jsonObject(with: ingredientsData) as? [[String: Any]] else {
-            return .error(id: call.id, name: call.name, message: "Invalid ingredients format - expected JSON array")
+        // Parse ingredients: native array first, JSON-string fallback
+        guard let ingredientsArray = call.parsedArrayOfDicts("ingredients") else {
+            return .error(id: call.id, name: call.name, message: "Invalid ingredients format - expected array")
         }
 
         let recipeIngredients = ingredientsArray.compactMap { RecipeIngredient.fromArguments($0) }
@@ -1563,15 +1561,13 @@ class GeminiService: NSObject {
             return .error(id: call.id, name: call.name, message: "No valid ingredients provided")
         }
 
-        // Parse steps from JSON string
-        guard let stepsJSON = call.string("steps"),
-              let stepsData = stepsJSON.data(using: .utf8),
-              let stepsArray = try? JSONSerialization.jsonObject(with: stepsData) as? [Any] else {
-            return .error(id: call.id, name: call.name, message: "Invalid steps format - expected JSON array")
+        // Parse steps: native array first, JSON-string fallback
+        guard let stepsRaw = call.parsedAnyArray("steps") else {
+            return .error(id: call.id, name: call.name, message: "Invalid steps format - expected array")
         }
 
         var recipeSteps: [RecipeStep] = []
-        for (index, stepItem) in stepsArray.enumerated() {
+        for (index, stepItem) in stepsRaw.enumerated() {
             if let stepStr = stepItem as? String {
                 recipeSteps.append(RecipeStep(instruction: stepStr, orderIndex: index))
             } else if let stepDict = stepItem as? [String: Any],
@@ -1593,12 +1589,8 @@ class GeminiService: NSObject {
         let servings = call.int("servings")
         let difficulty = call.string("difficulty").flatMap { RecipeDifficulty.parse($0) } ?? .medium
 
-        var tags: [String] = []
-        if let tagsJSON = call.string("tags"),
-           let tagsData = tagsJSON.data(using: .utf8),
-           let tagsArray = try? JSONSerialization.jsonObject(with: tagsData) as? [String] {
-            tags = tagsArray
-        }
+        // Parse tags: native array first, JSON-string fallback
+        let tags = call.parsedStringArray("tags") ?? []
 
         // Check if recipe already exists
         if Recipe.find(named: name, in: modelContext) != nil {
@@ -1660,33 +1652,29 @@ class GeminiService: NSObject {
         if let servings = call.int("servings") { changes["servings"] = servings }
         if let difficulty = call.string("difficulty") { changes["difficulty"] = difficulty }
 
-        // Update tags
-        if let tagsJSON = call.string("tags"),
-           let tagsData = tagsJSON.data(using: .utf8),
-           let tagsArray = try? JSONSerialization.jsonObject(with: tagsData) as? [String] {
-            changes["tags"] = tagsArray
+        // Update tags: native array first, JSON-string fallback
+        if let tags = call.parsedStringArray("tags") {
+            changes["tags"] = tags
         }
 
-        // Update ingredients (Full Replace)
-        if let ingredientsJSON = call.string("ingredients"),
-           let ingredientsData = ingredientsJSON.data(using: .utf8),
-           let ingredientsArray = try? JSONSerialization.jsonObject(with: ingredientsData) as? [[String: Any]] {
+        // Update ingredients (Full Replace): native array first, JSON-string fallback
+        let ingredientsArray = call.parsedArrayOfDicts("ingredients")
+        if let ingredientsArray {
             let oldIngredients = recipe.ingredients
             let newIngredients = ingredientsArray.compactMap { RecipeIngredient.fromArguments($0) }
-            recipe.ingredients = newIngredients // SwiftData relationship update
+            recipe.ingredients = newIngredients
             for ingredient in oldIngredients {
                 modelContext.delete(ingredient)
             }
             changes["ingredients"] = "\(newIngredients.count) items"
         }
 
-        // Update steps (Full Replace)
-        if let stepsJSON = call.string("steps"),
-           let stepsData = stepsJSON.data(using: .utf8),
-           let stepsArray = try? JSONSerialization.jsonObject(with: stepsData) as? [Any] {
+        // Update steps (Full Replace): native array first, JSON-string fallback
+        let stepsRaw = call.parsedAnyArray("steps")
+        if let stepsRaw {
             let oldSteps = recipe.steps
             var newSteps: [RecipeStep] = []
-            for (index, stepItem) in stepsArray.enumerated() {
+            for (index, stepItem) in stepsRaw.enumerated() {
                 if let stepStr = stepItem as? String {
                     newSteps.append(RecipeStep(instruction: stepStr, orderIndex: index))
                 } else if let stepDict = stepItem as? [String: Any],
@@ -1694,7 +1682,7 @@ class GeminiService: NSObject {
                     newSteps.append(step)
                 }
             }
-            recipe.steps = newSteps // SwiftData relationship update
+            recipe.steps = newSteps
             for step in oldSteps {
                 modelContext.delete(step)
             }
