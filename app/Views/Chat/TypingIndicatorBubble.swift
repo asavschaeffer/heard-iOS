@@ -17,6 +17,7 @@ struct TypingIndicatorBubble: View {
                         )
                 }
             }
+            .offset(y: -2)
             .padding(12)
             .background(
                 BubbleTailShape(isUser: false)
