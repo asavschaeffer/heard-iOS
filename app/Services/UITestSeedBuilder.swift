@@ -5,6 +5,8 @@ struct UITestSeedBuilder {
     let context: ModelContext
 
     func reset() {
+        deleteAll(ChatMessage.self)
+        deleteAll(ChatThread.self)
         deleteAll(Recipe.self)
         deleteAll(Ingredient.self)
         save()
@@ -27,6 +29,54 @@ struct UITestSeedBuilder {
         )
         context.insert(ingredient)
         return ingredient
+    }
+
+    @discardableResult
+    func chatThread(
+        title: String,
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) -> ChatThread {
+        let thread = ChatThread(
+            title: title,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+        context.insert(thread)
+        return thread
+    }
+
+    @discardableResult
+    func chatMessage(
+        thread: ChatThread,
+        role: ChatMessageRole,
+        text: String? = nil,
+        imageData: Data? = nil,
+        mediaType: ChatMediaType? = nil,
+        mediaURL: String? = nil,
+        mediaFilename: String? = nil,
+        mediaUTType: String? = nil,
+        status: ChatMessageStatus = .sent,
+        reactions: [String] = [],
+        createdAt: Date = .now,
+        updatedAt: Date = .now
+    ) -> ChatMessage {
+        let message = ChatMessage(
+            role: role,
+            text: text,
+            imageData: imageData,
+            mediaType: mediaType,
+            mediaURL: mediaURL,
+            mediaFilename: mediaFilename,
+            mediaUTType: mediaUTType,
+            status: status,
+            reactions: reactions,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            thread: thread
+        )
+        context.insert(message)
+        return message
     }
 
     @discardableResult
