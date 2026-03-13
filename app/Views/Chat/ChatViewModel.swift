@@ -338,7 +338,7 @@ class ChatViewModel: ObservableObject {
         let config: SessionConfig = {
             switch mode {
             case .audio:
-                return .audio(profile: .fasterTurnTaking300ms)
+                return .audio(profile: ChatSettings.currentAudioProfile())
             case .text:
                 return .text()
             }
