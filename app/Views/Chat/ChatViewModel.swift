@@ -7,6 +7,30 @@ import Combine
 import VoiceCore
 
 @MainActor
+protocol ChatVoiceCoordinating: AnyObject {
+    var delegate: VoiceCallCoordinatorDelegate? { get set }
+    var onCapturedAudio: ((Data) -> Void)? { get set }
+    var onCallKitStartRequested: (() -> Void)? { get set }
+    var onCallKitTransactionAccepted: (() -> Void)? { get set }
+    var onCallKitPerformStart: (() -> Void)? { get set }
+    var onCallKitActivated: (() -> Void)? { get set }
+    var onPlaybackStarted: (() -> Void)? { get set }
+
+    func prewarmPlayback()
+    func transportWillConnect()
+    func startCall()
+    func stopCall()
+    func toggleMute()
+    func toggleSpeaker()
+    func transportDidConnect()
+    func transportDidDisconnect(autoReconnect: Bool)
+    func transportDidFail(message: String)
+    func transportDidReceiveAudio(_ data: Data)
+}
+
+extension VoiceCallCoordinator: ChatVoiceCoordinating {}
+
+@MainActor
 class ChatViewModel: ObservableObject {
 
     enum ChatConfig {
@@ -61,7 +85,7 @@ class ChatViewModel: ObservableObject {
 
     private var geminiService: GeminiService?
     private var modelContext: ModelContext?
-    private let voiceCoordinator: VoiceCallCoordinator
+    private let voiceCoordinator: ChatVoiceCoordinating
     private var pendingMessages: [PendingMessage] = []
     private var draftMessageId: UUID?
     private var assistantTranscriptMessageId: UUID?
@@ -80,7 +104,10 @@ class ChatViewModel: ObservableObject {
     private var reconnectDelay: TimeInterval = 1.0
     private let maxReconnectDelay: TimeInterval = 30.0
     private var hasPrewarmedForFirstCall = false
+    private var isStoppingVoiceSession = false
     private let callStartupTrace = CallStartupTrace()
+    private let makeGeminiService: @MainActor (ModelContext) -> GeminiService
+    private let shouldBootstrapThreadOnModelContext: Bool
 
     private struct PendingMessage {
         let message: ChatMessage
@@ -90,11 +117,37 @@ class ChatViewModel: ObservableObject {
     
     // MARK: - Initialization
 
-    init() {
+    var isStoppingCall: Bool { isStoppingVoiceSession }
+    var hasScheduledReconnect: Bool { reconnectTask != nil }
+
+    convenience init() {
+        self.init(
+            geminiServiceFactory: { GeminiService(modelContext: $0) },
+            voiceCoordinator: nil,
+            shouldBootstrapThreadOnModelContext: true
+        )
+    }
+
+    init(
+        geminiServiceFactory: @escaping @MainActor (ModelContext) -> GeminiService,
+        voiceCoordinator: ChatVoiceCoordinating? = nil,
+        shouldBootstrapThreadOnModelContext: Bool = true
+    ) {
+        self.makeGeminiService = geminiServiceFactory
+        self.shouldBootstrapThreadOnModelContext = shouldBootstrapThreadOnModelContext
         let initialCallKitEnabled = true
-        let coordinator = VoiceCallCoordinator(displayName: "Heard, Chef", callKitEnabled: initialCallKitEnabled)
+        let coordinator = voiceCoordinator ?? VoiceCallCoordinator(displayName: "Heard, Chef", callKitEnabled: initialCallKitEnabled)
         self.voiceCoordinator = coordinator
         coordinator.delegate = self
+        coordinator.onCallKitStartRequested = { [weak self] in
+            self?.callStartupTrace.mark(.callKitStartRequested)
+        }
+        coordinator.onCallKitTransactionAccepted = { [weak self] in
+            self?.callStartupTrace.mark(.callKitTransactionAccepted)
+        }
+        coordinator.onCallKitPerformStart = { [weak self] in
+            self?.callStartupTrace.mark(.callKitPerformStart)
+        }
         coordinator.onCallKitActivated = { [weak self] in
             self?.callStartupTrace.mark(.callKitActivated)
         }
@@ -118,10 +171,11 @@ class ChatViewModel: ObservableObject {
         if geminiService == nil {
             // ChatView can reappear during sheet/tab transitions; preserve the same client so
             // in-flight REST turns are not orphaned by a fresh GeminiService instance.
-            let service = GeminiService(modelContext: modelContext ?? context)
+            let service = makeGeminiService(modelContext ?? context)
             service.delegate = self
             geminiService = service
         }
+        guard shouldBootstrapThreadOnModelContext else { return }
         loadOrCreateThread()
     }
 
@@ -293,9 +347,6 @@ class ChatViewModel: ObservableObject {
     
     func disconnect() {
         stopVoiceSession()
-        geminiService?.disconnect(reason: "ChatViewModel.disconnect")
-        connectionState = .disconnected
-        voiceCoordinator.transportDidDisconnect()
     }
 
     func sendMessage(_ text: String) {
@@ -330,6 +381,7 @@ class ChatViewModel: ObservableObject {
     // MARK: - Voice Session Management
 
     func startVoiceSession() {
+        isStoppingVoiceSession = false
         callStartupTrace.ensureStarted()
         callStartupTrace.mark(.voiceSessionStarted)
         let wasPresented = callState.isPresented
@@ -345,8 +397,11 @@ class ChatViewModel: ObservableObject {
     }
 
     func stopVoiceSession() {
+        guard !isStoppingVoiceSession else { return }
+        isStoppingVoiceSession = true
         callStartupTrace.finish(reason: "stopped")
         let wasPresented = callState.isPresented
+        let hasActiveSocketSession = geminiService?.hasActiveSocketSession == true
         voiceCoordinator.stopCall()
         // TODO: End Live Activity when Dynamic Island is implemented.
         liveActivityManager.endCallActivity()
@@ -359,8 +414,9 @@ class ChatViewModel: ObservableObject {
         resetCallTimer()
         // Disconnect the audio session; next text send will lazy-reconnect in text mode
         geminiService?.disconnect(reason: "stopVoiceSession")
-        connectionState = .disconnected
-        voiceCoordinator.transportDidDisconnect()
+        if !hasActiveSocketSession {
+            finalizeTransportDisconnect(shouldAutoReconnect: false)
+        }
         if wasPresented {
             sendCallHaptic(style: .warning)
         }
@@ -940,20 +996,11 @@ extension ChatViewModel: GeminiServiceDelegate {
     }
 
     func geminiServiceDidDisconnect(_ service: GeminiService) {
-        let shouldAutoReconnect: Bool = {
+        let shouldAutoReconnect = isStoppingVoiceSession == false && {
             if case .error = connectionState { return false }
             return true
         }()
-        finalizeAssistantStreamingMessages()
-        connectionState = .disconnected
-        voiceCoordinator.transportDidDisconnect()
-        isTyping = false
-        if callState.isPresented {
-            pauseCallTimer()
-            if shouldAutoReconnect {
-                scheduleAudioReconnect()
-            }
-        }
+        finalizeTransportDisconnect(shouldAutoReconnect: shouldAutoReconnect)
     }
 
     func geminiService(_ service: GeminiService, didReceiveError error: Error) {
@@ -1050,10 +1097,30 @@ extension ChatViewModel: VoiceCallCoordinatorDelegate {
 }
 
 @MainActor
+private extension ChatViewModel {
+    func finalizeTransportDisconnect(shouldAutoReconnect: Bool) {
+        finalizeAssistantStreamingMessages()
+        connectionState = .disconnected
+        voiceCoordinator.transportDidDisconnect(autoReconnect: shouldAutoReconnect)
+        isTyping = false
+        if callState.isPresented {
+            pauseCallTimer()
+            if shouldAutoReconnect {
+                scheduleAudioReconnect()
+            }
+        }
+        isStoppingVoiceSession = false
+    }
+}
+
+@MainActor
 private final class CallStartupTrace {
     enum Phase: String {
         case callViewPresented = "call-ui-presented"
         case voiceSessionStarted = "voice-session-started"
+        case callKitStartRequested = "callkit-start-requested"
+        case callKitTransactionAccepted = "callkit-transaction-accepted"
+        case callKitPerformStart = "callkit-perform-start"
         case callKitActivated = "callkit-activated"
         case transportConnected = "transport-connected"
         case firstAudioReceived = "first-audio-received"

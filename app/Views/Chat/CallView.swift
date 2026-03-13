@@ -3,8 +3,8 @@ import VoiceCore
 
 struct CallView: View {
     @ObservedObject var viewModel: ChatViewModel
-    @Environment(\.dismiss) private var dismiss
     let onMinimize: () -> Void
+    let onEndCall: () -> Void
 
     var body: some View {
         Group {
@@ -81,7 +81,7 @@ struct CallView: View {
                 isVideoActive: viewModel.callState.isVideoStreaming,
                 onToggleVideo: { viewModel.toggleVideoFromCallView() }
             ) {
-                viewModel.stopVoiceSession()
+                onEndCall()
             }
             .padding(.bottom, 12)
             .padding(.horizontal)
@@ -135,7 +135,7 @@ struct CallView: View {
                             systemImage: "phone.down.fill",
                             isDestructive: true
                         ) {
-                            viewModel.stopVoiceSession()
+                            onEndCall()
                         }
                     }
                     .padding(.trailing, 16)
