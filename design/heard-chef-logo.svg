@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <style>
+      .outline { fill: #fdfdfd; stroke: #5A3826; stroke-width: 14; stroke-linejoin: round; }
+      .shadow { fill: none; stroke: #D6DCE4; stroke-width: 18; stroke-linecap: round; }
+      .crease { fill: none; stroke: #D6DCE4; stroke-width: 10; stroke-linecap: round; }
+      .brown-fill { fill: #5A3826; }
+      .cheek { fill: #F5A8A8; }
+      .mouth-bg { fill: #6B3729; stroke: #5A3826; stroke-width: 10; stroke-linejoin: round; }
+      .teeth { fill: #ffffff; }
+      .tongue { fill: #CF625C; }
+    </style>
+  </defs>
+
+  <g transform="rotate(12, 250, 250)">
+
+    <path class="outline" d="M 150,230
+             C 80,180 80,80 160,80
+             C 180,10 320,10 350,70
+             C 430,60 460,150 410,210
+             C 440,260 400,310 350,300
+             L 150,230 Z" />
+
+    <path class="shadow" d="M 145,210 C 100,170 110,100 160,95" />
+    <path class="shadow" d="M 180,45 C 220,25 280,25 320,45" />
+
+    <path class="crease" d="M 220,100 Q 210,180 180,260" />
+    <path class="crease" d="M 280,90 Q 290,180 300,270" />
+
+    <path class="outline" d="M 155,250
+             L 180,430
+             C 250,470 360,450 390,400
+             L 365,275
+             C 300,300 200,290 155,250 Z" />
+
+    <path class="shadow" d="M 175,270 C 240,300 320,295 365,280" />
+
+    <path d="M 210,310 Q 230,295 250,305" fill="none" stroke="#5A3826" stroke-width="8" stroke-linecap="round"/>
+    <path d="M 315,300 Q 335,285 355,300" fill="none" stroke="#5A3826" stroke-width="8" stroke-linecap="round"/>
+
+    <ellipse cx="240" cy="335" rx="12" ry="18" class="brown-fill"/>
+    <circle cx="245" cy="328" r="4.5" fill="#ffffff"/>
+
+    <ellipse cx="330" cy="325" rx="12" ry="18" class="brown-fill"/>
+    <circle cx="335" cy="318" r="4.5" fill="#ffffff"/>
+
+    <ellipse cx="210" cy="370" rx="18" ry="12" class="cheek" transform="rotate(-10, 210, 370)"/>
+
+    <ellipse cx="365" cy="355" rx="18" ry="12" class="cheek" transform="rotate(-10, 365, 355)"/>
+
+    <path class="mouth-bg" d="M 245,375
+             C 310,350 340,360 360,410
+             C 370,450 290,470 240,440
+             C 210,420 220,385 245,375 Z" />
+
+    <path class="teeth" d="M 247,378
+             C 300,355 330,365 345,385
+             C 300,400 250,395 238,385 Z" />
+
+    <path class="tongue" d="M 240,435
+             C 270,395 320,405 345,430
+             C 320,460 260,455 240,435 Z" />
+
+  </g>
+</svg>
