@@ -75,6 +75,19 @@ struct GeminiServiceSetupTests {
         #expect(setup["inputAudioTranscription"] == nil)
     }
 
+    @Test
+    func audioPromptAddsLiveCallGuardrailsWithoutChangingTextPrompt() {
+        let service = makeService()
+
+        let audioPrompt = service.makeSystemPrompt(for: .audio)
+        let textPrompt = service.makeSystemPrompt(for: .text)
+
+        #expect(audioPrompt.contains("Reply in spoken audio when audio output is available."))
+        #expect(audioPrompt.contains("Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls."))
+        #expect(textPrompt.contains("Reply in spoken audio when audio output is available.") == false)
+        #expect(textPrompt.contains("Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls.") == false)
+    }
+
     private func makeService() -> GeminiService {
         let context = HeardChefApp().sharedModelContainer.mainContext
         return GeminiService(modelContext: context)
