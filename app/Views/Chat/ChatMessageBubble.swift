@@ -97,28 +97,14 @@ struct ChatMessageBubble: View {
             FullScreenVideoView(url: item.url)
         }
         .contextMenu {
-            Section {
-                ForEach(["👍", "❤️", "😂", "😮", "😢", "😡"], id: \.self) { emoji in
-                    Button {
-                        message.toggleReaction(emoji)
-                    } label: {
-                        Text(emoji)
-                    }
-                }
+            reactionMenuSection
+
+            if hasTextActions {
+                textActionMenuSection
             }
 
-            if let text = message.text {
-                Section {
-                    Button {
-                        UIPasteboard.general.string = text
-                    } label: {
-                        Label("Copy", systemImage: "doc.on.doc")
-                    }
-
-                    ShareLink(item: text) {
-                        Label("Share…", systemImage: "square.and.arrow.up")
-                    }
-                }
+            if hasAttachmentActions {
+                attachmentActionMenuSection
             }
         } preview: {
             MessageContextPreview(message: message)
@@ -138,65 +124,187 @@ struct ChatMessageBubble: View {
     }
     
     private var bubbleBackground: some View {
-        let fillColor = message.role.isUser ? Color(red: 0.039, green: 0.518, blue: 1.0) : Color(red: 0.149, green: 0.149, blue: 0.161)
         return Group {
             if isGroupEnd {
                 BubbleTailShape(isUser: message.role.isUser)
-                    .fill(fillColor)
+                    .fill(messageBubbleFillColor(for: message.role))
             } else {
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(fillColor)
+                    .fill(messageBubbleFillColor(for: message.role))
             }
         }
     }
 
     @ViewBuilder
     private var attachmentView: some View {
-        if message.mediaType == .image || (message.mediaType == nil && message.imageData != nil) {
+        if effectiveMediaType == .image {
             if let imageData = message.imageData, let uiImage = UIImage(data: imageData) {
                 Button {
                     openImagePreview(data: imageData)
                 } label: {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: 200)
-                        .clipShape(.rect(cornerRadius: 12))
+                    AttachmentImageView(uiImage: uiImage)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open image attachment")
+                .accessibilityIdentifier(attachmentAccessibilityIdentifier)
             }
-        } else if message.mediaType == .video {
+        } else if effectiveMediaType == .video {
             Button(action: openVideoPreview) {
-                VideoAttachmentView(thumbnailData: message.imageData)
+                VideoAttachmentView(
+                    thumbnailData: message.imageData,
+                    accessibilityIdentifier: attachmentAccessibilityIdentifier
+                )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open video attachment")
-        } else if message.mediaType == .document {
+            .accessibilityIdentifier(attachmentAccessibilityIdentifier)
+        } else if effectiveMediaType == .document {
             Button(action: openDocumentPreview) {
-                DocumentAttachmentView(filename: message.mediaFilename, utType: message.mediaUTType)
+                DocumentAttachmentView(
+                    filename: message.mediaFilename,
+                    utType: message.mediaUTType,
+                    accessibilityIdentifier: attachmentAccessibilityIdentifier
+                )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open document attachment")
+            .accessibilityIdentifier(attachmentAccessibilityIdentifier)
         }
     }
 
     private func openVideoPreview() {
-        guard let url = ChatAttachmentPathResolver.resolveURL(
-            storedReference: message.mediaURL,
-            fallbackFilename: message.mediaFilename
-        ) else { return }
+        guard let url = resolvedAttachmentURL() else { return }
         fullScreenVideoItem = FullScreenVideoItem(url: url)
     }
 
     private func openImagePreview(data: Data) {
-        if let existing = ChatAttachmentPathResolver.resolveURL(
+        guard let url = shareableAttachmentURL(fallbackImageData: data) else { return }
+        quickLookItem = QuickLookItem(url: url)
+    }
+
+    private func openDocumentPreview() {
+        guard let url = resolvedAttachmentURL() else { return }
+        quickLookItem = QuickLookItem(url: url)
+    }
+
+    private var effectiveMediaType: ChatMediaType? {
+        if let mediaType = message.mediaType {
+            return mediaType
+        }
+
+        if message.imageData != nil {
+            return .image
+        }
+
+        return nil
+    }
+
+    private var hasTextActions: Bool {
+        !(message.text?.isEmpty ?? true)
+    }
+
+    private var hasAttachmentActions: Bool {
+        switch effectiveMediaType {
+        case .image:
+            return message.imageData != nil
+        case .video, .document:
+            return resolvedAttachmentURL() != nil
+        case .audio, .none:
+            return false
+        }
+    }
+
+    private var attachmentAccessibilityIdentifier: String {
+        switch effectiveMediaType {
+        case .image where hasTextActions:
+            return "chat.message.attachment.image.captioned"
+        case .image:
+            return "chat.message.attachment.image"
+        case .video:
+            return "chat.message.attachment.video"
+        case .document:
+            return "chat.message.attachment.document"
+        case .audio, .none:
+            return "chat.message.attachment.unknown"
+        }
+    }
+
+    @ViewBuilder
+    private var reactionMenuSection: some View {
+        Section {
+            ForEach(["👍", "❤️", "😂", "😮", "😢", "😡"], id: \.self) { emoji in
+                Button {
+                    message.toggleReaction(emoji)
+                } label: {
+                    Text(emoji)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var textActionMenuSection: some View {
+        if let text = message.text {
+            let copyLabel = hasAttachmentActions ? "Copy Text" : "Copy"
+            let shareLabel = hasAttachmentActions ? "Share Text…" : "Share…"
+
+            Section {
+                Button {
+                    copyText()
+                } label: {
+                    Label(copyLabel, systemImage: "doc.on.doc")
+                }
+
+                ShareLink(item: text) {
+                    Label(shareLabel, systemImage: "square.and.arrow.up")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var attachmentActionMenuSection: some View {
+        if let shareURL = shareableAttachmentURL() {
+            let copyLabel = hasTextActions ? "Copy Attachment" : "Copy"
+            let shareLabel = hasTextActions ? "Share Attachment…" : "Share…"
+
+            Section {
+                Button {
+                    copyAttachment()
+                } label: {
+                    Label(copyLabel, systemImage: "doc.on.doc")
+                }
+
+                ShareLink(item: shareURL) {
+                    Label(shareLabel, systemImage: "square.and.arrow.up")
+                }
+            }
+        }
+    }
+
+    private func resolvedAttachmentURL() -> URL? {
+        ChatAttachmentPathResolver.resolveURL(
             storedReference: message.mediaURL,
             fallbackFilename: message.mediaFilename
-        ), existing.isFileURL {
-            quickLookItem = QuickLookItem(url: existing)
-            return
+        )
+    }
+
+    private func shareableAttachmentURL(fallbackImageData: Data? = nil) -> URL? {
+        switch effectiveMediaType {
+        case .image:
+            if let url = resolvedAttachmentURL(), url.isFileURL {
+                return url
+            }
+            return temporaryImagePreviewURL(from: fallbackImageData ?? message.imageData)
+        case .video, .document:
+            return resolvedAttachmentURL()
+        case .audio, .none:
+            return nil
         }
+    }
+
+    private func temporaryImagePreviewURL(from data: Data?) -> URL? {
+        guard let data else { return nil }
 
         let fm = FileManager.default
         let folder = fm.temporaryDirectory.appendingPathComponent("HeardImagePreview", isDirectory: true)
@@ -208,19 +316,32 @@ struct ChatMessageBubble: View {
             let ext = preferredImageExtension()
             let filename = "\(message.id.uuidString).\(ext)"
             let url = folder.appendingPathComponent(filename)
-            try data.write(to: url, options: .atomic)
-            quickLookItem = QuickLookItem(url: url)
+            if !fm.fileExists(atPath: url.path) {
+                try data.write(to: url, options: .atomic)
+            }
+            return url
         } catch {
             print("[UI] Failed to prepare image preview file: \(error)")
+            return nil
         }
     }
 
-    private func openDocumentPreview() {
-        guard let url = ChatAttachmentPathResolver.resolveURL(
-            storedReference: message.mediaURL,
-            fallbackFilename: message.mediaFilename
-        ) else { return }
-        quickLookItem = QuickLookItem(url: url)
+    private func copyText() {
+        UIPasteboard.general.string = message.text
+    }
+
+    private func copyAttachment() {
+        switch effectiveMediaType {
+        case .image:
+            guard let data = message.imageData, let image = UIImage(data: data) else { return }
+            UIPasteboard.general.image = image
+        case .video, .document:
+            guard let url = shareableAttachmentURL(),
+                  let provider = NSItemProvider(contentsOf: url) else { return }
+            UIPasteboard.general.itemProviders = [provider]
+        case .audio, .none:
+            return
+        }
     }
 
     private func preferredImageExtension() -> String {
@@ -257,6 +378,20 @@ struct ChatMessageBubble: View {
         guard let detector = SharedDataDetector.linkDetector else { return nil }
         let range = NSRange(text.startIndex..., in: text)
         return detector.firstMatch(in: text, options: [], range: range)?.url
+    }
+}
+
+private struct AttachmentImageView: View {
+    let uiImage: UIImage
+    var accessibilityIdentifier: String?
+
+    var body: some View {
+        Image(uiImage: uiImage)
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: 200)
+            .clipShape(.rect(cornerRadius: 12))
+            .accessibilityIdentifier(accessibilityIdentifier ?? "")
     }
 }
 
@@ -339,6 +474,7 @@ private struct FullScreenVideoView: View {
 
 private struct VideoAttachmentView: View {
     let thumbnailData: Data?
+    var accessibilityIdentifier: String?
     
     var body: some View {
         ZStack {
@@ -357,12 +493,15 @@ private struct VideoAttachmentView: View {
         }
         .frame(maxWidth: 220)
         .clipShape(.rect(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(accessibilityIdentifier ?? "")
     }
 }
 
 private struct DocumentAttachmentView: View {
     let filename: String?
     let utType: String?
+    var accessibilityIdentifier: String?
     
     var body: some View {
         HStack(spacing: 10) {
@@ -381,6 +520,8 @@ private struct DocumentAttachmentView: View {
         .padding(10)
         .background(Color(.systemGray6))
         .clipShape(.rect(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(accessibilityIdentifier ?? "")
     }
 
     private var typeLabel: String {
@@ -486,19 +627,79 @@ private struct MessageContextPreview: View {
     let message: ChatMessage
 
     var body: some View {
-        ScrollView {
+        VStack(alignment: .leading, spacing: 10) {
             if let text = message.text {
                 MarkdownBubbleText(text: text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(messageBubbleFillColor(for: message.role))
+                    )
             }
+
+            MessageAttachmentPreview(
+                message: message,
+                accessibilityIdentifier: contextPreviewAttachmentIdentifier
+            )
         }
         .frame(width: 300)
         .frame(maxHeight: 400)
-        .background(
-            message.role.isUser
-                ? Color(red: 0.039, green: 0.518, blue: 1.0)
-                : Color(red: 0.149, green: 0.149, blue: 0.161)
-        )
+        .padding(16)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
+
+    private var contextPreviewAttachmentIdentifier: String? {
+        let hasText = !(message.text?.isEmpty ?? true)
+        let mediaType = message.mediaType ?? (message.imageData != nil ? .image : nil)
+
+        switch mediaType {
+        case .image where hasText:
+            return "chat.contextPreview.attachment.image.captioned"
+        case .image:
+            return "chat.contextPreview.attachment.image"
+        case .video:
+            return "chat.contextPreview.attachment.video"
+        case .document:
+            return "chat.contextPreview.attachment.document"
+        case .audio, .none:
+            return nil
+        }
+    }
+}
+
+private struct MessageAttachmentPreview: View {
+    let message: ChatMessage
+    let accessibilityIdentifier: String?
+
+    var body: some View {
+        Group {
+            if message.mediaType == .image || (message.mediaType == nil && message.imageData != nil) {
+                if let imageData = message.imageData, let uiImage = UIImage(data: imageData) {
+                    AttachmentImageView(
+                        uiImage: uiImage,
+                        accessibilityIdentifier: accessibilityIdentifier
+                    )
+                }
+            } else if message.mediaType == .video {
+                VideoAttachmentView(
+                    thumbnailData: message.imageData,
+                    accessibilityIdentifier: accessibilityIdentifier
+                )
+            } else if message.mediaType == .document {
+                DocumentAttachmentView(
+                    filename: message.mediaFilename,
+                    utType: message.mediaUTType,
+                    accessibilityIdentifier: accessibilityIdentifier
+                )
+            }
+        }
+    }
+}
+
+private func messageBubbleFillColor(for role: ChatMessageRole) -> Color {
+    role.isUser
+        ? Color(red: 0.039, green: 0.518, blue: 1.0)
+        : Color(red: 0.149, green: 0.149, blue: 0.161)
 }
