@@ -10,6 +10,19 @@ struct HeardChefApp: App {
     @StateObject private var navigationState = AppNavigationState()
     @State private var showsLaunchOverlay = true
 
+    private var uiTestColorSchemeOverride: ColorScheme? {
+        guard TestSupport.isRunningUITests else { return nil }
+
+        switch ProcessInfo.processInfo.environment["HEARD_UI_STYLE"]?.lowercased() {
+        case "light":
+            return .light
+        case "dark":
+            return .dark
+        default:
+            return nil
+        }
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Ingredient.self,
@@ -67,6 +80,7 @@ struct HeardChefApp: App {
                     .environmentObject(warmup)
                 }
             }
+            .preferredColorScheme(uiTestColorSchemeOverride)
         }
         .modelContainer(sharedModelContainer)
     }

@@ -8,7 +8,7 @@ struct TypingIndicatorBubble: View {
             HStack(spacing: 6) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
-                        .fill(Color.white.opacity(0.6))
+                        .fill(ChatBubbleStyle.incomingAccent)
                         .frame(width: 6, height: 6)
                         .scaleEffect(animate ? 1.0 : 0.6)
                         .animation(
@@ -21,7 +21,7 @@ struct TypingIndicatorBubble: View {
             .padding(12)
             .background(
                 BubbleTailShape(isUser: false)
-                    .fill(Color(red: 0.149, green: 0.149, blue: 0.161))
+                    .fill(ChatBubbleStyle.incomingFill)
             )
             Spacer()
         }

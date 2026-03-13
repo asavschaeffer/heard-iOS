@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum CornerPlacement: Equatable {
     case topLeading, topTrailing, bottomLeading, bottomTrailing
@@ -125,7 +126,10 @@ private struct CallBarView: View {
 
             Spacer()
 
-            AudioRoutePickerView()
+            AudioRoutePickerView(
+                activeTintColor: .label,
+                tintColor: .secondaryLabel
+            )
                 .frame(width: 28, height: 28)
                 .background(Color.white.opacity(0.2), in: Circle())
                 .opacity(viewModel.connectionState == .connected ? 1.0 : 0.6)

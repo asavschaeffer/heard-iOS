@@ -24,7 +24,10 @@ struct ChatMessageBubble: View {
                 HStack(alignment: .top, spacing: 4) {
                     VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
                         if let text = message.text {
-                            MarkdownBubbleText(text: text)
+                            MarkdownBubbleText(
+                                text: text,
+                                foregroundColor: ChatBubbleStyle.foregroundColor(for: message.role)
+                            )
                                 .padding(.horizontal, 12)
                                 .padding(.top, 6)
                                 .padding(.bottom, isGroupEnd ? 16 : 10)
@@ -397,6 +400,7 @@ private struct AttachmentImageView: View {
 
 struct MarkdownBubbleText: View {
     let text: String
+    let foregroundColor: Color
 
     var body: some View {
         Group {
@@ -407,7 +411,7 @@ struct MarkdownBubbleText: View {
             }
         }
         .font(.body)
-        .foregroundStyle(.white)
+        .foregroundStyle(foregroundColor)
         .lineSpacing(4)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
@@ -423,7 +427,7 @@ struct MarkdownBubbleText: View {
             return nil
         }
 
-        attributed.foregroundColor = .white
+        attributed.foregroundColor = foregroundColor
         return attributed
     }
 
@@ -629,7 +633,10 @@ private struct MessageContextPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let text = message.text {
-                MarkdownBubbleText(text: text)
+                MarkdownBubbleText(
+                    text: text,
+                    foregroundColor: ChatBubbleStyle.foregroundColor(for: message.role)
+                )
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(
@@ -699,7 +706,5 @@ private struct MessageAttachmentPreview: View {
 }
 
 private func messageBubbleFillColor(for role: ChatMessageRole) -> Color {
-    role.isUser
-        ? Color(red: 0.039, green: 0.518, blue: 1.0)
-        : Color(red: 0.149, green: 0.149, blue: 0.161)
+    ChatBubbleStyle.fillColor(for: role)
 }
