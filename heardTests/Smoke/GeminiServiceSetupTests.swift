@@ -122,6 +122,23 @@ struct GeminiServiceSetupTests {
         #expect(textPrompt.contains("Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls.") == false)
     }
 
+    @Test
+    func customVoiceNameAppearsInAudioPayload() throws {
+        let service = makeService()
+
+        var profile = GeminiAudioSetupProfile.echoRejectingDefault
+        profile.voiceName = GeminiVoice.puck.rawValue
+
+        let payload = service.makeSetupPayload(config: .audio(profile: profile))
+        let setup = try #require(payload["setup"] as? [String: Any])
+        let generationConfig = try #require(setup["generationConfig"] as? [String: Any])
+        let speechConfig = try #require(generationConfig["speechConfig"] as? [String: Any])
+        let voiceConfig = try #require(speechConfig["voiceConfig"] as? [String: Any])
+        let prebuiltVoiceConfig = try #require(voiceConfig["prebuiltVoiceConfig"] as? [String: Any])
+
+        #expect(prebuiltVoiceConfig["voiceName"] as? String == "Puck")
+    }
+
     private func makeService() -> GeminiService {
         let context = HeardChefApp().sharedModelContainer.mainContext
         return GeminiService(modelContext: context)

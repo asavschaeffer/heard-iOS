@@ -2,6 +2,79 @@ import Foundation
 import SwiftData
 import VoiceCore
 
+// MARK: - Voice Selection
+
+enum GeminiVoice: String, CaseIterable, Identifiable {
+    case aoede = "Aoede"       // Bright
+    case charon = "Charon"     // Informative
+    case fenrir = "Fenrir"     // Excitable
+    case kore = "Kore"         // Firm
+    case leda = "Leda"         // Youthful
+    case orus = "Orus"         // Firm
+    case puck = "Puck"         // Upbeat
+    case zephyr = "Zephyr"     // Bright
+
+    case achernar = "Achernar" // Soft
+    case algenib = "Algenib"   // Gravelly
+    case algieba = "Algieba"   // Smooth
+    case alnilam = "Alnilam"   // Firm
+    case autonoe = "Autonoe"   // Bright
+    case callirrhoe = "Callirrhoe" // Smooth
+    case despina = "Despina"   // Smooth
+    case erinome = "Erinome"   // Clear
+    case gacrux = "Gacrux"     // Mature
+    case isonoe = "Isonoe"     // Balanced
+    case juliet = "Juliet"     // Confident
+    case keid = "Keid"         // Breathy
+    case koppa = "Koppa"       // Bright
+    case laomedeia = "Laomedeia" // Upbeat
+    case pulcherrima = "Pulcherrima" // Forward
+    case rasalgethi = "Rasalgethi" // Informative
+    case rasalhague = "Rasalhague" // Informative
+    case sadachbia = "Sadachbia" // Lively
+    case sadaltager = "Sadaltager" // Knowledgeable
+    case sulafat = "Sulafat"   // Warm
+    case umbriel = "Umbriel"   // Easy-going
+    case vindemiatrix = "Vindemiatrix" // Gentle
+
+    var id: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .aoede: "Bright"
+        case .charon: "Informative"
+        case .fenrir: "Excitable"
+        case .kore: "Firm"
+        case .leda: "Youthful"
+        case .orus: "Firm"
+        case .puck: "Upbeat"
+        case .zephyr: "Bright"
+        case .achernar: "Soft"
+        case .algenib: "Gravelly"
+        case .algieba: "Smooth"
+        case .alnilam: "Firm"
+        case .autonoe: "Bright"
+        case .callirrhoe: "Smooth"
+        case .despina: "Smooth"
+        case .erinome: "Clear"
+        case .gacrux: "Mature"
+        case .isonoe: "Balanced"
+        case .juliet: "Confident"
+        case .keid: "Breathy"
+        case .koppa: "Bright"
+        case .laomedeia: "Upbeat"
+        case .pulcherrima: "Forward"
+        case .rasalgethi: "Informative"
+        case .rasalhague: "Informative"
+        case .sadachbia: "Lively"
+        case .sadaltager: "Knowledgeable"
+        case .sulafat: "Warm"
+        case .umbriel: "Easy-going"
+        case .vindemiatrix: "Gentle"
+        }
+    }
+}
+
 // MARK: - Session Mode
 
 enum SessionMode {
@@ -17,6 +90,7 @@ struct GeminiAudioSetupProfile: Equatable, Sendable {
     let includesProactivity: Bool
     var activityHandling: String? = nil
     var turnCoverage: String? = nil
+    var voiceName: String = GeminiVoice.aoede.rawValue
 
     static let echoRejectingDefault = GeminiAudioSetupProfile(
         startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
@@ -347,7 +421,7 @@ class GeminiService: NSObject {
                 "speechConfig": [
                     "voiceConfig": [
                         "prebuiltVoiceConfig": [
-                            "voiceName": "Aoede"
+                            "voiceName": profile.voiceName
                         ]
                     ]
                 ]
