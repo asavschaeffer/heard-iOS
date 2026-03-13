@@ -11,6 +11,19 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Voice", selection: $settings.selectedVoice) {
+                        ForEach(GeminiVoice.allCases) { voice in
+                            Text("\(voice.rawValue) — \(voice.description)")
+                                .tag(voice.rawValue)
+                        }
+                    }
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text("Changes apply on next voice call")
+                }
+
+                Section {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle(
                             "Start Sensitivity: \(settings.vadStartSensitivityLow ? "LOW" : "HIGH")",

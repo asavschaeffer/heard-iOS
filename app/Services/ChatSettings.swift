@@ -50,6 +50,12 @@ final class ChatSettings: ObservableObject {
         }
     }
 
+    @Published var selectedVoice: String {
+        didSet {
+            UserDefaults.standard.set(selectedVoice, forKey: Keys.selectedVoice)
+        }
+    }
+
     init() {
         let defaults = UserDefaults.standard
 
@@ -63,7 +69,8 @@ final class ChatSettings: ObservableObject {
             Keys.vadSilenceDurationMs: 300,
             Keys.vadProactiveAudio: false,
             Keys.vadActivityHandlingInterrupts: true,
-            Keys.vadTurnCoverageOnlyActivity: true
+            Keys.vadTurnCoverageOnlyActivity: true,
+            Keys.selectedVoice: GeminiVoice.aoede.rawValue
         ])
 
         self.vadStartSensitivityLow = defaults.bool(forKey: Keys.vadStartSensitivityLow)
@@ -73,6 +80,7 @@ final class ChatSettings: ObservableObject {
         self.vadProactiveAudio = defaults.bool(forKey: Keys.vadProactiveAudio)
         self.vadActivityHandlingInterrupts = defaults.bool(forKey: Keys.vadActivityHandlingInterrupts)
         self.vadTurnCoverageOnlyActivity = defaults.bool(forKey: Keys.vadTurnCoverageOnlyActivity)
+        self.selectedVoice = defaults.string(forKey: Keys.selectedVoice) ?? GeminiVoice.aoede.rawValue
     }
 
     func audioSetupProfile() -> GeminiAudioSetupProfile {
@@ -83,7 +91,8 @@ final class ChatSettings: ObservableObject {
             silenceDurationMs: vadSilenceDurationMs,
             includesProactivity: vadProactiveAudio,
             activityHandling: vadActivityHandlingInterrupts ? nil : "NO_INTERRUPTION",
-            turnCoverage: vadTurnCoverageOnlyActivity ? nil : "TURN_INCLUDES_ALL_INPUT"
+            turnCoverage: vadTurnCoverageOnlyActivity ? nil : "TURN_INCLUDES_ALL_INPUT",
+            voiceName: selectedVoice
         )
     }
 
@@ -97,7 +106,8 @@ final class ChatSettings: ObservableObject {
             Keys.vadSilenceDurationMs: 300,
             Keys.vadProactiveAudio: false,
             Keys.vadActivityHandlingInterrupts: true,
-            Keys.vadTurnCoverageOnlyActivity: true
+            Keys.vadTurnCoverageOnlyActivity: true,
+            Keys.selectedVoice: GeminiVoice.aoede.rawValue
         ])
         let interrupts = defaults.bool(forKey: Keys.vadActivityHandlingInterrupts)
         let activityOnly = defaults.bool(forKey: Keys.vadTurnCoverageOnlyActivity)
@@ -110,7 +120,8 @@ final class ChatSettings: ObservableObject {
             silenceDurationMs: defaults.integer(forKey: Keys.vadSilenceDurationMs),
             includesProactivity: defaults.bool(forKey: Keys.vadProactiveAudio),
             activityHandling: interrupts ? nil : "NO_INTERRUPTION",
-            turnCoverage: activityOnly ? nil : "TURN_INCLUDES_ALL_INPUT"
+            turnCoverage: activityOnly ? nil : "TURN_INCLUDES_ALL_INPUT",
+            voiceName: defaults.string(forKey: Keys.selectedVoice) ?? GeminiVoice.aoede.rawValue
         )
     }
 
@@ -123,5 +134,6 @@ final class ChatSettings: ObservableObject {
         static let vadProactiveAudio = "vadProactiveAudio"
         static let vadActivityHandlingInterrupts = "vadActivityHandlingInterrupts"
         static let vadTurnCoverageOnlyActivity = "vadTurnCoverageOnlyActivity"
+        static let selectedVoice = "selectedVoice"
     }
 }
