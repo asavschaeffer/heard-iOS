@@ -36,6 +36,78 @@ struct VoiceCallCoordinatorTests {
     }
 
     @Test
+    func callKitTransportConnectWaitsForActivationBeforeStartingCapture() {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+
+        harness.coordinator.startCall()
+        harness.coordinator.transportDidConnect()
+
+        #expect(harness.capture.startCount == 0)
+        #expect(harness.coordinator.state.pendingVoiceStart)
+        expectCallLifecycleState(
+            harness.coordinator,
+            equals: "active(callKit,connected,awaitingCallKit)"
+        )
+    }
+
+    @Test
+    func callKitActivationStartsCaptureOnceAfterRouteSettles() async {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+
+        harness.coordinator.startCall()
+        harness.coordinator.transportDidConnect()
+        harness.callKit.onStartAudio?()
+
+        #expect(harness.capture.startCount == 0)
+        #expect(harness.coordinator.state.pendingVoiceStart)
+
+        harness.coordinator.handleRouteChange(
+            VoiceRouteChangeEvent(
+                reason: .routeConfigurationChange,
+                reasonDescription: "routeConfigurationChange",
+                previousRouteDescription: "inputs=[] outputs=[Speaker:Speaker]",
+                shouldAdapt: true
+            )
+        )
+
+        try? await Task.sleep(nanoseconds: 600_000_000)
+
+        #expect(harness.capture.startCount == 1)
+        #expect(harness.coordinator.state.pendingVoiceStart == false)
+        #expect(harness.coordinator.state.isListening)
+        expectCallLifecycleState(
+            harness.coordinator,
+            equals: "active(callKit,connected,captureFromCallKit,fallbackInput)"
+        )
+    }
+
+    @Test
+    func callKitRouteChangeBeforeTransportConnectStillStartsCaptureAfterTransportIsReady() async {
+        let harness = CoordinatorHarness(callKitEnabled: true)
+
+        harness.coordinator.startCall()
+        harness.callKit.onStartAudio?()
+        harness.coordinator.handleRouteChange(
+            VoiceRouteChangeEvent(
+                reason: .categoryChange,
+                reasonDescription: "categoryChange",
+                previousRouteDescription: "inputs=[] outputs=[Speaker:Speaker]",
+                shouldAdapt: false
+            )
+        )
+
+        #expect(harness.capture.startCount == 0)
+        #expect(harness.coordinator.state.pendingVoiceStart)
+
+        harness.coordinator.transportDidConnect()
+        try? await Task.sleep(nanoseconds: 700_000_000)
+
+        #expect(harness.capture.startCount == 1)
+        #expect(harness.coordinator.state.pendingVoiceStart == false)
+        #expect(harness.coordinator.state.isListening)
+    }
+
+    @Test
     func unmuteRestartsCaptureWhenCallIsActive() {
         let harness = CoordinatorHarness(callKitEnabled: false)
 

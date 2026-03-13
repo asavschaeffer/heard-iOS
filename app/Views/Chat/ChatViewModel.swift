@@ -155,6 +155,7 @@ class ChatViewModel: ObservableObject {
             self?.callStartupTrace.mark(.playbackStarted)
         }
         coordinator.onCapturedAudio = { [weak self] data in
+            self?.callStartupTrace.mark(.firstOutboundAudioSent)
             self?.geminiService?.sendAudio(data: data)
         }
     }
@@ -337,7 +338,7 @@ class ChatViewModel: ObservableObject {
         let config: SessionConfig = {
             switch mode {
             case .audio:
-                return .audio()
+                return .audio(profile: .fasterTurnTaking300ms)
             case .text:
                 return .text()
             }
@@ -1123,6 +1124,7 @@ private final class CallStartupTrace {
         case callKitPerformStart = "callkit-perform-start"
         case callKitActivated = "callkit-activated"
         case transportConnected = "transport-connected"
+        case firstOutboundAudioSent = "first-outbound-audio-sent"
         case firstAudioReceived = "first-audio-received"
         case playbackStarted = "playback-started"
     }
