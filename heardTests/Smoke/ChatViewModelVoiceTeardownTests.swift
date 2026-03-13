@@ -8,6 +8,26 @@ import VoiceCore
 @MainActor
 struct ChatViewModelVoiceTeardownTests {
     @Test
+    func startVoiceSessionUsesFasterTurnTakingAudioProfile() {
+        let modelContext = HeardChefApp().sharedModelContainer.mainContext
+        let service = MockGeminiService(modelContext: modelContext)
+        let coordinator = MockVoiceCoordinator()
+        let viewModel = ChatViewModel(
+            geminiServiceFactory: { _ in service },
+            voiceCoordinator: coordinator,
+            shouldBootstrapThreadOnModelContext: false
+        )
+        viewModel.setModelContext(modelContext)
+
+        viewModel.startVoiceSession()
+
+        let config = service.connectConfigs.last
+        #expect(config?.mode == .audio)
+        #expect(config?.audioSetupProfile == .fasterTurnTaking300ms)
+        #expect(coordinator.startCallCount == 1)
+    }
+
+    @Test
     func intentionalStopRequestsDisconnectOnceAndWaitsForDelegateCompletion() {
         let modelContext = HeardChefApp().sharedModelContainer.mainContext
         let service = MockGeminiService(modelContext: modelContext)
@@ -95,9 +115,14 @@ struct ChatViewModelVoiceTeardownTests {
 private final class MockGeminiService: GeminiService {
     var stubHasActiveSocketSession = false
     private(set) var disconnectReasons: [String] = []
+    private(set) var connectConfigs: [SessionConfig] = []
 
     override var hasActiveSocketSession: Bool {
         stubHasActiveSocketSession
+    }
+
+    override func connect(config: SessionConfig? = nil) {
+        connectConfigs.append(config ?? .text())
     }
 
     override func disconnect(reason: String = "manual") {
@@ -117,12 +142,15 @@ private final class MockVoiceCoordinator: ChatVoiceCoordinating {
     var onPlaybackStarted: (() -> Void)?
 
     private(set) var stopCallCount = 0
+    private(set) var startCallCount = 0
     private(set) var transportDisconnectCount = 0
     private(set) var transportDisconnectAutoReconnects: [Bool] = []
 
     func prewarmPlayback() {}
     func transportWillConnect() {}
-    func startCall() {}
+    func startCall() {
+        startCallCount += 1
+    }
 
     func stopCall() {
         stopCallCount += 1

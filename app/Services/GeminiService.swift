@@ -99,6 +99,15 @@ protocol GeminiServiceDelegate: AnyObject {
 
 @MainActor
 class GeminiService: NSObject {
+    private struct LiveAudioTrace {
+        var connectedAt: Date?
+        var firstOutboundAudioAt: Date?
+        var firstInputTranscriptAt: Date?
+        var firstModelEventAt: Date?
+        var firstModelEventKind: String?
+        var firstToolCallAt: Date?
+        var firstInboundAudioAt: Date?
+    }
 
     // MARK: - Properties
 
@@ -130,6 +139,7 @@ class GeminiService: NSObject {
     private var pendingDisconnectReason = "none"
     private var ignoreSocketErrorsUntilNextConnect = false
     private var hasLoggedIgnoredSocketErrorForCurrentDisconnect = false
+    private var liveAudioTrace = LiveAudioTrace()
 
     // Pending requests tracking with timeout
     private var pendingMessageID: UUID?
@@ -269,6 +279,7 @@ class GeminiService: NSObject {
         hasAccepted = false
         lastStreamChunkAt = nil
         pendingMessageID = nil
+        liveAudioTrace = LiveAudioTrace()
     }
 
     private func describe(mode: SessionMode?) -> String {
@@ -318,7 +329,7 @@ class GeminiService: NSObject {
             "model": "models/\(config.model)",
             "systemInstruction": [
                 "parts": [
-                    ["text": systemPrompt]
+                    ["text": makeSystemPrompt(for: config.mode)]
                 ]
             ],
             "tools": [
@@ -356,7 +367,16 @@ class GeminiService: NSObject {
         return ["setup": setup]
     }
 
-    private var systemPrompt: String {
+    func makeSystemPrompt(for mode: SessionMode) -> String {
+        switch mode {
+        case .audio:
+            return baseSystemPrompt + "\n\n" + liveAudioPrompt
+        case .text:
+            return baseSystemPrompt
+        }
+    }
+
+    private var baseSystemPrompt: String {
         """
         You are "Heard, Chef!" - a practical, knowledgeable sous chef who manages pantry + recipes efficiently.
 
@@ -377,6 +397,17 @@ class GeminiService: NSObject {
         \(Ingredient.schemaDescription)
 
         \(Recipe.schemaDescription)
+        """
+    }
+
+    private var liveAudioPrompt: String {
+        """
+        Live audio call behavior:
+        - Reply in spoken audio when audio output is available.
+        - Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls.
+        - Start with a short spoken acknowledgement or answer instead of a long preamble.
+        - Ask at most one brief spoken clarification question when needed.
+        - If you use tools, do the work and then give a brief spoken result.
         """
     }
 
@@ -431,6 +462,12 @@ class GeminiService: NSObject {
         guard isConnected else {
             debugLog("[Gemini] Dropping audio chunk while disconnected, bytes=\(data.count)")
             return
+        }
+
+        if currentMode == .audio, liveAudioTrace.firstOutboundAudioAt == nil {
+            let now = Date()
+            liveAudioTrace.firstOutboundAudioAt = now
+            debugLog("[Gemini] \(activeWebSocketSessionID) liveTrace firstOutboundAudio bytes=\(data.count) msSinceConnect=\(millisecondsSinceLiveConnect(until: now))")
         }
 
         sentAudioChunkCount += 1
@@ -750,12 +787,59 @@ class GeminiService: NSObject {
         [
             "contents": conversationHistory,
             "systemInstruction": [
-                "parts": [["text": systemPrompt]]
+                "parts": [["text": makeSystemPrompt(for: .text)]]
             ],
             "tools": [
                 ["functionDeclarations": GeminiTools.toAPIFormat()]
             ]
         ]
+    }
+
+    private func millisecondsSinceLiveConnect(until date: Date) -> Int {
+        guard let connectedAt = liveAudioTrace.connectedAt else { return -1 }
+        return Int(date.timeIntervalSince(connectedAt) * 1000)
+    }
+
+    private func millisecondsSinceFirstOutboundAudio(until date: Date) -> Int {
+        guard let firstOutboundAudioAt = liveAudioTrace.firstOutboundAudioAt else { return -1 }
+        return Int(date.timeIntervalSince(firstOutboundAudioAt) * 1000)
+    }
+
+    private func recordFirstInputTranscriptIfNeeded(chars: Int) {
+        guard currentMode == .audio, liveAudioTrace.firstInputTranscriptAt == nil else { return }
+        let now = Date()
+        liveAudioTrace.firstInputTranscriptAt = now
+        debugLog(
+            "[Gemini] \(activeWebSocketSessionID) liveTrace firstInputTranscript chars=\(chars) msSinceConnect=\(millisecondsSinceLiveConnect(until: now)) msSinceFirstOutboundAudio=\(millisecondsSinceFirstOutboundAudio(until: now))"
+        )
+    }
+
+    private func recordFirstModelEventIfNeeded(kind: String, extra: String) {
+        guard currentMode == .audio, liveAudioTrace.firstModelEventAt == nil else { return }
+        let now = Date()
+        liveAudioTrace.firstModelEventAt = now
+        liveAudioTrace.firstModelEventKind = kind
+        debugLog(
+            "[Gemini] \(activeWebSocketSessionID) liveTrace firstModelEvent kind=\(kind) \(extra) msSinceConnect=\(millisecondsSinceLiveConnect(until: now)) msSinceFirstOutboundAudio=\(millisecondsSinceFirstOutboundAudio(until: now))"
+        )
+    }
+
+    private func recordFirstToolCallIfNeeded(count: Int) {
+        guard currentMode == .audio, liveAudioTrace.firstToolCallAt == nil else { return }
+        let now = Date()
+        liveAudioTrace.firstToolCallAt = now
+        debugLog(
+            "[Gemini] \(activeWebSocketSessionID) liveTrace firstToolCall count=\(count) msSinceConnect=\(millisecondsSinceLiveConnect(until: now)) msSinceFirstOutboundAudio=\(millisecondsSinceFirstOutboundAudio(until: now))"
+        )
+    }
+
+    private func recordFirstInboundAudioIfNeeded(bytes: Int) {
+        guard currentMode == .audio, liveAudioTrace.firstInboundAudioAt == nil else { return }
+        let now = Date()
+        liveAudioTrace.firstInboundAudioAt = now
+        debugLog(
+            "[Gemini] \(activeWebSocketSessionID) liveTrace firstInboundAudio bytes=\(bytes) msSinceConnect=\(millisecondsSinceLiveConnect(until: now)) msSinceFirstOutboundAudio=\(millisecondsSinceFirstOutboundAudio(until: now))"
+        )
     }
 
     private func trimConversationHistory() {
@@ -893,6 +977,7 @@ class GeminiService: NSObject {
             acceptanceTask?.cancel()
             acceptanceTask = nil
             isConnected = true
+            liveAudioTrace.connectedAt = Date()
             sentAudioChunkCount = 0
             sentAudioByteCount = 0
             receivedAudioChunkCount = 0
@@ -935,14 +1020,17 @@ class GeminiService: NSObject {
         let turnComplete = (content["turnComplete"] as? Bool) ?? (content["turn_complete"] as? Bool) ?? false
 
         if let inputTranscript = (content["inputTranscript"] as? String) ?? (content["input_transcript"] as? String) {
+            recordFirstInputTranscriptIfNeeded(chars: inputTranscript.count)
             delegate?.geminiService(self, didReceiveInputTranscript: inputTranscript, isFinal: turnComplete)
         }
         if let inputTranscription = content["inputTranscription"] as? [String: Any],
            let transcript = inputTranscription["text"] as? String {
+            recordFirstInputTranscriptIfNeeded(chars: transcript.count)
             delegate?.geminiService(self, didReceiveInputTranscript: transcript, isFinal: turnComplete)
         }
         if let inputTranscription = content["input_audio_transcription"] as? [String: Any],
            let transcript = inputTranscription["text"] as? String {
+            recordFirstInputTranscriptIfNeeded(chars: transcript.count)
             delegate?.geminiService(self, didReceiveInputTranscript: transcript, isFinal: turnComplete)
         }
 
@@ -996,6 +1084,7 @@ class GeminiService: NSObject {
                 // Text response
                 if let text = part["text"] as? String {
                     inboundTurnTextParts += 1
+                    recordFirstModelEventIfNeeded(kind: "text", extra: "chars=\(text.count)")
                     if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
                         inboundTurnFirstEventLogged = true
                         debugLog("[Gemini] Inbound turn \(turnID) firstEvent=text chars=\(text.count)")
@@ -1011,6 +1100,8 @@ class GeminiService: NSObject {
                     receivedAudioByteCount += audioData.count
                     inboundTurnAudioChunks += 1
                     inboundTurnAudioBytes += audioData.count
+                    recordFirstModelEventIfNeeded(kind: "audio", extra: "bytes=\(audioData.count)")
+                    recordFirstInboundAudioIfNeeded(bytes: audioData.count)
                     if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
                         inboundTurnFirstEventLogged = true
                         debugLog("[Gemini] Inbound turn \(turnID) firstEvent=audio bytes=\(audioData.count)")
@@ -1024,6 +1115,7 @@ class GeminiService: NSObject {
                 // Output transcript (AI speech-to-text)
                 if let transcript = part["transcript"] as? String {
                     inboundTurnTranscriptParts += 1
+                    recordFirstModelEventIfNeeded(kind: "transcript", extra: "chars=\(transcript.count)")
                     if !inboundTurnFirstEventLogged, let turnID = inboundTurnID {
                         inboundTurnFirstEventLogged = true
                         debugLog("[Gemini] Inbound turn \(turnID) firstEvent=transcript chars=\(transcript.count)")
@@ -1071,6 +1163,7 @@ class GeminiService: NSObject {
 
     private func handleToolCall(_ toolCall: [String: Any]) {
         guard let functionCalls = toolCall["functionCalls"] as? [[String: Any]] else { return }
+        recordFirstToolCallIfNeeded(count: functionCalls.count)
         debugLog("[Gemini] Tool call batch received count=\(functionCalls.count)")
 
         for rawCall in functionCalls {
