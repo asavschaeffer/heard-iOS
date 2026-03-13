@@ -10,6 +10,8 @@ struct ChatThreadView: View {
     @ObservedObject var linkStore: LinkMetadataStore
     let onRetry: (ChatMessage) -> Void
 
+    private let bottomAnchorID = "chat-thread-bottom-anchor"
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -23,25 +25,21 @@ struct ChatThreadView: View {
                         TypingIndicatorBubble()
                             .padding(.bottom, 8)
                     }
+
+                    Color.clear.frame(height: 1).id(bottomAnchorID)
                 }
                 .padding()
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.count) {
-                if let lastId = messages.last?.id {
-                    withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
-                } else if let lastToolID = toolCallChips.last?.id {
-                    withAnimation { proxy.scrollTo(lastToolID, anchor: .bottom) }
-                }
+                withAnimation { proxy.scrollTo(bottomAnchorID, anchor: .bottom) }
             }
             .onChange(of: toolCallChips.count) {
-                if let last = toolCallChips.last {
-                    let anchorID = last.anchorMessageID
-                    if let anchor = anchorID, messages.contains(where: { $0.id == anchor }) {
-                        withAnimation { proxy.scrollTo(anchor, anchor: .bottom) }
-                    } else {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                    }
+                withAnimation { proxy.scrollTo(bottomAnchorID, anchor: .bottom) }
+            }
+            .onChange(of: isTyping) {
+                if isTyping {
+                    withAnimation { proxy.scrollTo(bottomAnchorID, anchor: .bottom) }
                 }
             }
         }
