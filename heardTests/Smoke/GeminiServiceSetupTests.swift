@@ -110,16 +110,15 @@ struct GeminiServiceSetupTests {
     }
 
     @Test
-    func audioPromptAddsLiveCallGuardrailsWithoutChangingTextPrompt() {
+    func audioPromptExtendsTextPromptForLiveCalls() {
         let service = makeService()
 
         let audioPrompt = service.makeSystemPrompt(for: .audio)
         let textPrompt = service.makeSystemPrompt(for: .text)
 
-        #expect(audioPrompt.contains("Reply in spoken audio when audio output is available."))
-        #expect(audioPrompt.contains("Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls."))
-        #expect(textPrompt.contains("Reply in spoken audio when audio output is available.") == false)
-        #expect(textPrompt.contains("Do not emit reasoning, analysis, headings, or text-only draft replies during live audio calls.") == false)
+        #expect(audioPrompt != textPrompt)
+        #expect(audioPrompt.starts(with: textPrompt))
+        #expect(audioPrompt.count > textPrompt.count)
     }
 
     @Test

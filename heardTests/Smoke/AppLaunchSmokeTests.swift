@@ -1,3 +1,4 @@
+import SwiftData
 import Testing
 @testable import heard
 
@@ -5,13 +6,19 @@ import Testing
 @MainActor
 struct AppLaunchSmokeTests {
     @Test
-    func xCTestDetectionIsEnabled() {
+    func hostedHarnessDetectsTestExecution() {
         #expect(TestSupport.isRunningTests)
+        #expect(TestSupport.shouldUseInMemoryModelContainer)
+        #expect(TestSupport.shouldRenderTestHarnessOnly)
+        #expect(TestSupport.shouldSkipWarmup)
     }
 
     @Test
     func appCreatesSharedModelContainerInTestMode() {
         let app = HeardChefApp()
-        _ = app.sharedModelContainer
+        let container = app.sharedModelContainer
+
+        _ = container.mainContext
+        #expect(TestSupport.shouldUseInMemoryModelContainer)
     }
 }
