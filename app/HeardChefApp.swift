@@ -8,6 +8,7 @@ private let logger = Logger(subsystem: "com.heardchef", category: "App")
 struct HeardChefApp: App {
     @StateObject private var warmup = AppWarmup()
     @StateObject private var navigationState = AppNavigationState()
+    @State private var showsLaunchOverlay = true
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -51,12 +52,12 @@ struct HeardChefApp: App {
                         MainTabView()
                             .environmentObject(navigationState)
 
-                        if !warmup.isFinished {
-                            LaunchLoadingView()
-                                .transition(.opacity)
+                        if showsLaunchOverlay {
+                            LaunchLoadingView {
+                                showsLaunchOverlay = false
+                            }
                         }
                     }
-                    .animation(.easeInOut(duration: 0.3), value: warmup.isFinished)
                     .task {
                         warmup.runAll()
                     }

@@ -19,6 +19,10 @@ final class AppWarmup: ObservableObject {
     @Published private(set) var completedSteps: Set<Step> = []
     @Published private(set) var isFinished = false
 
+    var completedStepCount: Int {
+        completedSteps.count
+    }
+
     var progress: Double {
         Double(completedSteps.count) / Double(Step.allCases.count)
     }
@@ -29,36 +33,38 @@ final class AppWarmup: ObservableObject {
         // Audio pipeline (sequential — session must come first)
         Task {
             await WarmupWork.audioSession()
-            markDone(.audioSession)
+            recordCompletion(of: .audioSession)
 
             await WarmupWork.captureEngine()
-            markDone(.captureEngine)
+            recordCompletion(of: .captureEngine)
         }
 
         // Camera framework
         Task {
             await WarmupWork.cameraAuthorization()
-            markDone(.cameraAuthorization)
+            recordCompletion(of: .cameraAuthorization)
         }
 
         // Speech framework
         Task {
             await WarmupWork.speechRecognizer()
-            markDone(.speechRecognizer)
+            recordCompletion(of: .speechRecognizer)
         }
 
         // Data detector + haptics
         Task {
             await WarmupWork.dataDetector()
-            markDone(.dataDetector)
+            recordCompletion(of: .dataDetector)
 
             SharedHaptics.generator.prepare()
-            markDone(.hapticEngine)
+            recordCompletion(of: .hapticEngine)
         }
     }
 
-    private func markDone(_ step: Step) {
-        completedSteps.insert(step)
+    func recordCompletion(of step: Step) {
+        let result = completedSteps.insert(step)
+        guard result.inserted else { return }
+
         print("[Warmup] \(step.rawValue) — ready (\(self.completedSteps.count)/\(Step.allCases.count))")
         if completedSteps.count == Step.allCases.count {
             isFinished = true

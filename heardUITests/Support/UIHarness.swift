@@ -11,12 +11,14 @@ enum UIHarness {
 
     static func launchApp(
         scenario: Scenario = .editorFlows,
+        skipWarmup: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments.append("-ui-testing")
         app.launchEnvironment["UITEST_SCENARIO"] = scenario.rawValue
+        app.launchEnvironment["HEARD_SKIP_WARMUP"] = skipWarmup ? "1" : "0"
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5), file: file, line: line)
         return app
