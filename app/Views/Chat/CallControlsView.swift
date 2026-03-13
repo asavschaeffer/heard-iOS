@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CallControlsView: View {
     @ObservedObject var viewModel: ChatViewModel
@@ -54,7 +55,10 @@ struct CallControlsView: View {
                 Circle()
                     .fill(Color.white.opacity(0.25))
                     .frame(width: 50, height: 50)
-                AudioRoutePickerView()
+                AudioRoutePickerView(
+                    activeTintColor: .white,
+                    tintColor: .white.withAlphaComponent(0.8)
+                )
                     .frame(width: 50, height: 50)
             }
             .opacity(isConnected ? 1.0 : 0.6)
