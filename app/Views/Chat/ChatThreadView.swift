@@ -76,7 +76,7 @@ struct ChatThreadView: View {
                 ToolCallChipsView(chips: attachedToolChips)
             }
 
-            ChatMessageBubble(
+            ChatMessageRow(
                 message: message,
                 isGroupEnd: isGroupEnd,
                 statusText: statusText,

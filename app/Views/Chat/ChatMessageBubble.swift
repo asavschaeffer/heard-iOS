@@ -17,81 +17,74 @@ struct ChatMessageBubble: View {
     
     
     var body: some View {
-        HStack {
-            if message.role.isUser { Spacer() }
-            
-            VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 4) {
-                    VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
-                        if let text = message.text {
-                            MarkdownBubbleText(
-                                text: text,
-                                foregroundColor: ChatBubbleStyle.foregroundColor(for: message.role)
-                            )
-                                .padding(.horizontal, 12)
-                                .padding(.top, 6)
-                                .padding(.bottom, isGroupEnd ? 16 : 10)
-                                .background(bubbleBackground)
-                                .opacity(message.isDraft ? 0.6 : 1.0)
-                        }
-                        
-                        if let linkMetadata = linkMetadata {
-                            Button(action: openLinkInSafari) {
-                                LinkPreviewView(metadata: linkMetadata)
-                                    .frame(maxWidth: 260)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Open link preview")
-                                .accessibilityHint("Opens the linked webpage")
-                                .contextMenu {
-                                    if let url = firstURL(in: message.text ?? "") {
-                                        Button("Copy Link") {
-                                            UIPasteboard.general.url = url
-                                        }
-                                        ShareLink(item: url) {
-                                            Label("Share…", systemImage: "square.and.arrow.up")
-                                        }
-                                    }
-                                }
-                        }
-                        
-                        attachmentView
-
-                        if !message.reactions.isEmpty {
-                            HStack(spacing: 4) {
-                                ForEach(message.reactions, id: \.self) { emoji in
-                                    Text(emoji)
-                                        .font(.caption)
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color(.systemGray6))
-                            .clipShape(Capsule())
-                        }
-
-                if let statusText {
-                    Text(statusText)
-                        .font(.caption2)
-                        .foregroundStyle(message.status == .failed ? .red : .secondary)
-                }
+        VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 4) {
+                VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 6) {
+                    if let text = message.text {
+                        MarkdownBubbleText(
+                            text: text,
+                            foregroundColor: ChatBubbleStyle.foregroundColor(for: message.role)
+                        )
+                            .padding(.horizontal, 12)
+                            .padding(.top, 6)
+                            .padding(.bottom, isGroupEnd ? 16 : 10)
+                            .background(bubbleBackground)
+                            .opacity(message.isDraft ? 0.6 : 1.0)
                     }
-                    
-                    // Red exclamation mark indicator for failed messages
-                    if message.status == .failed && message.role.isUser {
-                        Button {
-                            onRetry?(message)
-                        } label: {
-                            failureIndicator
+
+                    if let linkMetadata = linkMetadata {
+                        Button(action: openLinkInSafari) {
+                            LinkPreviewView(metadata: linkMetadata)
+                                .frame(maxWidth: 260)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Retry message")
+                        .accessibilityLabel("Open link preview")
+                        .accessibilityHint("Opens the linked webpage")
+                        .contextMenu {
+                            if let url = firstURL(in: message.text ?? "") {
+                                Button("Copy Link") {
+                                    UIPasteboard.general.url = url
+                                }
+                                ShareLink(item: url) {
+                                    Label("Share…", systemImage: "square.and.arrow.up")
+                                }
+                            }
+                        }
+                    }
+
+                    attachmentView
+
+                    if !message.reactions.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(message.reactions, id: \.self) { emoji in
+                                Text(emoji)
+                                    .font(.caption)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.systemGray6))
+                        .clipShape(Capsule())
+                    }
+
+                    if let statusText {
+                        Text(statusText)
+                            .font(.caption2)
+                            .foregroundStyle(message.status == .failed ? .red : .secondary)
                     }
                 }
+
+                if message.status == .failed && message.role.isUser {
+                    Button {
+                        onRetry?(message)
+                    } label: {
+                        failureIndicator
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Retry message")
+                }
             }
-            
-            if !message.role.isUser { Spacer() }
         }
         .sheet(item: $quickLookItem) { item in
             QuickLookPreview(url: item.url)
