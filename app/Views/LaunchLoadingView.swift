@@ -2,7 +2,6 @@ import SwiftUI
 
 struct LaunchLoadingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject private var warmup: AppWarmup
 
     private let launchSeedProgress = 0.22
@@ -16,43 +15,56 @@ struct LaunchLoadingView: View {
     @State private var didStartExit = false
     @State private var progressUpdatesUnlocked = false
 
-    private var isRegularWidth: Bool { horizontalSizeClass == .regular }
-    private var chefSize: CGFloat { isRegularWidth ? 280 : 220 }
-    private var bubbleWidth: CGFloat { isRegularWidth ? 240 : 190 }
-    private var progressWidth: CGFloat { isRegularWidth ? 240 : 200 }
-    private var bubbleOffsetX: CGFloat { isRegularWidth ? 112 : 96 }
-    private var bubbleOffsetY: CGFloat { isRegularWidth ? -138 : -112 }
-
     var body: some View {
-        ZStack {
+        GeometryReader { geo in
+            let cx = geo.size.width / 2
+            let cy = geo.size.height / 2
+            let layout = LaunchScreenLayout(containerWidth: geo.size.width)
             Color(.systemBackground)
-                .ignoresSafeArea()
 
             Image(decorative: "launch-chef")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: chefSize, height: chefSize)
-                .offset(y: 16)
+                .frame(width: layout.chefSize, height: layout.chefSize)
+                .position(
+                    x: cx + LaunchScreenLayout.chefOffsetX,
+                    y: cy + LaunchScreenLayout.centerYOffset + LaunchScreenLayout.chefOffsetY
+                )
                 .accessibilityHidden(true)
 
             Image(decorative: "launch-bubble")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: bubbleWidth)
-                .offset(x: bubbleOffsetX, y: 16 + bubbleOffsetY)
+                .frame(width: layout.bubbleWidth)
                 .rotationEffect(bubbleRotation)
+                .position(
+                    x: cx + LaunchScreenLayout.bubbleOffsetX,
+                    y: cy + LaunchScreenLayout.centerYOffset + LaunchScreenLayout.bubbleOffsetY
+                )
                 .accessibilityHidden(true)
                 .accessibilityIdentifier("launch.bubble")
 
-            ProgressView(value: displayedProgress, total: 1.0)
-                .progressViewStyle(.linear)
-                .tint(.orange)
-                .frame(width: progressWidth)
-                .offset(y: 16 + chefSize / 2 + 18)
+            Capsule()
+                .fill(Color(red: 0.929, green: 0.902, blue: 0.875))
+                .frame(width: layout.progressWidth, height: LaunchScreenLayout.progressHeight)
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(red: 1, green: 0.584, blue: 0))
+                        .frame(width: layout.progressWidth * displayedProgress)
+                }
+                .position(
+                    x: cx,
+                    y: cy
+                        + LaunchScreenLayout.centerYOffset
+                        + LaunchScreenLayout.chefOffsetY
+                        + layout.chefSize / 2
+                        + LaunchScreenLayout.progressTopSpacing
+                )
                 .accessibilityIdentifier("launch.progress")
                 .accessibilityLabel("Warmup progress")
                 .accessibilityValue(Text("\(Int((displayedProgress * 100).rounded())) percent"))
         }
+        .ignoresSafeArea()
         .opacity(overlayOpacity)
         .accessibilityIdentifier("launch.overlay")
         .task {

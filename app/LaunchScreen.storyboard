@@ -16,19 +16,19 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launch-chef" translatesAutoresizingMaskIntoConstraints="NO" id="JvR-Ia-5MZ">
-                                <rect key="frame" x="86.5" y="332" width="220" height="220"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" horizontalCompressionResistancePriority="749" verticalCompressionResistancePriority="749" image="launch-chef" translatesAutoresizingMaskIntoConstraints="NO" id="JvR-Ia-5MZ">
+                                <rect key="frame" x="86.5" y="367" width="170" height="170"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="220" id="KVD-3S-0eh"/>
-                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="280" id="Q2E-L2-g5u"/>
+                                    <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="170" id="KVD-3S-0eh"/>
+                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="210" id="Q2E-L2-g5u"/>
                                     <constraint firstAttribute="height" secondItem="JvR-Ia-5MZ" secondAttribute="width" multiplier="1:1" id="QIt-qf-iKj"/>
                                 </constraints>
                             </imageView>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launch-bubble" translatesAutoresizingMaskIntoConstraints="NO" id="bh8-Rw-ZgI">
-                                <rect key="frame" x="200.5" y="238" width="190" height="172.5"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" horizontalCompressionResistancePriority="749" verticalCompressionResistancePriority="749" image="launch-bubble" translatesAutoresizingMaskIntoConstraints="NO" id="bh8-Rw-ZgI">
+                                <rect key="frame" x="215.5" y="235.06" width="145" height="131.56999999999999"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="190" id="1WR-y7-y5z"/>
-                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="240" id="6Zc-Dh-btJ"/>
+                                    <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="145" id="1WR-y7-y5z"/>
+                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="180" id="6Zc-Dh-btJ"/>
                                     <constraint firstAttribute="height" secondItem="bh8-Rw-ZgI" secondAttribute="width" multiplier="49:54" id="qaa-5t-s1N"/>
                                 </constraints>
                             </imageView>
@@ -41,17 +41,17 @@
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="K1f-jS-7wN"/>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.34" priority="750" id="O7H-FD-yD8"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" constant="-25" id="K1f-jS-7wN"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.26" priority="750" id="O7H-FD-yD8"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="top" secondItem="JvR-Ia-5MZ" secondAttribute="bottom" constant="18" id="WgJ-oS-U0R"/>
-                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="centerY" secondItem="JvR-Ia-5MZ" secondAttribute="centerY" constant="-112" id="Xhi-xU-zOI"/>
+                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="centerY" secondItem="JvR-Ia-5MZ" secondAttribute="centerY" constant="-132" id="Xhi-xU-zOI"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="bkr-KT-Z26"/>
-                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="centerX" secondItem="JvR-Ia-5MZ" secondAttribute="centerX" constant="96" id="dVN-hN-mUP"/>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="16" id="hMQ-4A-XhW"/>
+                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="centerX" secondItem="JvR-Ia-5MZ" secondAttribute="centerX" constant="129" id="dVN-hN-mUP"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="26" id="hMQ-4A-XhW"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.34" priority="750" id="iFZ-L9-8uu"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="width" relation="greaterThanOrEqual" constant="200" id="q2x-u5-I5a"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="width" relation="lessThanOrEqual" constant="240" id="uwG-Rn-5A8"/>
-                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.3" priority="750" id="xUi-BU-64Q"/>
+                            <constraint firstItem="bh8-Rw-ZgI" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.22" priority="750" id="xUi-BU-64Q"/>
                         </constraints>
                     </view>
                 </viewController>
