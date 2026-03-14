@@ -27,30 +27,26 @@ struct PropertySchema {
     let enumValues: [String]?
     let properties: [String: PropertySchema]?
     let required: [String]?
-    private let _items: Box<PropertySchema>?
+    private let itemSchemas: [PropertySchema]?
 
-    var items: PropertySchema? { _items?.value }
-
-    /// Reference wrapper to allow recursive value types.
-    private final class Box<T> {
-        let value: T
-        init(_ value: T) { self.value = value }
-    }
+    // Arrays provide the indirection needed for recursive schema values
+    // without relying on the nested generic box that crashes Swift 6.2.4.
+    var items: PropertySchema? { itemSchemas?.first }
 
     static func string(_ description: String) -> PropertySchema {
-        PropertySchema(type: "string", description: description, enumValues: nil, properties: nil, required: nil, _items: nil)
+        PropertySchema(type: "string", description: description, enumValues: nil, properties: nil, required: nil, itemSchemas: nil)
     }
 
     static func number(_ description: String) -> PropertySchema {
-        PropertySchema(type: "number", description: description, enumValues: nil, properties: nil, required: nil, _items: nil)
+        PropertySchema(type: "number", description: description, enumValues: nil, properties: nil, required: nil, itemSchemas: nil)
     }
 
     static func boolean(_ description: String) -> PropertySchema {
-        PropertySchema(type: "boolean", description: description, enumValues: nil, properties: nil, required: nil, _items: nil)
+        PropertySchema(type: "boolean", description: description, enumValues: nil, properties: nil, required: nil, itemSchemas: nil)
     }
 
     static func stringEnum(_ description: String, values: [String]) -> PropertySchema {
-        PropertySchema(type: "string", description: description, enumValues: values, properties: nil, required: nil, _items: nil)
+        PropertySchema(type: "string", description: description, enumValues: values, properties: nil, required: nil, itemSchemas: nil)
     }
 
     static func object(_ description: String, properties: [String: PropertySchema], required: [String] = []) -> PropertySchema {
@@ -60,7 +56,7 @@ struct PropertySchema {
             enumValues: nil,
             properties: properties,
             required: required.isEmpty ? nil : required,
-            _items: nil
+            itemSchemas: nil
         )
     }
 
@@ -71,7 +67,7 @@ struct PropertySchema {
             enumValues: nil,
             properties: nil,
             required: nil,
-            _items: Box(items)
+            itemSchemas: [items]
         )
     }
 }
