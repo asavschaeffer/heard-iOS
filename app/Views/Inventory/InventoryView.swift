@@ -20,13 +20,16 @@ struct InventoryView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                scanWithChefSection
-
+            Group {
                 if filteredIngredients.isEmpty {
-                    emptyStateView
+                    ScrollView {
+                        emptyStateView
+                            .padding()
+                    }
                 } else {
-                    groupedSections
+                    List {
+                        groupedSections
+                    }
                 }
             }
             .accessibilityIdentifier("inventory.list")
@@ -167,56 +170,59 @@ struct InventoryView: View {
 
     @ViewBuilder
     private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label("No Ingredients", systemImage: "refrigerator")
-        } description: {
-            Text("Add ingredients to your inventory to get started.")
-        } actions: {
-            Button("Add Ingredient") {
-                showingAddSheet = true
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
+        VStack(spacing: 24) {
+            Image(systemName: "refrigerator")
+                .font(.system(size: 70))
+                .foregroundStyle(.secondary)
 
-            Button("Add From Photo") {
-                openInventoryCamera()
-            }
-            .buttonStyle(.bordered)
-        }
-    }
+            Text("No Ingredients")
+                .font(.title)
+                .fontWeight(.semibold)
 
-    private var scanWithChefSection: some View {
-        Section {
-            Button(action: openInventoryCamera) {
-                HStack(spacing: 12) {
-                    Image(systemName: "camera.viewfinder")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-                        .frame(width: 40, height: 40)
-                        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            Text("Scan a receipt or grocery haul to get started.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Add From Photo")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-
-                        Text("Snap a picture, then Chef adds those ingredients in chat.")
+            HStack(spacing: 0) {
+                Button { openInventoryCamera() } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 48))
+                        Text("Scan")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
                     }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.vertical, 4)
+
+                Button {
+                    navigationState.requestCall()
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 48))
+                        Text("Talk")
+                            .font(.subheadline)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+
+                Button { showingAddSheet = true } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 48))
+                        Text("Add manually")
+                            .font(.subheadline)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("inventory.scanWithChatButton")
+            .foregroundStyle(.orange)
+            .padding(.top, 8)
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Actions

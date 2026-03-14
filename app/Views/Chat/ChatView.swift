@@ -78,6 +78,14 @@ struct ChatView: View {
             .onChange(of: navigationState.pendingChatSubmission?.id) {
                 handlePendingChatSubmission()
             }
+            .onChange(of: navigationState.pendingCallRequest) {
+                if navigationState.pendingCallRequest {
+                    navigationState.pendingCallRequest = false
+                    viewModel.noteCallPresentationRequested()
+                    callPresentationStyle = .fullScreen
+                    isCallScreenPresented = true
+                }
+            }
             .onChange(of: selectedItem) { handleSelectedItemChange() }
             .onChange(of: dictationController.transcript) { handleTranscriptChange() }
     }

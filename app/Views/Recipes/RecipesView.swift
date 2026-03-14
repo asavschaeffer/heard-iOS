@@ -3,6 +3,7 @@ import SwiftData
 
 struct RecipesView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var navigationState: AppNavigationState
     @Query(sort: \Recipe.name) private var recipes: [Recipe]
     @Query private var ingredients: [Ingredient]
 
@@ -87,31 +88,65 @@ struct RecipesView: View {
 
     @ViewBuilder
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
             Image(systemName: showMakeableOnly ? "basket" : "book.closed")
-                .font(.system(size: 60))
+                .font(.system(size: 70))
                 .foregroundStyle(.secondary)
 
             Text(showMakeableOnly ? "No Recipes Available" : "No Recipes")
-                .font(.title2)
+                .font(.title)
                 .fontWeight(.semibold)
 
             Text(showMakeableOnly
                  ? "Add more ingredients to your inventory or create new recipes."
-                 : "Create your first recipe to get started.")
-                .font(.subheadline)
+                 : "Snap a photo of a recipe or tell us what to make.")
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             if !showMakeableOnly {
-                Button("Add Recipe") {
-                    showingAddRecipe = true
+                HStack(spacing: 0) {
+                    Button {
+                        // Camera recipe scanning — no-op for now
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: "camera.viewfinder")
+                                .font(.system(size: 48))
+                            Text("Scan")
+                                .font(.subheadline)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    Button {
+                        navigationState.requestCall()
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 48))
+                            Text("Talk")
+                                .font(.subheadline)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    Button { showingAddRecipe = true } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 48))
+                            Text("Add manually")
+                                .font(.subheadline)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .buttonStyle(.plain)
+                .foregroundStyle(.orange)
+                .padding(.top, 8)
             }
         }
-        .padding(.vertical, 60)
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Makeable Recipes Section
