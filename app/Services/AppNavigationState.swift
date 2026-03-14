@@ -25,6 +25,7 @@ final class AppNavigationState: ObservableObject {
 
     @Published var selectedTab: Tab
     @Published var pendingChatSubmission: PendingChatSubmission?
+    @Published var pendingCallRequest = false
 
     init() {
         selectedTab = TestSupport.defaultTabIndex == 1 ? .inventory : .chat
@@ -48,5 +49,10 @@ final class AppNavigationState: ObservableObject {
     func consumePendingChatSubmission(id: UUID) {
         guard pendingChatSubmission?.id == id else { return }
         pendingChatSubmission = nil
+    }
+
+    func requestCall() {
+        selectedTab = .chat
+        pendingCallRequest = true
     }
 }
