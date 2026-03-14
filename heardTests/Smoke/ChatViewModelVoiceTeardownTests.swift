@@ -109,6 +109,32 @@ struct ChatViewModelVoiceTeardownTests {
         #expect(coordinator.transportDisconnectCount == 1)
         #expect(coordinator.transportDisconnectAutoReconnects == [true])
     }
+
+    @Test
+    func coordinatorUpdatesDoNotResetVideoStreamingSelection() {
+        let modelContext = HeardChefApp().sharedModelContainer.mainContext
+        let service = MockGeminiService(modelContext: modelContext)
+        let coordinator = MockVoiceCoordinator()
+        let viewModel = ChatViewModel(
+            geminiServiceFactory: { _ in service },
+            voiceCoordinator: coordinator,
+            shouldBootstrapThreadOnModelContext: false
+        )
+        viewModel.setModelContext(modelContext)
+
+        viewModel.toggleVideoFromCallView()
+
+        var updatedState = VoiceCallUIState()
+        updatedState.isPresented = true
+        updatedState.isMicrophoneMuted = true
+        updatedState.isSpeakerPreferred = false
+        coordinator.publish(state: updatedState)
+
+        #expect(viewModel.callState.isVideoStreaming)
+        #expect(viewModel.callState.isPresented)
+        #expect(viewModel.isMicrophoneMuted)
+        #expect(viewModel.isSpeakerPreferred == false)
+    }
 }
 
 @MainActor
@@ -141,6 +167,7 @@ private final class MockVoiceCoordinator: ChatVoiceCoordinating {
     var onCallKitActivated: (() -> Void)?
     var onPlaybackStarted: (() -> Void)?
 
+    private let delegateCoordinator = VoiceCallCoordinator(displayName: "Mock", callKitEnabled: false)
     private(set) var stopCallCount = 0
     private(set) var startCallCount = 0
     private(set) var transportDisconnectCount = 0
@@ -171,5 +198,9 @@ private final class MockVoiceCoordinator: ChatVoiceCoordinating {
 
     func transportDidReceiveAudio(_ data: Data) {
         _ = data
+    }
+
+    func publish(state: VoiceCallUIState) {
+        delegate?.voiceCallCoordinator(delegateCoordinator, didUpdate: state)
     }
 }

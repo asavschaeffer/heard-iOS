@@ -235,9 +235,14 @@ class ChatViewModel: ObservableObject {
     }
 
     private func applyVoiceState(_ newState: VoiceCallUIState) {
-        callState = newState
-        isMicrophoneMuted = newState.isMicrophoneMuted
-        isSpeakerPreferred = newState.isSpeakerPreferred
+        var mergedState = newState
+        // Video presentation is owned by ChatViewModel/UI, not VoiceCallCoordinator.
+        mergedState.isVideoStreaming = callState.isVideoStreaming
+        mergedState.videoFrameInterval = callState.videoFrameInterval
+
+        callState = mergedState
+        isMicrophoneMuted = mergedState.isMicrophoneMuted
+        isSpeakerPreferred = mergedState.isSpeakerPreferred
     }
 
     private func startCallTimer() {
