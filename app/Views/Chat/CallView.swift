@@ -50,18 +50,7 @@ struct CallView: View {
 
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 200, height: 200)
-                    .shadow(color: viewModel.callState.isSpeaking ? .white.opacity(0.15) : .clear, radius: 20)
-                    .scaleEffect(viewModel.callState.isSpeaking ? 1.04 : 1.0)
-                    .animation(.easeInOut(duration: 0.3).repeatForever(), value: viewModel.callState.isSpeaking)
-
-                Image(systemName: "fork.knife.circle.fill")
-                    .font(.system(size: 90))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
+            SpeakingChefOrb(isSpeaking: viewModel.callState.isSpeaking)
 
             Spacer()
         }
@@ -110,6 +99,14 @@ struct CallView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 12)
+
+                HStack {
+                    chefCallBadge
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 12)
+
                 Spacer()
             }
 
@@ -186,6 +183,99 @@ struct CallView: View {
         switch viewModel.connectionState {
         case .connecting, .disconnected: true
         case .connected, .error: false
+        }
+    }
+
+    private var chefCallBadge: some View {
+        HStack(spacing: 10) {
+            Image("launch-chef")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Chef Guy")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Text(viewModel.connectionState == .connected ? "Live call" : statusText)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Chef Guy, \(viewModel.connectionState == .connected ? "live call" : statusText)")
+    }
+}
+
+private struct SpeakingChefOrb: View {
+    let isSpeaking: Bool
+
+    @State private var pulseScale = 1.0
+    @State private var pulseTask: Task<Void, Never>?
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.white.opacity(0.08))
+                .frame(width: 200, height: 200)
+                .shadow(color: isSpeaking ? .white.opacity(0.15) : .clear, radius: 20)
+                .scaleEffect(pulseScale)
+
+            Image("launch-chef")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 144, height: 144)
+                .accessibilityLabel("Chef Guy")
+        }
+        .onAppear {
+            updatePulse(for: isSpeaking)
+        }
+        .onChange(of: isSpeaking) { _, newValue in
+            updatePulse(for: newValue)
+        }
+        .onDisappear {
+            pulseTask?.cancel()
+            pulseTask = nil
+            pulseScale = 1.0
+        }
+    }
+
+    @MainActor
+    private func updatePulse(for isSpeaking: Bool) {
+        pulseTask?.cancel()
+        pulseTask = nil
+
+        guard isSpeaking else {
+            withAnimation(.easeOut(duration: 0.18)) {
+                pulseScale = 1.0
+            }
+            return
+        }
+
+        pulseTask = Task {
+            while !Task.isCancelled {
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.32)) {
+                        pulseScale = 1.1
+                    }
+                }
+
+                try? await Task.sleep(for: .milliseconds(320))
+                guard !Task.isCancelled else { break }
+
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.24)) {
+                        pulseScale = 1.0
+                    }
+                }
+
+                try? await Task.sleep(for: .milliseconds(240))
+            }
         }
     }
 }
