@@ -14,6 +14,8 @@ final class AppWarmup: ObservableObject {
         case speechRecognizer = "Speech Recognizer"
         case dataDetector = "Data Detector"
         case hapticEngine = "Haptic Engine"
+        case textInput = "Text Input"
+        case menuSystem = "Menu System"
     }
 
     @Published private(set) var completedSteps: Set<Step> = []
@@ -58,6 +60,15 @@ final class AppWarmup: ObservableObject {
 
             SharedHaptics.generator.prepare()
             recordCompletion(of: .hapticEngine)
+        }
+
+        // UIKit interaction stack
+        Task {
+            await WarmupWork.textInput()
+            recordCompletion(of: .textInput)
+
+            await WarmupWork.menuSystem()
+            recordCompletion(of: .menuSystem)
         }
     }
 
@@ -151,6 +162,14 @@ private enum WarmupWork {
                 continuation.resume()
             }
         }
+    }
+
+    static func textInput() async {
+        await UIInteractionWarmup.warmTextInput()
+    }
+
+    static func menuSystem() async {
+        await UIInteractionWarmup.warmMenuSystem()
     }
 }
 
