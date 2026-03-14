@@ -4,7 +4,8 @@ struct TypingIndicatorBubble: View {
     @State private var animate = false
 
     var body: some View {
-        HStack {
+        HStack(alignment: .bottom, spacing: 8) {
+            ChefAvatarView()
             HStack(spacing: 6) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
