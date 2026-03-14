@@ -1,6 +1,6 @@
 # Heard, Chef
 
-![Status](https://img.shields.io/badge/status-in%20development-yellow)
+![Status](https://img.shields.io/badge/status-closed%20alpha-blue)
 ![Swift](https://img.shields.io/badge/swift%20toolchain-6.2-orange)
 ![Xcode](https://img.shields.io/badge/xcode-17%2B-blue)
 
@@ -199,52 +199,56 @@ The repo is past the highest-risk voice infrastructure phase.
 - gesture-heavy UI regressions stay opt-in until repeated local and CI evidence proves them stable enough for default CI
 - physical-device validation for route-sensitive truth
 - run-grouped `.xcresult` manifests under `.deriveddata/codex-tests/Logs/TestRuns/` for AI-friendly triage
-- The current short-term focus is reliability closure, documentation accuracy, and repeated verification, not another voice rewrite.
+- The current focus is feature development and tool expansion, with the voice and test infrastructure stable.
 
 ## Roadmap
 
 **Short term**
 
-- finish the remaining physical-device voice regression matrix(deferred)
-- keep docs and repo structure aligned with the landed `VoiceCore` architecture
-- standardize the local verification loop for `VoiceCore`, `heardTests`, and `build-for-testing`
-
-**Medium term**
-
+- finish the remaining physical-device voice regression matrix (deferred)
 - evaluate a `Modules/GeminiTransport` extraction only if app-side integration pressure justifies it
-- keep `app/` stable until a second real reusable module exists
-- adopt local-only media fixtures for repeated manual and smoke validation
 
 **Long term**
 
 - evolve toward a modular app shell with two or more real internal modules
 - strengthen module-first automation while keeping hardware checks for route-sensitive audio
-- keep broad folder churn deferred until it is justified by real subsystem boundaries
 
 ## Todo
 
-**UX Fixes**
-- [ ] Fix ingredients page camera (or redirect to chat with camera open)
-- [ ] First-action lag (phone button, long-hold message, share button)
+**v1.3.0 — Done**
+- [x] First-action lag (phone button, long-hold message, share button)*
+  - *Still intermittently present — see [#4](https://github.com/asavschaeffer/heard-iOS/issues/4)*
 - [x] Keyboard dismiss in add/edit ingredients and edit recipe modals
-- [ ] Speakerphone echo with Google Live API (model interrupts itself)
-- [ ] Nav order: Inventory → Chat → Recipes → Settings
+- [x] Speakerphone echo with Google Live API (VAD tuning + AEC)
+- [x] Nav order: Inventory → Chat → Recipes → Settings
+- [x] Launch screen dark mode (backgroundless logo)
+- [x] Chat bubble color dynamism on light mode
+- [x] Chef avatar in chat view, calling, and FaceTime
+- [x] VoiceCore module extraction with explicit state machine
+- [x] Voice selection and VAD calibration settings
+- [x] Beta system prompt editing
+- [x] App icon refresh
+- [x] Fix ingredients page camera
+- [x] Test infrastructure (test plans, VoiceCoreTests, UI regression suite, xcresult diagnostics)
 
-**Visual Polish**
-- [ ] Launch screen dark mode (backgroundless logo)
-- [ ] Chat bubble color dynamism on light mode
-- [ ] Chef avatar in chat view, calling, and FaceTime
+**UX**
+- [ ] Shopping list UI
 
 **New Tools**
 - [ ] Allergies
 - [ ] Timer tool
-- [ ] Conversion tool
+- [ ] Unit conversion tool
 
 **Major Features**
 - [ ] Multiple chats
-- [ ] Auth
+- [ ] Auth & ephemeral keys
 - [ ] Onboarding
+- [ ] Google Cloud backend
 - [ ] Memory manager (post-conversation topic extraction and context assembly)
+
+**Ongoing**
+- [ ] Speakerphone echo refinement (VAD tuning, AEC)
+- [ ] System prompt experimentation
 
 ## Specs
 
