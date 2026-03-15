@@ -3,6 +3,14 @@ import SwiftUI
 struct ChefCharacterView: View {
     let size: CGFloat
 
+    private static let faces = [
+        "face-angry", "face-crying", "face-cute", "face-excited",
+        "face-feminine", "face-joyful", "face-laughing", "face-pouting",
+        "face-silly", "face-winking", "face-xd"
+    ]
+
+    @State private var face = faces.randomElement()!
+
     var body: some View {
         ZStack {
             Image("chef-hat")
@@ -10,7 +18,7 @@ struct ChefCharacterView: View {
                 .scaledToFit()
                 .scaleEffect(1.35)
 
-            Image("chef-face")
+            Image(face)
                 .resizable()
                 .scaledToFit()
                 .scaleEffect(0.78)
