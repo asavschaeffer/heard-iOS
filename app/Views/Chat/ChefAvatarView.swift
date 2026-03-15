@@ -8,6 +8,7 @@ struct ChefAvatarView: View {
     var body: some View {
         ChefCharacterView(size: imageSize, expression: expression)
             .frame(width: Self.slotSize, height: Self.slotSize, alignment: .bottom)
+            .offset(y: 4)
             .contentShape(Rectangle())
             .accessibilityLabel("Chef Guy")
     }
