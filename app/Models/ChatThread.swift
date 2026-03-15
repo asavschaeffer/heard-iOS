@@ -80,11 +80,22 @@ final class ChatMessage {
             reactionsData = newValue.joined(separator: ",")
         }
     }
+    var expressionRaw: String?
     var isDraft: Bool
     var createdAt: Date
     var updatedAt: Date
-    
+
     var thread: ChatThread?
+
+    var expression: ChefExpression? {
+        get {
+            guard let raw = expressionRaw else { return nil }
+            return ChefExpression(rawValue: raw)
+        }
+        set {
+            expressionRaw = newValue?.rawValue
+        }
+    }
     
     var role: ChatMessageRole {
         get { ChatMessageRole(rawValue: roleRaw) ?? .assistant }

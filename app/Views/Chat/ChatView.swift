@@ -219,6 +219,7 @@ struct ChatView: View {
                 isTyping: viewModel.isTyping,
                 toolCallChips: viewModel.toolCallChips,
                 showReadReceipts: settings.showReadReceipts,
+                chefExpression: viewModel.chefExpression,
                 linkStore: linkStore,
                 onRetry: { message in
                     // Forward retry without relying on dynamic member lookup

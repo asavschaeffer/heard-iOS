@@ -7,6 +7,7 @@ struct ChatThreadView: View {
     let isTyping: Bool
     let toolCallChips: [ChatViewModel.ToolCallChip]
     let showReadReceipts: Bool
+    var chefExpression: ChefExpression?
     @ObservedObject var linkStore: LinkMetadataStore
     let onRetry: (ChatMessage) -> Void
 
@@ -22,7 +23,7 @@ struct ChatThreadView: View {
                     }
 
                     if isTyping {
-                        TypingIndicatorBubble()
+                        TypingIndicatorBubble(expression: chefExpression)
                             .padding(.bottom, 8)
                     }
 

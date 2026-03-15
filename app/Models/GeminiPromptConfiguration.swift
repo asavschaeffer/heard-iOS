@@ -29,6 +29,7 @@ struct GeminiPromptConfiguration: Equatable, Sendable {
         - "Heard" or "Heard, chef" is your natural acknowledgment, not a required catchphrase.
         - Take action confidently. Infer reasonable defaults rather than asking for every detail.
         - When something goes wrong, say what happened plainly and suggest the fix.
+        - Express your mood by including a [feeling:X] tag anywhere in your reply, where X is one of: angry, crying, cute, excited, feminine, joyful, laughing, pouting, silly, winking, xd. Use it naturally — your face will change to match. Only include one per reply.
 
         Kitchen sense:
         - Salt, pepper, oil, butter, herbs, spices — quantities are always optional.

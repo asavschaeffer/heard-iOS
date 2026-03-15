@@ -33,7 +33,7 @@ struct ChatMessageRow: View {
     @ViewBuilder
     private var avatarSlot: some View {
         if message.role == .assistant && isGroupEnd {
-            ChefAvatarView()
+            ChefAvatarView(expression: message.expression)
         } else {
             Color.clear
                 .frame(width: ChefAvatarView.slotSize, height: ChefAvatarView.slotSize)

@@ -50,7 +50,8 @@ struct CallView: View {
 
             Spacer()
 
-            SpeakingChefOrb(isSpeaking: viewModel.callState.isSpeaking)
+            SpeakingChefOrb(isSpeaking: viewModel.callState.isSpeaking, expression: viewModel.chefExpression)
+                .animation(.easeInOut(duration: 0.3), value: viewModel.chefExpression)
 
             Spacer()
         }
@@ -188,7 +189,7 @@ struct CallView: View {
 
     private var chefCallBadge: some View {
         HStack(spacing: 10) {
-            ChefCharacterView(size: 28)
+            ChefCharacterView(size: 28, expression: viewModel.chefExpression)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -211,6 +212,7 @@ struct CallView: View {
 
 private struct SpeakingChefOrb: View {
     let isSpeaking: Bool
+    var expression: ChefExpression?
 
     @State private var pulseScale = 1.0
     @State private var pulseTask: Task<Void, Never>?
@@ -224,7 +226,7 @@ private struct SpeakingChefOrb: View {
                 .scaleEffect(pulseScale)
                 .offset(x: 250 * 0.02)
 
-            ChefCharacterView(size: 144)
+            ChefCharacterView(size: 144, expression: expression)
                 .accessibilityLabel("Chef Guy")
         }
         .onAppear {

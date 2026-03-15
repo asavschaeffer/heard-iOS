@@ -1,11 +1,12 @@
 import SwiftUI
 
 struct TypingIndicatorBubble: View {
+    var expression: ChefExpression?
     @State private var animate = false
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            ChefAvatarView()
+            ChefAvatarView(expression: expression)
             HStack(spacing: 6) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()

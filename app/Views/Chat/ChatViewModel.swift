@@ -80,6 +80,7 @@ class ChatViewModel: ObservableObject {
     @Published var callKitEnabled = true
     @Published private(set) var isMicrophoneMuted = false
     @Published private(set) var isSpeakerPreferred = true
+    @Published var chefExpression: ChefExpression = .pouting
     
     // MARK: - Private Properties
 
@@ -869,19 +870,35 @@ class ChatViewModel: ObservableObject {
         return existing + incoming
     }
 
+    private static let feelingRegex = try! NSRegularExpression(pattern: #"\[feeling:(\w+)\]"#)
+
+    private func stripFeelingTag(from text: String) -> String {
+        let range = NSRange(text.startIndex..., in: text)
+        if let match = Self.feelingRegex.firstMatch(in: text, range: range),
+           let captureRange = Range(match.range(at: 1), in: text),
+           let expr = ChefExpression(rawValue: String(text[captureRange])) {
+            chefExpression = expr
+        }
+        return Self.feelingRegex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+            .trimmingCharacters(in: .whitespaces)
+    }
+
     private func updateAssistantTranscriptMessage(chunk: String, isFinal: Bool) {
         guard !chunk.isEmpty else { return }
 
         assistantTranscriptBuffer = mergeStreamingText(existing: assistantTranscriptBuffer, incoming: chunk)
-        let text = assistantTranscriptBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stripped = stripFeelingTag(from: assistantTranscriptBuffer)
+        let text = stripped.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
         if let messageId = assistantTranscriptMessageId,
            let index = messages.firstIndex(where: { $0.id == messageId }) {
             messages[index].updateText(text, isDraft: !isFinal)
+            messages[index].expression = chefExpression
             attachUnanchoredToolChips(to: messageId)
         } else {
             let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
+            message.expression = chefExpression
             insertMessage(message)
             messages.append(message)
             assistantTranscriptMessageId = message.id
@@ -898,15 +915,18 @@ class ChatViewModel: ObservableObject {
         guard !chunk.isEmpty else { return }
 
         assistantTextBuffer = mergeStreamingText(existing: assistantTextBuffer, incoming: chunk)
-        let text = assistantTextBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stripped = stripFeelingTag(from: assistantTextBuffer)
+        let text = stripped.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
         if let messageId = assistantTextMessageId,
            let index = messages.firstIndex(where: { $0.id == messageId }) {
             messages[index].updateText(text, isDraft: !isFinal)
+            messages[index].expression = chefExpression
             attachUnanchoredToolChips(to: messageId)
         } else {
             let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
+            message.expression = chefExpression
             insertMessage(message)
             messages.append(message)
             assistantTextMessageId = message.id
@@ -922,12 +942,14 @@ class ChatViewModel: ObservableObject {
     private func finalizeAssistantStreamingMessages() {
         if let messageId = assistantTranscriptMessageId,
            let index = messages.firstIndex(where: { $0.id == messageId }) {
-            let finalText = assistantTranscriptBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            let finalText = stripFeelingTag(from: assistantTranscriptBuffer)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             if finalText.isEmpty {
                 let message = messages.remove(at: index)
                 modelContext?.delete(message)
             } else {
                 messages[index].updateText(finalText, isDraft: false)
+                messages[index].expression = chefExpression
             }
         }
         assistantTranscriptMessageId = nil
@@ -935,12 +957,14 @@ class ChatViewModel: ObservableObject {
 
         if let messageId = assistantTextMessageId,
            let index = messages.firstIndex(where: { $0.id == messageId }) {
-            let finalText = assistantTextBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            let finalText = stripFeelingTag(from: assistantTextBuffer)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             if finalText.isEmpty {
                 let message = messages.remove(at: index)
                 modelContext?.delete(message)
             } else {
                 messages[index].updateText(finalText, isDraft: false)
+                messages[index].expression = chefExpression
             }
         }
         assistantTextMessageId = nil

@@ -1,15 +1,19 @@
 import SwiftUI
 
+enum ChefExpression: String, CaseIterable {
+    case angry, crying, cute, excited, feminine, joyful, laughing, pouting, silly, winking, xd
+    var assetName: String { "face-\(rawValue)" }
+}
+
 struct ChefCharacterView: View {
     let size: CGFloat
+    var expression: ChefExpression?
 
-    private static let faces = [
-        "face-angry", "face-crying", "face-cute", "face-excited",
-        "face-feminine", "face-joyful", "face-laughing", "face-pouting",
-        "face-silly", "face-winking", "face-xd"
-    ]
+    @State private var randomFace = ChefExpression.allCases.randomElement()!
 
-    @State private var face = faces.randomElement()!
+    private var activeFace: String {
+        (expression ?? randomFace).assetName
+    }
 
     var body: some View {
         ZStack {
@@ -18,7 +22,7 @@ struct ChefCharacterView: View {
                 .scaledToFit()
                 .scaleEffect(1.35)
 
-            Image(face)
+            Image(activeFace)
                 .resizable()
                 .scaledToFit()
                 .scaleEffect(0.78)
