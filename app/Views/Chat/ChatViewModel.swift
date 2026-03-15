@@ -209,6 +209,9 @@ class ChatViewModel: ObservableObject {
         let thread = existingThread ?? ChatThread(title: "Heard, Chef")
         if existingThread == nil {
             context.insert(thread)
+            let greeting = ChatMessage(role: .assistant, text: "What are we cooking today?", thread: thread)
+            greeting.expression = .joyful
+            context.insert(greeting)
         }
 
         activeThread = thread
