@@ -22,20 +22,18 @@ struct LaunchLoadingView: View {
             let layout = LaunchScreenLayout(containerWidth: geo.size.width)
             Color(.systemBackground)
 
-            Image(decorative: "launch-chef")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: layout.chefSize, height: layout.chefSize)
+            ChefCharacterView(size: layout.chefSize)
                 .position(
                     x: cx + LaunchScreenLayout.chefOffsetX,
                     y: cy + LaunchScreenLayout.centerYOffset + LaunchScreenLayout.chefOffsetY
                 )
                 .accessibilityHidden(true)
 
-            Image(decorative: "launch-bubble")
+            Image(systemName: "bubble.left.fill")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: layout.bubbleWidth)
+                .foregroundStyle(Color(red: 1, green: 0.584, blue: 0).opacity(0.25))
                 .rotationEffect(bubbleRotation)
                 .position(
                     x: cx + LaunchScreenLayout.bubbleOffsetX,

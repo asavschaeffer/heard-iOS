@@ -1,0 +1,119 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.96471,0.59216,0.23137,1.00000",
+      "display-p3:1.00000,0.43863,0.00000,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode" : "soft-light",
+          "fill" : "automatic",
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "winking.svg",
+          "name" : "winking",
+          "position" : {
+            "scale" : 4.5,
+            "translation-in-points" : [
+              8,
+              150
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "fill" : "automatic",
+          "hidden" : false,
+          "image-name" : "mushroom_toque.svg",
+          "name" : "mushroom_toque",
+          "position" : {
+            "scale" : 6,
+            "translation-in-points" : [
+              -13.1484375,
+              1.094503090427338
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "extended-gray:0.00000,0.21878",
+              "display-p3:1.00000,1.00000,1.00000,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.20066287878787878,
+                "y" : -0.0958663382477794
+              },
+              "stop" : {
+                "x" : 0.4769128787878788,
+                "y" : 0.5910920495874071
+              }
+            }
+          },
+          "hidden" : false,
+          "image-name" : "mushroom_toque.svg",
+          "name" : "mushroom_toque",
+          "position" : {
+            "scale" : 6,
+            "translation-in-points" : [
+              -13.1484375,
+              1.094503090427338
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

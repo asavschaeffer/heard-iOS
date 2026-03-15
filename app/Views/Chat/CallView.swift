@@ -188,10 +188,7 @@ struct CallView: View {
 
     private var chefCallBadge: some View {
         HStack(spacing: 10) {
-            Image("launch-chef")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 28, height: 28)
+            ChefCharacterView(size: 28)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -222,14 +219,12 @@ private struct SpeakingChefOrb: View {
         ZStack {
             Circle()
                 .fill(Color.white.opacity(0.08))
-                .frame(width: 200, height: 200)
+                .frame(width: 250, height: 250)
                 .shadow(color: isSpeaking ? .white.opacity(0.15) : .clear, radius: 20)
                 .scaleEffect(pulseScale)
+                .offset(x: 250 * 0.02)
 
-            Image("launch-chef")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 144, height: 144)
+            ChefCharacterView(size: 144)
                 .accessibilityLabel("Chef Guy")
         }
         .onAppear {
