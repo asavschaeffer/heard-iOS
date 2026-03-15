@@ -16,11 +16,17 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" horizontalCompressionResistancePriority="749" verticalCompressionResistancePriority="749" image="chef-hat" translatesAutoresizingMaskIntoConstraints="NO" id="hAt-1a-2bC">
+                                <rect key="frame" x="83" y="310" width="227" height="227"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" secondItem="hAt-1a-2bC" secondAttribute="width" multiplier="1:1" id="hAt-AR-001"/>
+                                </constraints>
+                            </imageView>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" horizontalCompressionResistancePriority="749" verticalCompressionResistancePriority="749" image="launch-chef" translatesAutoresizingMaskIntoConstraints="NO" id="JvR-Ia-5MZ">
                                 <rect key="frame" x="86.5" y="367" width="170" height="170"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="170" id="KVD-3S-0eh"/>
-                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="210" id="Q2E-L2-g5u"/>
+                                    <constraint firstAttribute="width" relation="greaterThanOrEqual" constant="121" id="KVD-3S-0eh"/>
+                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="158" id="Q2E-L2-g5u"/>
                                     <constraint firstAttribute="height" secondItem="JvR-Ia-5MZ" secondAttribute="width" multiplier="1:1" id="QIt-qf-iKj"/>
                                 </constraints>
                             </imageView>
@@ -33,11 +39,14 @@
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" constant="-25" id="K1f-jS-7wN"/>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.26" priority="750" id="O7H-FD-yD8"/>
-                            <constraint firstItem="0F2-u4-iVa" firstAttribute="top" secondItem="JvR-Ia-5MZ" secondAttribute="bottom" constant="18" id="WgJ-oS-U0R"/>
+                            <constraint firstItem="hAt-1a-2bC" firstAttribute="centerX" secondItem="JvR-Ia-5MZ" secondAttribute="centerX" id="hAt-CX-001"/>
+                            <constraint firstItem="hAt-1a-2bC" firstAttribute="width" secondItem="JvR-Ia-5MZ" secondAttribute="width" multiplier="1.73" id="hAt-WD-001"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerY" secondItem="hAt-1a-2bC" secondAttribute="centerY" constant="37" id="hAt-CY-001"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" constant="0" id="K1f-jS-7wN"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.217" priority="750" id="O7H-FD-yD8"/>
+                            <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="0F2-u4-iVa" secondAttribute="bottom" constant="80" id="WgJ-oS-U0R"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="bkr-KT-Z26"/>
-                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="26" id="hMQ-4A-XhW"/>
+                            <constraint firstItem="JvR-Ia-5MZ" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="42" id="hMQ-4A-XhW"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.34" priority="750" id="iFZ-L9-8uu"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="width" relation="greaterThanOrEqual" constant="200" id="q2x-u5-I5a"/>
                             <constraint firstItem="0F2-u4-iVa" firstAttribute="width" relation="lessThanOrEqual" constant="240" id="uwG-Rn-5A8"/>
@@ -50,7 +59,8 @@
         </scene>
     </scenes>
     <resources>
-        <image name="launch-chef" width="108" height="48"/>
+        <image name="chef-hat" width="150" height="139"/>
+        <image name="launch-chef" width="107" height="35"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

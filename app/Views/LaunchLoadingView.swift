@@ -44,7 +44,7 @@ struct LaunchLoadingView: View {
 
             Capsule()
                 .fill(Color(red: 0.929, green: 0.902, blue: 0.875))
-                .frame(width: layout.progressWidth, height: LaunchScreenLayout.progressHeight)
+                .frame(width: layout.progressWidth, height: 4)
                 .overlay(alignment: .leading) {
                     Capsule()
                         .fill(Color(red: 1, green: 0.584, blue: 0))
@@ -52,11 +52,7 @@ struct LaunchLoadingView: View {
                 }
                 .position(
                     x: cx,
-                    y: cy
-                        + LaunchScreenLayout.centerYOffset
-                        + LaunchScreenLayout.chefOffsetY
-                        + layout.chefSize / 2
-                        + LaunchScreenLayout.progressTopSpacing
+                    y: geo.size.height - geo.safeAreaInsets.bottom - 113
                 )
                 .accessibilityIdentifier("launch.progress")
                 .accessibilityLabel("Warmup progress")

@@ -1,9 +1,9 @@
 import CoreGraphics
 
 struct LaunchScreenLayout {
-    static let centerYOffset: CGFloat = 16
-    static let chefOffsetX: CGFloat = -25
-    static let chefOffsetY: CGFloat = 10
+    static let centerYOffset: CGFloat = 0
+    static let chefOffsetX: CGFloat = 0
+    static let chefOffsetY: CGFloat = 0
     static let bubbleOffsetX: CGFloat = 104
     static let bubbleOffsetY: CGFloat = -122
     static let progressTopSpacing: CGFloat = 18
