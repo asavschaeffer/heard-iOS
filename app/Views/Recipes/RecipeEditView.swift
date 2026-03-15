@@ -1,6 +1,25 @@
 import SwiftUI
 import SwiftData
 
+private struct RecipeStepDraft: Identifiable {
+    var id: UUID
+    var instruction: String
+    var durationMinutes: Int?
+    var orderIndex: Int
+
+    init(
+        id: UUID = UUID(),
+        instruction: String,
+        durationMinutes: Int? = nil,
+        orderIndex: Int = 0
+    ) {
+        self.id = id
+        self.instruction = instruction
+        self.durationMinutes = durationMinutes
+        self.orderIndex = orderIndex
+    }
+}
+
 struct RecipeEditView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -12,7 +31,7 @@ struct RecipeEditView: View {
     @State private var notes = ""
     @State private var cookingTemperature = ""
     @State private var ingredients: [RecipeIngredient] = []
-    @State private var steps: [RecipeStep] = []
+    @State private var stepDrafts: [RecipeStepDraft] = []
     @State private var prepTime: Int?
     @State private var cookTime: Int?
     @State private var servings: Int?
@@ -26,8 +45,8 @@ struct RecipeEditView: View {
 
     private var isEditing: Bool { recipe != nil }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
-    private var validSteps: [RecipeStep] {
-        steps.filter { !$0.instruction.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var validStepDrafts: [RecipeStepDraft] {
+        stepDrafts.filter { !$0.instruction.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 
     var body: some View {
@@ -75,7 +94,7 @@ struct RecipeEditView: View {
                         saveRecipe()
                     }
                     .fontWeight(.semibold)
-                    .disabled(trimmedName.isEmpty || ingredients.isEmpty || validSteps.isEmpty)
+                    .disabled(trimmedName.isEmpty || ingredients.isEmpty || validStepDrafts.isEmpty)
                     .accessibilityIdentifier(isEditing ? "recipe.edit.saveButton" : "recipe.add.saveButton")
                 }
             }
@@ -228,9 +247,7 @@ struct RecipeEditView: View {
     @ViewBuilder
     private var stepsSection: some View {
         Section {
-            ForEach(steps) { step in
-                @Bindable var step = step
-
+            ForEach($stepDrafts) { $step in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top) {
                         Text("\(step.orderIndex + 1).")
@@ -258,16 +275,16 @@ struct RecipeEditView: View {
                 }
             }
             .onDelete { indexSet in
-                steps.remove(atOffsets: indexSet)
-                reindexSteps()
+                stepDrafts.remove(atOffsets: indexSet)
+                reindexStepDrafts()
             }
             .onMove { from, to in
-                steps.move(fromOffsets: from, toOffset: to)
-                reindexSteps()
+                stepDrafts.move(fromOffsets: from, toOffset: to)
+                reindexStepDrafts()
             }
 
             Button {
-                steps.append(RecipeStep(instruction: "", orderIndex: steps.count))
+                stepDrafts.append(RecipeStepDraft(instruction: "", orderIndex: stepDrafts.count))
             } label: {
                 Label("Add Step", systemImage: "plus.circle")
             }
@@ -281,9 +298,9 @@ struct RecipeEditView: View {
         }
     }
 
-    private func reindexSteps() {
-        for i in 0..<steps.count {
-            steps[i].orderIndex = i
+    private func reindexStepDrafts() {
+        for i in 0..<stepDrafts.count {
+            stepDrafts[i].orderIndex = i
         }
     }
 
@@ -354,7 +371,14 @@ struct RecipeEditView: View {
         notes = recipe.notes ?? ""
         cookingTemperature = recipe.cookingTemperature ?? ""
         ingredients = recipe.ingredients
-        steps = recipe.steps
+        stepDrafts = recipe.orderedSteps.map { step in
+            RecipeStepDraft(
+                id: step.id,
+                instruction: step.instruction,
+                durationMinutes: step.durationMinutes,
+                orderIndex: step.orderIndex
+            )
+        }
         prepTime = recipe.prepTime
         cookTime = recipe.cookTime
         servings = recipe.servings
@@ -366,14 +390,35 @@ struct RecipeEditView: View {
 
     private func saveRecipe() {
         // Filter out empty steps and reindex
-        let filteredSteps = validSteps
-        for i in 0..<filteredSteps.count {
-            filteredSteps[i].orderIndex = i
+        var filteredStepDrafts = validStepDrafts
+        for i in 0..<filteredStepDrafts.count {
+            filteredStepDrafts[i].orderIndex = i
         }
 
-        guard !trimmedName.isEmpty, !ingredients.isEmpty, !filteredSteps.isEmpty else { return }
+        guard !trimmedName.isEmpty, !ingredients.isEmpty, !filteredStepDrafts.isEmpty else { return }
 
         if let recipe = recipe {
+            let previousIngredients = recipe.ingredients
+            let previousSteps = recipe.steps
+            let retainedIngredientIDs = Set(ingredients.map(\.id))
+
+            let desiredSteps = filteredStepDrafts.map { draft -> RecipeStep in
+                if let existingStep = previousSteps.first(where: { $0.id == draft.id }) {
+                    existingStep.instruction = draft.instruction.trimmingCharacters(in: .whitespaces)
+                    existingStep.durationMinutes = draft.durationMinutes
+                    existingStep.orderIndex = draft.orderIndex
+                    return existingStep
+                }
+
+                return RecipeStep(
+                    id: draft.id,
+                    instruction: draft.instruction,
+                    durationMinutes: draft.durationMinutes,
+                    orderIndex: draft.orderIndex
+                )
+            }
+            let retainedStepIDs = Set(desiredSteps.map(\.id))
+
             // Update existing
             recipe.name = trimmedName
             recipe.normalizedName = Recipe.normalize(trimmedName)
@@ -385,13 +430,21 @@ struct RecipeEditView: View {
                 ? nil
                 : cookingTemperature.trimmingCharacters(in: .whitespacesAndNewlines)
             recipe.ingredients = ingredients
-            recipe.steps = filteredSteps
+            recipe.steps = desiredSteps
             recipe.prepTime = prepTime
             recipe.cookTime = cookTime
             recipe.servings = servings
             recipe.tags = tags.map { $0.lowercased() }
             recipe.difficulty = difficulty
             recipe.updatedAt = Date()
+
+            for ingredient in previousIngredients where !retainedIngredientIDs.contains(ingredient.id) {
+                modelContext.delete(ingredient)
+            }
+
+            for step in previousSteps where !retainedStepIDs.contains(step.id) {
+                modelContext.delete(step)
+            }
         } else {
             // Create new
             let newRecipe = Recipe(
@@ -400,7 +453,14 @@ struct RecipeEditView: View {
                 notes: notes,
                 cookingTemperature: cookingTemperature,
                 ingredients: ingredients,
-                steps: filteredSteps,
+                steps: filteredStepDrafts.map {
+                    RecipeStep(
+                        id: $0.id,
+                        instruction: $0.instruction,
+                        durationMinutes: $0.durationMinutes,
+                        orderIndex: $0.orderIndex
+                    )
+                },
                 prepTime: prepTime,
                 cookTime: cookTime,
                 servings: servings,
