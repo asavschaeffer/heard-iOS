@@ -5,12 +5,12 @@ struct LaunchScreenLayout {
     static let chefOffsetX: CGFloat = 0
     static let chefOffsetY: CGFloat = 0
     static let bubbleOffsetX: CGFloat = 104
-    static let bubbleOffsetY: CGFloat = -122
+    static let bubbleOffsetY: CGFloat = -145
     static let progressTopSpacing: CGFloat = 18
     static let progressHeight: CGFloat = 2
 
     private static let chefWidthRange: ClosedRange<CGFloat> = 170...210
-    private static let bubbleWidthRange: ClosedRange<CGFloat> = 145...180
+    private static let bubbleWidthRange: ClosedRange<CGFloat> = 175...215
     private static let progressWidthRange: ClosedRange<CGFloat> = 200...240
 
     let chefSize: CGFloat
@@ -19,7 +19,7 @@ struct LaunchScreenLayout {
 
     init(containerWidth: CGFloat) {
         chefSize = Self.clamped(containerWidth * 0.26, within: Self.chefWidthRange)
-        bubbleWidth = Self.clamped(containerWidth * 0.22, within: Self.bubbleWidthRange)
+        bubbleWidth = Self.clamped(containerWidth * 0.28, within: Self.bubbleWidthRange)
         progressWidth = Self.clamped(containerWidth * 0.34, within: Self.progressWidthRange)
     }
 

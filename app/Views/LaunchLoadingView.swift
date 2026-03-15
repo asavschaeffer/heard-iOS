@@ -29,11 +29,18 @@ struct LaunchLoadingView: View {
                 )
                 .accessibilityHidden(true)
 
-            Image(systemName: "bubble.left.fill")
+            Image("speech-bubble")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: layout.bubbleWidth)
-                .foregroundStyle(Color(red: 1, green: 0.584, blue: 0).opacity(0.25))
+                .overlay {
+                    Text("HEARD,\nCHEF!")
+                        .font(.system(size: layout.bubbleWidth * 0.16, weight: .heavy, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                        .foregroundStyle(Color(red: 0.44, green: 0.43, blue: 0.4))
+                        .offset(y: -layout.bubbleWidth * 0.1)
+                }
                 .rotationEffect(bubbleRotation)
                 .position(
                     x: cx + LaunchScreenLayout.bubbleOffsetX,

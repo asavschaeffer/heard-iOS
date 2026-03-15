@@ -1,0 +1,89 @@
+<svg width="200" height="172" viewBox="0 0 200 172" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main bubble body with organic tail on bottom-left -->
+  <path d="
+    M 28 8
+    L 172 8
+    C 186 8, 194 16, 194 30
+    L 194 108
+    C 194 122, 186 130, 172 130
+    L 68 130
+    Q 48 150, 20 166
+    Q 35 146, 42 130
+    L 28 130
+    C 14 130, 6 122, 6 108
+    L 6 30
+    C 6 16, 14 8, 28 8
+    Z" fill="#F6F5E1"/>
+
+  <!-- Edge shadow gradient (matching chef hat paint0 style) -->
+  <path d="
+    M 28 8
+    L 172 8
+    C 186 8, 194 16, 194 30
+    L 194 108
+    C 194 122, 186 130, 172 130
+    L 68 130
+    Q 48 150, 20 166
+    Q 35 146, 42 130
+    L 28 130
+    C 14 130, 6 122, 6 108
+    L 6 30
+    C 6 16, 14 8, 28 8
+    Z" fill="url(#edgeShadow)"/>
+
+  <!-- White highlight for 3D depth (upper-left, matching hat paint8 style) -->
+  <path opacity="0.8" d="
+    M 28 8
+    L 172 8
+    C 186 8, 194 16, 194 30
+    L 194 108
+    C 194 122, 186 130, 172 130
+    L 68 130
+    Q 48 150, 20 166
+    Q 35 146, 42 130
+    L 28 130
+    C 14 130, 6 122, 6 108
+    L 6 30
+    C 6 16, 14 8, 28 8
+    Z" fill="url(#highlight)"/>
+
+  <!-- Subtle accent shadow on lower-right (matching hat DEDEC6 spots) -->
+  <path opacity="0.5" d="
+    M 28 8
+    L 172 8
+    C 186 8, 194 16, 194 30
+    L 194 108
+    C 194 122, 186 130, 172 130
+    L 68 130
+    Q 48 150, 20 166
+    Q 35 146, 42 130
+    L 28 130
+    C 14 130, 6 122, 6 108
+    L 6 30
+    C 6 16, 14 8, 28 8
+    Z" fill="url(#accentShadow)"/>
+
+  <defs>
+    <!-- Edge shadow: transparent center → sage at edges (like hat paint0_radial) -->
+    <radialGradient id="edgeShadow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(100 66) scale(108 74)">
+      <stop offset="0.62" stop-color="#B2B3A5" stop-opacity="0"/>
+      <stop offset="0.98" stop-color="#B2B3A5"/>
+    </radialGradient>
+
+    <!-- White highlight: bright upper-left → transparent (like hat paint8_radial) -->
+    <radialGradient id="highlight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(40 22) scale(110 110)">
+      <stop stop-color="white"/>
+      <stop offset="0.022" stop-color="white" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Accent shadow on lower-right (like hat DEDEC6 radials) -->
+    <radialGradient id="accentShadow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(160 115) scale(50 50)">
+      <stop offset="0.6" stop-color="#DEDEC6" stop-opacity="0"/>
+      <stop offset="1" stop-color="#DEDEC6"/>
+    </radialGradient>
+  </defs>
+</svg>
