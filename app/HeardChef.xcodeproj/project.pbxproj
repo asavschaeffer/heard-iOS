@@ -47,6 +47,7 @@
 		EC06F6ED2F4D06C400A6A1F9 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC0D25632F38F1C70028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		EC1CC3A22F6777ED00E5DDB1 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB97B2F36AF4900904A9F /* heard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = heard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB9DC2F37CEE700904A9F /* heard-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "heard-Info.plist"; sourceTree = "<group>"; };
@@ -181,6 +182,11 @@
 			sourceTree = "<group>";
 		};
 		EC0D26012F390AEF0028674C /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EC1CC3A72F6777ED00E5DDB1 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -468,8 +474,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
-					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
+					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = ECE5567A2F5FB82700465205 /* Products */;
@@ -494,6 +500,10 @@
 				{
 					ProductGroup = ECE55A9C2F60D7E700465205 /* Products */;
 					ProjectRef = ECE55A972F60D7E700465205 /* HeardChef.xcodeproj */;
+				},
+				{
+					ProductGroup = EC1CC3A72F6777ED00E5DDB1 /* Products */;
+					ProjectRef = EC1CC3A22F6777ED00E5DDB1 /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = EC06F6F12F4D06C400A6A1F9 /* Products */;
@@ -548,8 +558,8 @@
 					ProjectRef = ECE561402F663A3900465205 /* HeardChef.xcodeproj */;
 				},
 				{
-					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
-					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
+					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
 				},
 			);
 			projectRoot = "";
