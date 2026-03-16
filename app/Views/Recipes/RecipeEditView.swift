@@ -41,6 +41,7 @@ struct RecipeEditView: View {
 
     @State private var showingAddIngredient = false
     @State private var showingDeleteConfirmation = false
+    @State private var persistenceErrorMessage: String?
     @FocusState private var isNameFocused: Bool
 
     private var isEditing: Bool { recipe != nil }
@@ -103,12 +104,14 @@ struct RecipeEditView: View {
                     ingredients.append(ingredient)
                 }
             }
+            .alert("Save Error", isPresented: persistenceErrorPresented) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(persistenceErrorMessage ?? "Unable to save your changes.")
+            }
             .alert("Delete Recipe?", isPresented: $showingDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
-                    if let recipe = recipe {
-                        modelContext.delete(recipe)
-                    }
-                    dismiss()
+                    deleteRecipe()
                 }
                 .accessibilityIdentifier("recipe.edit.confirmDeleteButton")
                 Button("Cancel", role: .cancel) {}
@@ -120,6 +123,17 @@ struct RecipeEditView: View {
                 loadRecipeData()
             }
         }
+    }
+
+    private var persistenceErrorPresented: Binding<Bool> {
+        Binding(
+            get: { persistenceErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    persistenceErrorMessage = nil
+                }
+            }
+        )
     }
 
     // MARK: - Basic Info Section
@@ -471,7 +485,30 @@ struct RecipeEditView: View {
             modelContext.insert(newRecipe)
         }
 
-        dismiss()
+        if persistChanges() {
+            dismiss()
+        }
+    }
+
+    private func deleteRecipe() {
+        if let recipe {
+            modelContext.delete(recipe)
+        }
+
+        if persistChanges() {
+            dismiss()
+        }
+    }
+
+    private func persistChanges() -> Bool {
+        do {
+            try modelContext.save()
+            return true
+        } catch {
+            modelContext.rollback()
+            persistenceErrorMessage = error.localizedDescription
+            return false
+        }
     }
 }
 

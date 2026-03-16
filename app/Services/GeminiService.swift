@@ -1320,6 +1320,10 @@ class GeminiService: NSObject {
             ? "Added \(ingredient.displayQuantity) of \(ingredient.name) to the \(ingredient.location.displayName)"
             : "Updated \(ingredient.name) - now have \(ingredient.displayQuantity) in the \(ingredient.location.displayName)"
 
+        if let errorResult = persistMutation(for: call, action: "adding ingredient '\(ingredient.name)'") {
+            return errorResult
+        }
+
         return .success(
             id: call.id,
             name: call.name,
@@ -1350,6 +1354,9 @@ class GeminiService: NSObject {
 
             if ingredient.quantity <= 0 {
                 modelContext.delete(ingredient)
+                if let errorResult = persistMutation(for: call, action: "removing ingredient '\(ingredient.name)'") {
+                    return errorResult
+                }
                 return .success(
                     id: call.id,
                     name: call.name,
@@ -1357,6 +1364,9 @@ class GeminiService: NSObject {
                 )
             }
 
+            if let errorResult = persistMutation(for: call, action: "updating ingredient '\(ingredient.name)' quantity") {
+                return errorResult
+            }
             return .success(
                 id: call.id,
                 name: call.name,
@@ -1367,6 +1377,9 @@ class GeminiService: NSObject {
 
         let ingredientName = ingredient.name
         modelContext.delete(ingredient)
+        if let errorResult = persistMutation(for: call, action: "deleting ingredient '\(ingredientName)'") {
+            return errorResult
+        }
         return .success(
             id: call.id,
             name: call.name,
@@ -1409,6 +1422,10 @@ class GeminiService: NSObject {
         }
 
         ingredient.update(with: params)
+
+        if let errorResult = persistMutation(for: call, action: "updating ingredient '\(ingredient.name)'") {
+            return errorResult
+        }
 
         return .success(
             id: call.id,
@@ -1615,6 +1632,10 @@ class GeminiService: NSObject {
 
         modelContext.insert(recipe)
 
+        if let errorResult = persistMutation(for: call, action: "creating recipe '\(recipe.name)'") {
+            return errorResult
+        }
+
         return .success(
             id: call.id,
             name: call.name,
@@ -1690,6 +1711,10 @@ class GeminiService: NSObject {
         }
 
         recipe.update(from: changes)
+
+        if let errorResult = persistMutation(for: call, action: "updating recipe '\(recipe.name)'") {
+            return errorResult
+        }
 
         return .success(
             id: call.id,
@@ -1908,6 +1933,10 @@ class GeminiService: NSObject {
         let recipeName = recipe.name
         modelContext.delete(recipe)
 
+        if let errorResult = persistMutation(for: call, action: "deleting recipe '\(recipeName)'") {
+            return errorResult
+        }
+
         return .success(
             id: call.id,
             name: call.name,
@@ -1916,6 +1945,21 @@ class GeminiService: NSObject {
     }
 
     // MARK: - Helpers
+
+    private func persistMutation(for call: FunctionCall, action: String) -> FunctionResult? {
+        do {
+            try modelContext.save()
+            return nil
+        } catch {
+            faultLog("[Gemini] Failed to save after \(action): \(error.localizedDescription)")
+            modelContext.rollback()
+            return .error(
+                id: call.id,
+                name: call.name,
+                message: "Couldn't save changes while \(action)."
+            )
+        }
+    }
 
     @discardableResult
     private func sendJSON(_ json: [String: Any]) -> Result<Void, Error> {

@@ -13,6 +13,7 @@ struct AddInventoryView: View {
     @State private var hasExpiry = false
     @State private var expiryDate = Date()
     @State private var notes = ""
+    @State private var persistenceErrorMessage: String?
 
     @FocusState private var isNameFocused: Bool
 
@@ -80,6 +81,11 @@ struct AddInventoryView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Add Ingredient")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Save Error", isPresented: persistenceErrorPresented) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(persistenceErrorMessage ?? "Unable to save your changes.")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
@@ -101,6 +107,17 @@ struct AddInventoryView: View {
                 isNameFocused = true
             }
         }
+    }
+
+    private var persistenceErrorPresented: Binding<Bool> {
+        Binding(
+            get: { persistenceErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    persistenceErrorMessage = nil
+                }
+            }
+        )
     }
 
     // MARK: - Quick Add Buttons
@@ -170,7 +187,17 @@ struct AddInventoryView: View {
             in: modelContext
         )
 
-        dismiss()
+        saveChangesOrShowError()
+    }
+
+    private func saveChangesOrShowError() {
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            persistenceErrorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -181,6 +208,7 @@ struct BulkAddView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var items: [PendingItem] = []
+    @State private var persistenceErrorMessage: String?
 
     struct PendingItem: Identifiable {
         let id = UUID()
@@ -212,6 +240,11 @@ struct BulkAddView: View {
             }
             .navigationTitle("Add Items")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Save Error", isPresented: persistenceErrorPresented) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(persistenceErrorMessage ?? "Unable to save your changes.")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
@@ -242,7 +275,28 @@ struct BulkAddView: View {
                 in: modelContext
             )
         }
-        dismiss()
+        saveChangesOrShowError()
+    }
+
+    private var persistenceErrorPresented: Binding<Bool> {
+        Binding(
+            get: { persistenceErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    persistenceErrorMessage = nil
+                }
+            }
+        )
+    }
+
+    private func saveChangesOrShowError() {
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            persistenceErrorMessage = error.localizedDescription
+        }
     }
 }
 

@@ -212,6 +212,9 @@ class ChatViewModel: ObservableObject {
             let greeting = ChatMessage(role: .assistant, text: "What are we cooking today?", thread: thread)
             greeting.expression = .joyful
             context.insert(greeting)
+            guard saveContext(reason: "creating chat thread", reloadMessagesOnFailure: true) else {
+                return
+            }
         }
 
         activeThread = thread
@@ -236,6 +239,7 @@ class ChatViewModel: ObservableObject {
             message.thread = thread
             context.insert(message)
         }
+        _ = saveContext(reason: "migrating chat messages", reloadMessagesOnFailure: true)
     }
 
     private func applyVoiceState(_ newState: VoiceCallUIState) {
@@ -369,7 +373,7 @@ class ChatViewModel: ObservableObject {
         guard hasText || attachment != nil else { return }
 
         let message = buildMessage(text: hasText ? trimmed : nil, attachment: attachment)
-        insertMessage(message)
+        guard insertMessage(message) else { return }
         messages.append(message)
 
         enqueueOrSend(
@@ -382,10 +386,13 @@ class ChatViewModel: ObservableObject {
     func retryMessage(_ message: ChatMessage) {
         guard message.role.isUser, message.status == .failed else { return }
         message.markStatus(.sending)
+        activeThread?.touch()
+        guard saveContext(reason: "retrying message", reloadMessagesOnFailure: true) else {
+            return
+        }
         let text = message.text
         let imageData = message.imageData
         enqueueOrSend(text: text, imageData: imageData, message: message)
-        activeThread?.touch()
     }
 
     // MARK: - Voice Session Management
@@ -442,13 +449,14 @@ class ChatViewModel: ObservableObject {
 
     // MARK: - Queueing
     
-    private func insertMessage(_ message: ChatMessage) {
-        guard let context = modelContext else { return }
+    private func insertMessage(_ message: ChatMessage) -> Bool {
+        guard let context = modelContext else { return false }
         if message.thread == nil {
             message.thread = activeThread
         }
         context.insert(message)
         activeThread?.touch()
+        return saveContext(reason: "inserting chat message", reloadMessagesOnFailure: true)
     }
 
     private func enqueueOrSend(text: String?, imageData: Data?, message: ChatMessage) {
@@ -505,6 +513,7 @@ class ChatViewModel: ObservableObject {
         // Only mark failed if result is failure; leave .sending otherwise
         if case .failure = result {
             message.markStatus(.failed)
+            _ = saveContext(reason: "marking message send failure", reloadMessagesOnFailure: true)
             print("[Chat] sendToGemini failed id=\(message.id.uuidString.prefix(8))")
         } else {
             print("[Chat] sendToGemini dispatched id=\(message.id.uuidString.prefix(8))")
@@ -593,28 +602,38 @@ class ChatViewModel: ObservableObject {
     }
 
     private func markPendingMessagesFailed() {
+        var didChange = false
         for pending in pendingMessages {
-            pending.message.markStatus(.failed)
+            if pending.message.status != .failed {
+                pending.message.markStatus(.failed)
+                didChange = true
+            }
         }
         pendingMessages.removeAll()
+        if didChange {
+            _ = saveContext(reason: "marking pending messages failed", reloadMessagesOnFailure: true)
+        }
     }
 
     private func markLatestUserMessageRead() {
         guard let latest = messages.last(where: { $0.role.isUser }) else { return }
         if latest.status != .read {
             latest.markStatus(.read)
+            _ = saveContext(reason: "marking latest user message read", reloadMessagesOnFailure: true)
         }
     }
 
     private func markLatestUserMessageSent() {
         guard let latest = messages.last(where: { $0.role.isUser && $0.status == .sending }) else { return }
         latest.markStatus(.sent)
+        _ = saveContext(reason: "marking latest user message sent", reloadMessagesOnFailure: true)
         print("[Chat] Marked latest user message as Sent")
     }
     
     private func markLatestUserMessageFailedIfSending() {
         guard let latest = messages.last(where: { $0.role.isUser && $0.status == .sending }) else { return }
         latest.markStatus(.failed)
+        _ = saveContext(reason: "marking latest user message failed", reloadMessagesOnFailure: true)
         print("[Chat] Marked latest user message as Failed")
     }
 
@@ -819,6 +838,9 @@ class ChatViewModel: ObservableObject {
             let message = messages[index]
             let draftText = trimmed.isEmpty ? text : trimmed
             message.updateText(draftText, isDraft: !isFinal)
+            if isFinal {
+                _ = saveContext(reason: "finalizing user draft message", reloadMessagesOnFailure: true)
+            }
         } else {
             let draftText = trimmed.isEmpty ? text : trimmed
             let newDraft = ChatMessage(
@@ -827,7 +849,7 @@ class ChatViewModel: ObservableObject {
                 status: .sent,
                 isDraft: !isFinal
             )
-            insertMessage(newDraft)
+            guard insertMessage(newDraft) else { return }
             messages.append(newDraft)
             draftMessageId = newDraft.id
         }
@@ -838,10 +860,13 @@ class ChatViewModel: ObservableObject {
     private func clearDraftMessage() {
         if let draftId = draftMessageId, let index = messages.firstIndex(where: { $0.id == draftId }) {
             let message = messages[index]
-            messages.remove(at: index)
             if let context = modelContext {
                 context.delete(message)
+                guard saveContext(reason: "clearing user draft message", reloadMessagesOnFailure: true) else {
+                    return
+                }
             }
+            messages.remove(at: index)
         }
         draftMessageId = nil
     }
@@ -899,10 +924,13 @@ class ChatViewModel: ObservableObject {
             messages[index].updateText(text, isDraft: !isFinal)
             messages[index].expression = chefExpression
             attachUnanchoredToolChips(to: messageId)
+            if isFinal {
+                _ = saveContext(reason: "finalizing assistant transcript message", reloadMessagesOnFailure: true)
+            }
         } else {
             let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
             message.expression = chefExpression
-            insertMessage(message)
+            guard insertMessage(message) else { return }
             messages.append(message)
             assistantTranscriptMessageId = message.id
             attachUnanchoredToolChips(to: message.id)
@@ -927,10 +955,13 @@ class ChatViewModel: ObservableObject {
             messages[index].updateText(text, isDraft: !isFinal)
             messages[index].expression = chefExpression
             attachUnanchoredToolChips(to: messageId)
+            if isFinal {
+                _ = saveContext(reason: "finalizing assistant text message", reloadMessagesOnFailure: true)
+            }
         } else {
             let message = ChatMessage(role: .assistant, text: text, status: .sent, isDraft: !isFinal)
             message.expression = chefExpression
-            insertMessage(message)
+            guard insertMessage(message) else { return }
             messages.append(message)
             assistantTextMessageId = message.id
             attachUnanchoredToolChips(to: message.id)
@@ -943,6 +974,7 @@ class ChatViewModel: ObservableObject {
     }
 
     private func finalizeAssistantStreamingMessages() {
+        var didMutateMessages = false
         if let messageId = assistantTranscriptMessageId,
            let index = messages.firstIndex(where: { $0.id == messageId }) {
             let finalText = stripFeelingTag(from: assistantTranscriptBuffer)
@@ -950,9 +982,11 @@ class ChatViewModel: ObservableObject {
             if finalText.isEmpty {
                 let message = messages.remove(at: index)
                 modelContext?.delete(message)
+                didMutateMessages = true
             } else {
                 messages[index].updateText(finalText, isDraft: false)
                 messages[index].expression = chefExpression
+                didMutateMessages = true
             }
         }
         assistantTranscriptMessageId = nil
@@ -965,13 +999,34 @@ class ChatViewModel: ObservableObject {
             if finalText.isEmpty {
                 let message = messages.remove(at: index)
                 modelContext?.delete(message)
+                didMutateMessages = true
             } else {
                 messages[index].updateText(finalText, isDraft: false)
                 messages[index].expression = chefExpression
+                didMutateMessages = true
             }
         }
         assistantTextMessageId = nil
         assistantTextBuffer = ""
+        if didMutateMessages {
+            _ = saveContext(reason: "finalizing assistant streaming messages", reloadMessagesOnFailure: true)
+        }
+    }
+
+    @discardableResult
+    private func saveContext(reason: String, reloadMessagesOnFailure: Bool = false) -> Bool {
+        guard let context = modelContext else { return false }
+        do {
+            try context.save()
+            return true
+        } catch {
+            VoiceDiagnostics.fault("[Chat] Failed to save after \(reason): \(error.localizedDescription)")
+            context.rollback()
+            if reloadMessagesOnFailure {
+                fetchMessages()
+            }
+            return false
+        }
     }
 
     private func scheduleTranscriptFinalize() {

@@ -10,6 +10,7 @@ struct InventoryView: View {
     @State private var showingAddSheet = false
     @State private var showingCameraCapture = false
     @State private var attachmentErrorMessage: String?
+    @State private var persistenceErrorMessage: String?
     @State private var groupBy: GroupBy = .location
     @State private var selectedIngredient: Ingredient?
 
@@ -78,6 +79,11 @@ struct InventoryView: View {
             } message: {
                 Text(attachmentErrorMessage ?? "Unable to prepare attachment.")
             }
+            .alert("Save Error", isPresented: persistenceErrorPresented) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(persistenceErrorMessage ?? "Unable to save your changes.")
+            }
         }
     }
 
@@ -87,6 +93,17 @@ struct InventoryView: View {
             set: { newValue in
                 if !newValue {
                     attachmentErrorMessage = nil
+                }
+            }
+        )
+    }
+
+    private var persistenceErrorPresented: Binding<Bool> {
+        Binding(
+            get: { persistenceErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    persistenceErrorMessage = nil
                 }
             }
         )
@@ -229,6 +246,12 @@ struct InventoryView: View {
 
     private func deleteIngredient(_ ingredient: Ingredient) {
         modelContext.delete(ingredient)
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            persistenceErrorMessage = error.localizedDescription
+        }
     }
 
     private var inventoryCameraCaptureView: some View {
@@ -348,6 +371,7 @@ struct InventoryDetailView: View {
     @State private var expiryDate: Date = Date()
     @State private var hasExpiry: Bool = false
     @State private var notes: String = ""
+    @State private var persistenceErrorMessage: String?
     @FocusState private var isNameFocused: Bool
 
     var body: some View {
@@ -408,8 +432,7 @@ struct InventoryDetailView: View {
 
                 Section {
                     Button("Delete Ingredient", role: .destructive) {
-                        modelContext.delete(ingredient)
-                        dismiss()
+                        deleteIngredient()
                     }
                     .accessibilityIdentifier("inventory.edit.deleteButton")
                 }
@@ -418,6 +441,11 @@ struct InventoryDetailView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Ingredient")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Save Error", isPresented: persistenceErrorPresented) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(persistenceErrorMessage ?? "Unable to save your changes.")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
@@ -428,8 +456,9 @@ struct InventoryDetailView: View {
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        saveChanges()
-                        dismiss()
+                        if saveChanges() {
+                            dismiss()
+                        }
                     }
                     .fontWeight(.semibold)
                     .disabled(!canSave)
@@ -454,9 +483,20 @@ struct InventoryDetailView: View {
         notes = ingredient.notes ?? ""
     }
 
-    private func saveChanges() {
+    private var persistenceErrorPresented: Binding<Bool> {
+        Binding(
+            get: { persistenceErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    persistenceErrorMessage = nil
+                }
+            }
+        )
+    }
+
+    private func saveChanges() -> Bool {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else { return }
+        guard !trimmedName.isEmpty else { return false }
 
         let params = IngredientUpdateParams(
             name: trimmedName,
@@ -471,6 +511,26 @@ struct InventoryDetailView: View {
         ingredient.update(with: params)
         if !hasExpiry {
             ingredient.expiryDate = nil
+        }
+
+        return persistChanges()
+    }
+
+    private func deleteIngredient() {
+        modelContext.delete(ingredient)
+        if persistChanges() {
+            dismiss()
+        }
+    }
+
+    private func persistChanges() -> Bool {
+        do {
+            try modelContext.save()
+            return true
+        } catch {
+            modelContext.rollback()
+            persistenceErrorMessage = error.localizedDescription
+            return false
         }
     }
 
