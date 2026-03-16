@@ -6,65 +6,107 @@
 
 > **"Heard, chef!"** - this AI definitely will not say "you're absolutely right!"
 
-<div align="center">
-  <img src="design/app-icon-template.png" alt="Heard, Chef" width="35%">
-</div>
-
 ## Overview
 
-"Heard, Chef" is a native iOS cooking assistant designed to leverage existing AI with long-term personalized memory. It combines an iMessage-style chat interface with a powerful, interruptible voice mode, allowing you to manage inventory, plan meals, and get real-time cooking feedback without washing your hands.
+"Heard, Chef" is a native iOS cooking assistant powered by Gemini, with persistent memory backed by Firestore. It combines an iMessage-style chat interface with a hands-free voice mode, letting you manage inventory, plan meals, and get real-time cooking feedback without washing your hands.
 
-Under the hood, it is engineered for **model independence**, using a custom "Brain Protocol" that decouples the user experience from the underlying AI, ensuring the app remains fast, private, and adaptable.
+The system is three pieces: a **SwiftUI iOS app**, a **Python FastAPI backend** on Cloud Run, and **Firestore** as the shared database. The AI layer is Gemini 2.5 Flash for text/photo and Gemini 2.5 Flash Native Audio for voice.
 
 ## The Experience
 
-### 💬 Conversational Core
+### Conversational Core
 
-The app is built around a familiar, **iMessage-esque chat interface**.
+The app is built around a familiar, iMessage-style chat interface.
 
 - **Natural Texting:** Text your chef just like a friend. "Do I have enough eggs for a quiche?" or "Remind me to buy basil."
 - **Media Rich:** Snap photos directly in the chat flow to ask questions or log items.
-- **Live Tool Chips:** Watch the AI "think" and work. When you ask to check the pantry, you'll see a background chip pop up: `Checking Inventory...` followed by `Found: 6 Eggs`.
+- **Live Tool Chips:** Watch the AI "think" and work. When you ask to check the pantry, a chip pops up showing `Checking Inventory...` followed by `Found: 6 Eggs`.
 
-### 🎙️ Live Voice Mode
+### Live Voice Mode
 
-Tap the microphone for a hands-free experience designed for active cooking. "How can I make sure this sauce won't break?", "What else could I add to this stir fry?"
+Tap the microphone for a hands-free experience designed for active cooking.
 
-- **The 40% Modal:** Voice mode slides up a non-intrusive sheet covering the bottom 40% of the screen.
-- **Chef Avatar:** A dedicated, animated avatar provides visual feedback, reacting to your voice and the AI's processing state.
-- **Background Context:** The chat window and tool chips remain visible behind the modal, so you can visually confirm that the AI successfully added "Paprika" to your list even while it keeps talking.
+- **The 40% Modal:** Voice mode slides up a sheet covering the bottom 40% of the screen.
+- **Chef Avatar:** An animated avatar provides visual feedback, reacting to your voice and the AI's processing state.
+- **Background Context:** The chat window and tool chips remain visible behind the modal, so you can confirm that the AI added "Paprika" to your list even while it keeps talking.
 
-### 📷 Visual Intelligence
+### Visual Intelligence
 
 Use the camera to bridge the physical and digital kitchen.
 
 - **Receipt Scanning:** Snap a photo of a grocery receipt. The AI parses the items, normalizes quantities (e.g., "2 lbs" instead of "bag"), and adds them to your inventory.
-- **Cooking Feedback:** Unsure if your onions are caramelized enough? Snap a photo and ask, "Is this ready?" for instant visual analysis.
+- **Cooking Feedback:** Unsure if your onions are caramelized enough? Snap a photo and ask, "Is this ready?"
 
-### Data Memory Layer
+### Persistent Memory
 
-What sets this apart from Grok or ChatGPT voice mode is you don't have to orchestrate custom files storing your information
+What sets this apart from generic AI chat is that your data lives across sessions in Firestore.
 
-- **allergy information prompt injection** The LLM will always adjust recipes for your personal situation
-- **find, save, edit, and share recipes** The recipebook can be referenced while shopping or cooking or sent between users
-- **easy shopping list** never forget what you had already at home while youre at the store.
+- **Allergy awareness:** The system prompt includes your dietary restrictions so recipes are always adjusted.
+- **Recipe book:** Find, save, edit, and share recipes. The recipe book can be referenced while shopping or cooking.
+- **Inventory tracking:** Know what you already have at home while you're at the store.
 
 ## Technical Architecture
 
-This project is architected for longevity and flexibility, avoiding vendor lock-in through strict abstraction layers.
+### System Overview
 
-### 1. The "Brain" Protocol
+```mermaid
+graph TB
+    subgraph iOS["iOS App"]
+        UI["SwiftUI Views<br/>(Chat · Inventory · Recipes · Settings)"]
+        VM["ChatViewModel"]
+        GS["GeminiService"]
+        BS["BackendService"]
+        FS["FirestoreSync"]
+        SD[("SwiftData<br/>(local cache)")]
+        VC["VoiceCore Module<br/>(audio capture/playback)"]
+    end
 
-The app does not communicate directly with any specific AI provider. Instead, it interacts with a strictly typed `ChefIntelligence` protocol.
+    subgraph Backend["Cloud Run Backend"]
+        API["FastAPI"]
+        ADK["ADK Agent<br/>(cooking_agent)"]
+        VR["Voice Relay<br/>(WebSocket proxy)"]
+        BT["Backend Tools<br/>(Firestore CRUD)"]
+    end
 
-- **Swappable Backend:** Allows the app to switch between **Gemini 2.0 Flash** (Cloud) for complex reasoning and potential future **Local Models** (e.g., Llama/Mistral via MLX) for offline privacy.
-- **Audio Specs:** The pipeline handles **PCM 16-bit, 16kHz** audio for low-latency streaming.
+    subgraph Google["Google Cloud"]
+        Firestore[("Firestore<br/>(source of truth)")]
+        GeminiREST["Gemini 2.5 Flash<br/>(REST · text/photo)"]
+        GeminiLive["Gemini 2.5 Flash<br/>(Live API · voice)"]
+    end
 
-### 2. Precision Context Management (Tool-First)
+    UI --> VM
+    VM -->|text/photo| BS
+    VM -->|voice calls| VC
 
-To minimize latency and costs, "Heard, Chef" uses **Active Tool Calling**. Instead of dumping your entire inventory into the prompt, the AI calls specific tools to retrieve data on demand.
+    BS -->|"POST /chat<br/>POST /chat-with-photo"| API
+    VC -->|"WS /voice<br/>(PCM audio)"| VR
 
-**Available Tools:**
+    API --> ADK
+    ADK --> GeminiREST
+    ADK -->|tool calls| BT
+    BT --> Firestore
+
+    VR -->|audio relay + tool intercept| GeminiLive
+    VR -->|function execution| BT
+
+    Firestore -->|snapshot listeners| FS
+    FS -->|upsert/delete| SD
+    SD --> UI
+```
+
+### How It Fits Together
+
+**iOS app** (`app/`) — SwiftUI front-end with four tabs: Inventory, Chat, Recipes, Settings. `GeminiService` is the main integration point, routing text and photo chat through `BackendService` (REST) and voice calls through a WebSocket relay. `FirestoreSync` listens for Firestore changes and writes them into a local SwiftData cache so the UI stays responsive offline.
+
+**Cloud Run backend** (`backend/`) — A Python FastAPI server using Google's Agent Development Kit (ADK). It exposes three endpoints: `POST /chat` for text, `POST /chat-with-photo` for multimodal, and `WS /voice` for bidirectional audio relay. Tool calls (add ingredient, create recipe, etc.) are executed server-side against Firestore.
+
+**Firestore** — Source of truth for all user data. Structured as `users/{userId}/ingredients/{docId}` and `users/{userId}/recipes/{docId}`. The iOS app never writes to Firestore directly; all mutations go through the backend's tool execution.
+
+**VoiceCore module** (`Modules/VoiceCore/`) — Extracted subsystem owning voice/call coordination, audio capture/playback, route recovery, and the call state machine. Keeps voice complexity out of the main app layer.
+
+### Tool Calling
+
+Instead of dumping inventory into the prompt, the AI calls specific tools to retrieve and mutate data on demand. Tool calls are executed server-side against Firestore.
 
 | Domain         | Function                      | Description                                 |
 | -------------- | ----------------------------- | ------------------------------------------- |
@@ -83,135 +125,106 @@ To minimize latency and costs, "Heard, Chef" uses **Active Tool Calling**. Inste
 | **Cross-Tool** | `suggest_recipes`             | Recipes matching current inventory          |
 |                | `check_recipe_availability`   | Missing list for a specific recipe          |
 
-### 3. The "Fuzzy-to-Strict" Bridge
+### Testing
 
-LLMs speak in approximations; databases need precision.
+Tests are split across three surfaces with stable and experimental lanes. See [Running Tests](#3-running-tests) for commands.
 
-- **Ingestion:** User says "I bought a bunch of cilantro."
-- **Normalization:** The engine maps "bunch" to a standard unit (e.g., `count: 1`) and categorizes it under `.produce`.
-- **Persistence:** Only validated, strictly-typed data is saved to **SwiftData** (SQLite), ensuring sorting and filtering always work.
+| Surface | Location | What it covers |
+| --- | --- | --- |
+| `VoiceCoreTests` | `Modules/VoiceCore/Tests/VoiceCoreTests/` | Voice coordination, state machine, audio policy |
+| `heardTests` | `heardTests/` | App-host smoke checks, hosted config validation |
+| `heardUITests` | `heardUITests/` | Simulator-driven CRUD, navigation, search regressions |
 
-### 4. Internal Modules and Verification Surfaces
+Non-UI tests use Swift Testing. UI tests and `measure`-based performance tests use XCTest.
 
-The repo now has one real internal subsystem module:
-
-- `Modules/VoiceCore/` owns voice/call coordination, route recovery, structured eventing, and the derived `VoiceCallUIState` used by the app.
-- `app/` remains the app shell, UI, persistence wiring, and Gemini integration layer.
-- `Modules/VoiceCore/Tests/VoiceCoreTests/` is the primary automated logic suite for voice behavior.
-- `heardTests/` is intentionally smoke-first and exists to verify the hosted app test harness, with hosted performance checks kept experimental.
-- `heardUITests/` owns simulator-driven interaction regressions, with stable CRUD/navigation/search coverage on by default and gesture-heavy keyboard dismissal coverage available as opt-in.
-
-Supporting docs:
-
-- `docs/testing/ios-testing-playbook.md`
-- `docs/testing/testing-strategy.md`
-- `docs/architecture/repo-structure-roadmap.md`
-- `docs/rebuild/04-voice-regression-matrix.md`
-- `scripts/xcresult-summary.sh` for compact local test-result summaries
-
-### Testing Workflow
-
-The iOS test setup keeps one stable default lane and one explicit experimental lane.
-
-Stable commands:
-
-- `./scripts/test-ios.sh voicecore`
-- `./scripts/test-ios.sh app-build`
-- `./scripts/test-ios.sh app-smoke`
-- `./scripts/test-ios.sh app-ui`
-- `./scripts/test-ios.sh stable`
-
-Experimental commands:
-
-- `./scripts/test-ios.sh app-ui-gestures`
-- `./scripts/test-ios.sh app-ui-gestures-repeat 10`
-- `./scripts/test-ios.sh experimental`
-
-Stable hosted coverage currently includes:
-
-- `AppLaunchSmokeTests`
-- `GeminiServiceSetupTests`
-
-Non-UI tests are moving to Swift Testing. UI tests and `measure`-based performance tests remain on XCTest.
-
-`GeminiServiceSetupTests` now covers an explicit matrix of hosted audio setup payload variants while keeping `SessionConfig.audio()` mapped to the current runtime default.
-
-Use [docs/testing/ios-testing-playbook.md](docs/testing/ios-testing-playbook.md) as the testing source of truth. It documents:
-
-- the shared `heard-stable` and `heard-experimental` Xcode test plans
-- simulator resolution and the canonical `iPhone 17 Pro` / `iOS 26.2` target
-- logical-run `.xcresult` triage via `--latest-run` and `--run <id>`
-- historical directory aggregation via `--all`
-- stable vs experimental coverage and promotion rules
+Full testing reference: [docs/testing/ios-testing-playbook.md](docs/testing/ios-testing-playbook.md)
 
 ## Setup & Requirements
 
-- **Xcode 17.x** with the Apple Swift 6.2 toolchain
-- **Swift language mode:** Swift 5
-- **Deployment target:** iOS 17.0+
-- **Canonical test simulator:** iPhone 17 Pro on iOS 26.2, or the nearest installed current runtime
-- **API Key:** Google Gemini API Key (multimodal live access).
+### Prerequisites
 
-### 1. Clone & Project Creation
+- **Xcode 17.x** with the Apple Swift 6.2 toolchain
+- **Deployment target:** iOS 17.0+
+- **Python 3.11+** (for the backend)
+- **jq** (`brew install jq`) — required by the test runner for result parsing
+- **API Key:** Google Gemini API Key (multimodal live access)
+
+### 1. Clone & iOS Setup
 
 ```bash
 git clone https://github.com/asavschaeffer/heard-iOS.git
 cd heard-iOS
-
 ```
 
-_Note: If the `.xcodeproj` file is not tracked, create a new iOS App in Xcode, select "SwiftData" for storage, and drag the `app/` folder into the project navigator._
+Create the API key config (the Xcode project references this file):
 
-### 2. API Key Configuration
-
-This project uses `.xcconfig` files to secure secrets.
-
-1. Create `Secrets.xcconfig` in the root directory.
-2. Add your key:
-
-```properties
+```bash
+cat > app/Secrets.xcconfig <<'EOF'
 GEMINI_API_KEY = your_actual_key_here
-
+EOF
 ```
 
-_(REST uses `gemini-2.5-flash`; Live API uses `gemini-2.5-flash-native-audio-preview`)_
+Build and run:
 
-### 3. Configuration & Customization
+```bash
+xcodebuild -project app/HeardChef.xcodeproj -scheme heard \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+```
 
-- **Voice Persona:** You can change the voice in `GeminiService.swift`. Supported voices include: `Aoede`, `Charon`, `Fenrir`, `Kore`, and `Puck`.
+The test script will create a stub `app/Secrets.xcconfig` automatically if one doesn't exist, so tests can run without a real API key.
+
+### 2. Backend Setup
+
+The Cloud Run backend handles all chat (text, photo, and voice). The ADK agent manages tool calling and Firestore mutations server-side.
+
+```bash
+cd backend
+pip install -r requirements.txt
+
+# Set your Gemini API key
+export GEMINI_API_KEY=your_actual_key_here
+
+# Run locally on port 8080
+uvicorn main:app --reload --port 8080
+```
+
+The iOS app reads `BACKEND_URL` from `app/Secrets.xcconfig` (defaults to `http://localhost:8080`).
+
+**CI/CD:** Pushes to `master` that change files in `backend/` automatically deploy to Cloud Run via GitHub Actions (`.github/workflows/deploy-backend.yml`). This requires a `GCP_SA_KEY` repository secret containing a service account JSON key with Cloud Run and Secret Manager access.
+
+### 3. Running Tests
+
+The test runner auto-resolves the best available iPhone simulator (prefers iPhone 17 Pro / iOS 26.2).
+
+```bash
+# Quick verification — module tests only (~15s)
+./scripts/test-ios.sh voicecore
+
+# Build check — confirms the app compiles
+./scripts/test-ios.sh app-build
+
+# Smoke tests — app-hosted sanity checks (~90s)
+./scripts/test-ios.sh app-smoke
+
+# UI tests — simulator-driven interaction regressions
+./scripts/test-ios.sh app-ui
+
+# Full stable gate — all of the above
+./scripts/test-ios.sh stable
+```
+
+After any run, inspect results with:
+
+```bash
+./scripts/xcresult-summary.sh --latest-run
+```
+
+See [docs/testing/ios-testing-playbook.md](docs/testing/ios-testing-playbook.md) for the full testing reference (experimental lanes, environment variables, failure triage).
+
+### 4. Configuration & Customization
+
+- **Voice Persona:** Change the voice in `GeminiService.swift`. Supported voices include: `Aoede`, `Charon`, `Fenrir`, `Kore`, and `Puck`.
 - **System Prompt:** Customize the chef's personality (e.g., "Gordon Ramsay mode" vs "Grandma mode") in `ChefIntelligence.swift`.
-
-## Current Engineering Status
-
-The repo is past the highest-risk voice infrastructure phase.
-
-- `VoiceCore` is landed as an internal module under `Modules/VoiceCore/`.
-- Voice/call logic no longer primarily lives in `ChatViewModel`.
-- Explicit lifecycle and route state handling now live inside `VoiceCore`.
-- The automated test split is intentional:
-  - `VoiceCoreTests` for module-owned logic
-  - `heardTests` for app-host smoke coverage plus experimental hosted perf
-  - `heardUITests` for simulator-driven interaction regressions
-  - stable vs experimental hosted plans under `app/TestPlans/`
-  - `.xcresult` summaries as the default diagnostics interface
-  - gate-level `.xcresult` aggregation for CI and AI triage
-- `VoiceCorePerformanceTests` and `AppStartupPerformanceTests` in the experimental lane
-- gesture-heavy UI regressions stay opt-in until repeated local and CI evidence proves them stable enough for default CI
-- physical-device validation for route-sensitive truth
-- run-grouped `.xcresult` manifests under `.deriveddata/codex-tests/Logs/TestRuns/` for AI-friendly triage
-- The current focus is feature development and tool expansion, with the voice and test infrastructure stable.
-
-## Roadmap
-
-**Short term**
-
-- finish the remaining physical-device voice regression matrix (deferred)
-- evaluate a `Modules/GeminiTransport` extraction only if app-side integration pressure justifies it
-
-**Long term**
-
-- evolve toward a modular app shell with two or more real internal modules
-- strengthen module-first automation while keeping hardware checks for route-sensitive audio
 
 ## Todo
 
@@ -230,6 +243,7 @@ The repo is past the highest-risk voice infrastructure phase.
 - [x] App icon refresh
 - [x] Fix ingredients page camera
 - [x] Test infrastructure (test plans, VoiceCoreTests, UI regression suite, xcresult diagnostics)
+- [x] Google Cloud backend
 
 **UX**
 - [ ] Shopping list UI
@@ -243,7 +257,6 @@ The repo is past the highest-risk voice infrastructure phase.
 - [ ] Multiple chats
 - [ ] Auth & ephemeral keys
 - [ ] Onboarding
-- [ ] Google Cloud backend
 - [ ] Memory manager (post-conversation topic extraction and context assembly)
 
 **Ongoing**
@@ -252,16 +265,16 @@ The repo is past the highest-risk voice infrastructure phase.
 
 ## Specs
 
-- `docs/gemini-tools.md` - Drill-down toolset and Gemini tool architecture
-- `docs/testing/ios-testing-playbook.md` - Canonical local verification commands and test ownership
-- `docs/testing/testing-strategy.md` - Test layer philosophy, ownership rules, and future UI-test direction
-- `docs/architecture/repo-structure-roadmap.md` - Current module/app ownership rules and extraction direction
+- `docs/gemini-tools.md` - Toolset and Gemini tool architecture
+- `docs/testing/ios-testing-playbook.md` - Local verification commands and test ownership
+- `docs/testing/testing-strategy.md` - Test layer philosophy and ownership rules
+- `docs/architecture/repo-structure-roadmap.md` - Module/app ownership and extraction direction
 - `docs/rebuild/04-voice-regression-matrix.md` - Physical-device checklist for voice and attachment regressions
-
+- `docs/compendium/` - Culinary reference knowledge base (ingredients, techniques, books)
 
 ## Known Limitations
 
-- **No cloud sync** - Data is local only
+- **Single user** - No authentication; all data stored under a default user ID
 - **Live API experimental** - Gemini Live API may change
 - **iOS only** - No macOS/watchOS support
 - **English only** - No localization yet
@@ -269,7 +282,6 @@ The repo is past the highest-risk voice infrastructure phase.
 
 ## Future Ideas
 
-- [ ] Cloud sync with iCloud or Supabase
 - [ ] Meal planning calendar
 - [ ] Nutritional information
 - [ ] Recipe import from URLs
