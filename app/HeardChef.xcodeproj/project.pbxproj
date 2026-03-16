@@ -207,6 +207,7 @@
 			isa = PBXGroup;
 			children = (
 				EC7C41FF2F38FF00009FB9AF /* Secrets.xcconfig */,
+				AB1234567890ABCDEF000001 /* GoogleService-Info.plist */,
 				EC5CB9DC2F37CEE700904A9F /* heard-Info.plist */,
 				EC5CB97D2F36AF4900904A9F /* . */,
 				F20000012F80000100000001 /* TestPlans */,
