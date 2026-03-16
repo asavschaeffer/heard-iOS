@@ -898,7 +898,10 @@ class ChatViewModel: ObservableObject {
         return existing + incoming
     }
 
-    private static let feelingRegex = try! NSRegularExpression(pattern: #"\[feeling:(\w+)\]"#)
+    private static let feelingRegex = try! NSRegularExpression(
+        pattern: #"^\s*\[(?:feeling:)?(angry|crying|cute|excited|feminine|joyful|laughing|pouting|silly|winking|xd)\]\s*"#,
+        options: [.caseInsensitive]
+    )
 
     private func stripFeelingTag(from text: String) -> String {
         let range = NSRange(text.startIndex..., in: text)
