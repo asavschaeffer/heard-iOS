@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EC1CC6452F6885A700E5DDB1 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2776E8015070FDF617CDADB3 /* FirebaseCore */; };
+		EC1CC6462F6885A700E5DDB1 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 98AF806F3FCD8B0D3C65ED57 /* FirebaseFirestore */; };
 		F000000F2F60000100000001 /* VoiceCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F00000012F60000100000001 /* VoiceCore.framework */; };
 		F00000102F60000100000001 /* VoiceCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F00000012F60000100000001 /* VoiceCore.framework */; };
 /* End PBXBuildFile section */
@@ -48,6 +50,7 @@
 		EC0D25632F38F1C70028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC0D25FC2F390AEF0028674C /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC1CC3A22F6777ED00E5DDB1 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
+		EC1CC68C2F6885A700E5DDB1 /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB97B2F36AF4900904A9F /* heard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = heard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB9DC2F37CEE700904A9F /* heard-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "heard-Info.plist"; sourceTree = "<group>"; };
@@ -130,6 +133,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EC1CC6462F6885A700E5DDB1 /* FirebaseFirestore in Frameworks */,
+				EC1CC6452F6885A700E5DDB1 /* FirebaseCore in Frameworks */,
 				F000000F2F60000100000001 /* VoiceCore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -187,6 +192,11 @@
 			sourceTree = "<group>";
 		};
 		EC1CC3A72F6777ED00E5DDB1 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EC1CC6912F6885A700E5DDB1 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -335,6 +345,7 @@
 			packageProductDependencies = (
 				2776E8015070FDF617CDADB3 /* FirebaseCore */,
 				98AF806F3FCD8B0D3C65ED57 /* FirebaseFirestore */,
+				A1B2C3D4E5F60718910111213 /* FirebaseAnalytics */,
 			);
 			productName = heard;
 			productReference = EC5CB97B2F36AF4900904A9F /* heard.app */;
@@ -471,13 +482,16 @@
 			);
 			mainGroup = EC5CB9722F36AF4900904A9F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3504516B25B644F8DA18A92A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = EC5CB97C2F36AF4900904A9F /* Products */;
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
-					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
+					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
 				},
 				{
 					ProductGroup = ECE5567A2F5FB82700465205 /* Products */;
@@ -544,6 +558,10 @@
 					ProjectRef = ECE5594F2F5FEF6200465205 /* HeardChef.xcodeproj */;
 				},
 				{
+					ProductGroup = EC1CC6912F6885A700E5DDB1 /* Products */;
+					ProjectRef = EC1CC68C2F6885A700E5DDB1 /* HeardChef.xcodeproj */;
+				},
+				{
 					ProductGroup = ECE55D9C2F63AD2600465205 /* Products */;
 					ProjectRef = ECE55D972F63AD2600465205 /* HeardChef.xcodeproj */;
 				},
@@ -560,12 +578,9 @@
 					ProjectRef = ECE561402F663A3900465205 /* HeardChef.xcodeproj */;
 				},
 				{
-					ProductGroup = EC5CB9B62F37CEAE00904A9F /* Products */;
-					ProjectRef = EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */;
+					ProductGroup = EC5CBA0E2F37D08F00904A9F /* Products */;
+					ProjectRef = EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */;
 				},
-			);
-			packageReferences = (
-				3504516B25B644F8DA18A92A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			projectRoot = "";
 			targets = (
@@ -1165,6 +1180,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 3504516B25B644F8DA18A92A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		A1B2C3D4E5F60718910111213 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3504516B25B644F8DA18A92A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
