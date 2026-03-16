@@ -38,6 +38,7 @@ Secrets.xcconfig
 *.xcconfig
 !Debug.xcconfig.template
 !Release.xcconfig.template
+GoogleService-Info.plist
 
 # macOS
 .DS_Store

@@ -15,7 +15,7 @@ actor BackendService {
 
     /// Base URL for the Cloud Run backend (no trailing slash).
     /// Set via `BACKEND_URL` in Secrets.xcconfig → Info.plist.
-    let baseURL: String = {
+    nonisolated let baseURL: String = {
         if let url = Bundle.main.infoDictionary?["BACKEND_URL"] as? String, !url.isEmpty {
             return url
         }
@@ -24,7 +24,7 @@ actor BackendService {
     }()
 
     /// WebSocket URL for voice relay (`wss://` or `ws://`).
-    var voiceURL: String {
+    nonisolated var voiceURL: String {
         let wsScheme = baseURL.hasPrefix("https") ? "wss" : "ws"
         let hostPart = baseURL
             .replacingOccurrences(of: "https://", with: "")

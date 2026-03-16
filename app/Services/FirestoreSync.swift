@@ -8,7 +8,7 @@ import OSLog
 /// Firestore is the source of truth (written by the ADK backend).
 /// SwiftData is a local read cache for offline support and fast UI.
 @MainActor
-final class FirestoreSync: ObservableObject {
+final class FirestoreSync {
 
     static let shared = FirestoreSync()
 
