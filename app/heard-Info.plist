@@ -5,7 +5,7 @@
 	<key>GEMINI_API_KEY</key>
 	<string>$(GEMINI_API_KEY)</string>
 	<key>BACKEND_URL</key>
-	<string>$(BACKEND_URL)</string>
+	<string>https://$(BACKEND_HOST)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>voip</string>

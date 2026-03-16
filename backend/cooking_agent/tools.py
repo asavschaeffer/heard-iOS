@@ -5,10 +5,11 @@ per-request by the FastAPI endpoint before the agent runs.
 """
 
 import asyncio
+import json
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TypedDict
 
 from google.cloud import firestore
 
@@ -18,6 +19,18 @@ from google.cloud import firestore
 
 _db: Optional[firestore.AsyncClient] = None
 _user_id: str = "default"
+
+
+class RecipeIngredientPayload(TypedDict, total=False):
+    name: str
+    quantity: float
+    unit: str
+    preparation: str
+
+
+class RecipeStepPayload(TypedDict, total=False):
+    instruction: str
+    durationMinutes: float
 
 
 def _get_db() -> firestore.AsyncClient:
@@ -65,6 +78,37 @@ def _display_quantity(qty: float, unit: str) -> str:
     if qty == int(qty):
         return f"{int(qty)} {unit}"
     return f"{qty:.2g} {unit}"
+
+
+def _parse_json_object(value: str | None, field_name: str) -> dict:
+    if value is None or not value.strip():
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{field_name} must be valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{field_name} must decode to a JSON object")
+    return parsed
+
+
+def _parse_json_array(value: str | None, field_name: str) -> list[dict]:
+    if value is None or not value.strip():
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{field_name} must be valid JSON") from exc
+    if not isinstance(parsed, list):
+        raise ValueError(f"{field_name} must decode to a JSON array")
+    return parsed
+
+
+def _parse_tags_csv(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    tags = [tag.strip().lower() for tag in value.split(",") if tag.strip()]
+    return tags
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +570,20 @@ async def update_ingredient(
     }
 
 
+async def agent_update_ingredient(
+    name: str,
+    patch_json: str,
+) -> dict:
+    """Agent-friendly wrapper for update_ingredient with a simple schema."""
+    return await update_ingredient(
+        name=name,
+        patch=_parse_json_object(patch_json, "patch_json"),
+    )
+
+
+agent_update_ingredient.__name__ = "update_ingredient"
+
+
 async def list_ingredients(
     category: str | None = None,
     location: str | None = None,
@@ -611,8 +669,8 @@ async def get_ingredient(name: str) -> dict:
 
 async def create_recipe(
     name: str,
-    ingredients: list[dict],
-    steps: list[dict],
+    ingredients: list[RecipeIngredientPayload],
+    steps: list[RecipeStepPayload],
     description: str | None = None,
     notes: str | None = None,
     cookingTemperature: str | None = None,
@@ -695,8 +753,8 @@ async def update_recipe(
     description: str | None = None,
     notes: str | None = None,
     cookingTemperature: str | None = None,
-    ingredients: list[dict] | None = None,
-    steps: list[dict] | None = None,
+    ingredients: list[RecipeIngredientPayload] | None = None,
+    steps: list[RecipeStepPayload] | None = None,
     prepTime: int | None = None,
     cookTime: int | None = None,
     servings: int | None = None,
@@ -776,6 +834,80 @@ async def update_recipe(
         "message": f"Updated recipe '{final_name}'",
         "updatedFields": changed_fields,
     }
+
+
+async def agent_create_recipe(
+    name: str,
+    ingredients_json: str,
+    steps_json: str,
+    description: str | None = None,
+    notes: str | None = None,
+    cookingTemperature: str | None = None,
+    prepTime: int | None = None,
+    cookTime: int | None = None,
+    servings: int | None = None,
+    difficulty: str = "medium",
+    tags_csv: str | None = None,
+) -> dict:
+    """Agent-friendly wrapper for create_recipe with string/scalar parameters."""
+    return await create_recipe(
+        name=name,
+        ingredients=_parse_json_array(ingredients_json, "ingredients_json"),
+        steps=_parse_json_array(steps_json, "steps_json"),
+        description=description,
+        notes=notes,
+        cookingTemperature=cookingTemperature,
+        prepTime=prepTime,
+        cookTime=cookTime,
+        servings=servings,
+        difficulty=difficulty,
+        tags=_parse_tags_csv(tags_csv),
+    )
+
+
+agent_create_recipe.__name__ = "create_recipe"
+
+
+async def agent_update_recipe(
+    name: str,
+    newName: str | None = None,
+    description: str | None = None,
+    notes: str | None = None,
+    cookingTemperature: str | None = None,
+    ingredients_json: str | None = None,
+    steps_json: str | None = None,
+    prepTime: int | None = None,
+    cookTime: int | None = None,
+    servings: int | None = None,
+    difficulty: str | None = None,
+    tags_csv: str | None = None,
+) -> dict:
+    """Agent-friendly wrapper for update_recipe with string/scalar parameters."""
+    ingredients = None
+    if ingredients_json is not None:
+        ingredients = _parse_json_array(ingredients_json, "ingredients_json")
+
+    steps = None
+    if steps_json is not None:
+        steps = _parse_json_array(steps_json, "steps_json")
+
+    return await update_recipe(
+        name=name,
+        newName=newName,
+        description=description,
+        notes=notes,
+        cookingTemperature=cookingTemperature,
+        ingredients=ingredients,
+        steps=steps,
+        prepTime=prepTime,
+        cookTime=cookTime,
+        servings=servings,
+        difficulty=difficulty,
+        tags=_parse_tags_csv(tags_csv),
+    )
+
+
+agent_update_recipe.__name__ = "update_recipe"
 
 
 async def delete_recipe(name: str) -> dict:

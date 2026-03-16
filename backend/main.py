@@ -6,7 +6,7 @@ import logging
 import os
 import uuid
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
@@ -58,13 +58,17 @@ async def chat(body: dict):
     )
 
     final_text = ""
-    async for event in runner.run_async(
-        user_id=user_id, session_id=session_id, new_message=user_content
-    ):
-        if event.is_final_response():
-            for part in event.content.parts:
-                if part.text:
-                    final_text += part.text
+    try:
+        async for event in runner.run_async(
+            user_id=user_id, session_id=session_id, new_message=user_content
+        ):
+            if event.is_final_response():
+                for part in event.content.parts:
+                    if part.text:
+                        final_text += part.text
+    except Exception as exc:
+        logger.exception("[chat] Agent run failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"reply": final_text, "session_id": session_id}
 
