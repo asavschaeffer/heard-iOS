@@ -239,16 +239,9 @@ class GeminiService: NSObject {
     private let apiKey: String
     private(set) var activeConfig: SessionConfig?
     var currentMode: SessionMode? { activeConfig?.mode }
-    private let baseURL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
-    private let restBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
-
-    // Backend routing — when set, text chat and voice go through Cloud Run
+    // Backend routing — text chat, photos, and voice go through Cloud Run
     private let backendService = BackendService.shared
     private var chatSessionID: String = UUID().uuidString
-
-    // REST conversation history (stateless API needs context each request)
-    private var conversationHistory: [[String: Any]] = []
-    private let maxConversationTurns = 20
     private var restTask: Task<Void, Never>?
 
     // MARK: - Initialization
@@ -659,24 +652,13 @@ class GeminiService: NSObject {
     func sendPhotoREST(_ imageData: Data, messageID: UUID? = nil) {
         let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
         debugLog("[Gemini] Outbound turn \(turnID) compose REST image parts=1 imageBytes=\(imageData.count)")
-        let base64Image = imageData.base64EncodedString()
-        let userParts: [[String: Any]] = [
-            ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]]
-        ]
-        let userTurn: [String: Any] = ["role": "user", "parts": userParts]
-        sendRESTRequest(userTurn: userTurn, messageID: messageID)
+        sendBackendPhotoRequest(imageData: imageData, text: nil, messageID: messageID)
     }
 
     func sendTextWithPhotoREST(_ text: String, imageData: Data, messageID: UUID? = nil) {
         let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
         debugLog("[Gemini] Outbound turn \(turnID) compose REST text+image parts=2 chars=\(text.count) imageBytes=\(imageData.count)")
-        let base64Image = imageData.base64EncodedString()
-        let userParts: [[String: Any]] = [
-            ["text": text],
-            ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]]
-        ]
-        let userTurn: [String: Any] = ["role": "user", "parts": userParts]
-        sendRESTRequest(userTurn: userTurn, messageID: messageID)
+        sendBackendPhotoRequest(imageData: imageData, text: text, messageID: messageID)
     }
 
     // MARK: - Backend-Routed Text Chat
@@ -720,28 +702,26 @@ class GeminiService: NSObject {
         }
     }
 
-    // MARK: - Legacy Direct REST (used for photo endpoints until Phase 5)
-
-    private func sendRESTRequest(userTurn: [String: Any], messageID: UUID?) {
+    /// Send a photo (with optional text) through the Cloud Run backend.
+    private func sendBackendPhotoRequest(imageData: Data, text: String?, messageID: UUID?) {
         let turnID = messageID.flatMap { outboundTurnByMessageID[$0] } ?? "out-unknown"
         let restInboundID = "in-rest-\(inboundRESTTurnSequence + 1)"
         let startedAt = Date()
-        debugLog("[Gemini] Inbound turn \(restInboundID) started linkedOutbound=\(turnID) mode=rest(legacy-direct)")
+        debugLog("[Gemini] Inbound turn \(restInboundID) started linkedOutbound=\(turnID) mode=backend-photo")
         delegate?.geminiServiceDidStartResponse(self)
-
-        // Append user turn to history (still used for direct REST fallback on photos)
-        conversationHistory.append(userTurn)
-        trimConversationHistory()
 
         restTask?.cancel()
         restTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let responseText = try await self.executeRESTRequest(messageID: messageID)
+                let sessionID = await MainActor.run { self.chatSessionID }
+                let responseText = try await self.backendService.sendPhoto(
+                    imageData, text: text, sessionID: sessionID
+                )
                 await MainActor.run {
                     if !responseText.isEmpty {
                         let preview = responseText.count > 160 ? String(responseText.prefix(160)) + "..." : responseText
-                        self.debugLog("[Gemini] Inbound turn \(restInboundID) restText chars=\(responseText.count) preview=\(preview)")
+                        self.debugLog("[Gemini] Inbound turn \(restInboundID) backendPhoto chars=\(responseText.count) preview=\(preview)")
                         self.delegate?.geminiService(self, didReceiveResponse: responseText)
                     }
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
@@ -750,7 +730,7 @@ class GeminiService: NSObject {
                     self.delegate?.geminiServiceDidEndResponse(self)
                 }
             } catch is CancellationError {
-                // Task cancelled, no action
+                // Task cancelled
             } catch {
                 await MainActor.run {
                     let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
@@ -761,73 +741,6 @@ class GeminiService: NSObject {
                 }
             }
         }
-    }
-
-    private func executeRESTRequest(messageID: UUID?) async throws -> String {
-        let model = SessionConfig.defaultTextModel
-        let urlString = "\(restBaseURL)/\(model):generateContent?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
-            throw GeminiError.invalidURL
-        }
-
-        let body = buildRESTBody()
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = requestTimeout
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw GeminiError.connectionFailed
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            faultLog("[Gemini REST] HTTP \(httpResponse.statusCode): \(errorBody)")
-            if httpResponse.statusCode == 429 {
-                throw GeminiError.requestTimeout
-            }
-            throw GeminiError.serviceUnavailable
-        }
-
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let candidates = json["candidates"] as? [[String: Any]],
-              let firstCandidate = candidates.first,
-              let content = firstCandidate["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]] else {
-            throw GeminiError.invalidJSON
-        }
-
-        // Function calling loop removed — tool execution is handled server-side.
-        // This direct REST path is only used for photo endpoints (Phase 5 will
-        // route those through the backend too).
-
-        // Extract text response
-        let textParts = parts.compactMap { $0["text"] as? String }
-        let responseText = textParts.joined()
-
-        // Append assistant turn to history
-        if !responseText.isEmpty {
-            let modelTurn: [String: Any] = ["role": "model", "parts": [["text": responseText]]]
-            conversationHistory.append(modelTurn)
-            trimConversationHistory()
-        }
-
-        return responseText
-    }
-
-    private func buildRESTBody() -> [String: Any] {
-        [
-            "contents": conversationHistory,
-            "systemInstruction": [
-                "parts": [["text": makeSystemPrompt(for: .text)]]
-            ],
-            "tools": [
-                ["functionDeclarations": GeminiTools.toAPIFormat()]
-            ]
-        ]
     }
 
     private func millisecondsSinceLiveConnect(until date: Date) -> Int {
@@ -875,17 +788,6 @@ class GeminiService: NSObject {
         debugLog(
             "[Gemini] \(activeWebSocketSessionID) liveTrace firstInboundAudio bytes=\(bytes) msSinceConnect=\(millisecondsSinceLiveConnect(until: now)) msSinceFirstOutboundAudio=\(millisecondsSinceFirstOutboundAudio(until: now))"
         )
-    }
-
-    private func trimConversationHistory() {
-        // Each turn is one entry; cap at maxConversationTurns
-        while conversationHistory.count > maxConversationTurns {
-            conversationHistory.removeFirst()
-        }
-    }
-
-    func clearConversationHistory() {
-        conversationHistory.removeAll()
     }
 
     // MARK: - Video Streaming

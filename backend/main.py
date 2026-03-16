@@ -74,6 +74,61 @@ async def chat(body: dict):
 
 
 # ---------------------------------------------------------------------------
+# Photo Chat — POST /chat-with-photo
+# ---------------------------------------------------------------------------
+
+@app.post("/chat-with-photo")
+async def chat_with_photo(body: dict):
+    """Text + optional image chat. Image is base64 JPEG in the 'image' field."""
+    message = body.get("message", "")
+    image_b64 = body.get("image")  # base64-encoded JPEG
+    session_id = body.get("session_id") or str(uuid.uuid4())
+    user_id = body.get("user_id", "default")
+
+    set_user_id(user_id)
+
+    session = await session_service.get_session(
+        app_name="heard_chef", user_id=user_id, session_id=session_id
+    )
+    if session is None:
+        session = await session_service.create_session(
+            app_name="heard_chef", user_id=user_id, session_id=session_id
+        )
+
+    # Build multimodal parts
+    parts = []
+    if message:
+        parts.append(types.Part.from_text(text=message))
+    if image_b64:
+        import base64
+
+        image_bytes = base64.b64decode(image_b64)
+        parts.append(
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+        )
+
+    if not parts:
+        raise HTTPException(status_code=400, detail="No message or image provided")
+
+    user_content = types.Content(role="user", parts=parts)
+
+    final_text = ""
+    try:
+        async for event in runner.run_async(
+            user_id=user_id, session_id=session_id, new_message=user_content
+        ):
+            if event.is_final_response():
+                for part in event.content.parts:
+                    if part.text:
+                        final_text += part.text
+    except Exception as exc:
+        logger.exception("[chat-with-photo] Agent run failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"reply": final_text, "session_id": session_id}
+
+
+# ---------------------------------------------------------------------------
 # Voice Relay — WS /voice
 # ---------------------------------------------------------------------------
 

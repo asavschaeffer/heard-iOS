@@ -73,6 +73,51 @@ actor BackendService {
         logger.debug("[Backend] Reply chars=\(reply.count)")
         return reply
     }
+
+    // MARK: - Photo Chat
+
+    /// Send a photo (with optional text) to the backend and return the reply.
+    func sendPhoto(_ imageData: Data, text: String? = nil, sessionID: String, userID: String = "default") async throws -> String {
+        guard let url = URL(string: "\(baseURL)/chat-with-photo") else {
+            throw BackendError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 90  // photos take longer
+
+        var body: [String: Any] = [
+            "image": imageData.base64EncodedString(),
+            "session_id": sessionID,
+            "user_id": userID,
+        ]
+        if let text, !text.isEmpty {
+            body["message"] = text
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        logger.debug("[Backend] POST /chat-with-photo sessionID=\(sessionID) imageBytes=\(imageData.count) text=\(text?.count ?? 0)")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw BackendError.connectionFailed
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let errorBody = String(data: data, encoding: .utf8) ?? ""
+            logger.error("[Backend] HTTP \(http.statusCode): \(errorBody)")
+            throw BackendError.serverError(http.statusCode, errorBody)
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let reply = json["reply"] as? String else {
+            throw BackendError.invalidResponse
+        }
+
+        logger.debug("[Backend] Reply chars=\(reply.count)")
+        return reply
+    }
 }
 
 // MARK: - Errors
