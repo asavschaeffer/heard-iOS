@@ -1,0 +1,52 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: heard-chef-7c9f1
+  SERVICE_NAME: heard-backend
+  REGION: us-west3
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE_NAME \
+            --source backend/ \
+            --project $PROJECT_ID \
+            --region $REGION \
+            --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
+            --timeout 3600 \
+            --allow-unauthenticated \
+            --quiet
+
+      - name: Show deployment URL
+        run: |
+          URL=$(gcloud run services describe $SERVICE_NAME \
+            --project $PROJECT_ID \
+            --region $REGION \
+            --format 'value(status.url)')
+          echo "Deployed to: $URL"
