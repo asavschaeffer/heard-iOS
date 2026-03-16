@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import OSLog
+import FirebaseCore
 
 private let logger = Logger(subsystem: "com.heardchef", category: "App")
 
@@ -9,6 +10,10 @@ struct HeardChefApp: App {
     @StateObject private var warmup = AppWarmup()
     @StateObject private var navigationState = AppNavigationState()
     @State private var showsLaunchOverlay = true
+
+    init() {
+        FirebaseApp.configure()
+    }
 
     private var uiTestColorSchemeOverride: ColorScheme? {
         guard TestSupport.isRunningUITests else { return nil }
@@ -75,6 +80,9 @@ struct HeardChefApp: App {
                     }
                     .task {
                         warmup.runAll()
+                        FirestoreSync.shared.startListening(
+                            modelContext: sharedModelContainer.mainContext
+                        )
                     }
                     .environmentObject(navigationState)
                     .environmentObject(warmup)
