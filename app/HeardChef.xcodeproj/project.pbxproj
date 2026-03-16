@@ -54,6 +54,7 @@
 		EC5CB97B2F36AF4900904A9F /* heard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = heard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC5CB9B42F37CEAE00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CB9DC2F37CEE700904A9F /* heard-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "heard-Info.plist"; sourceTree = "<group>"; };
+		AB1234567890ABCDEF000001 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		EC5CBA0C2F37D08F00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC5CBAD72F37DDAD00904A9F /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
 		EC7C41422F38EE55009FB9AF /* HeardChef.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = HeardChef.xcodeproj; sourceTree = "<group>"; };
@@ -82,6 +83,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"heard-Info.plist",
+				"GoogleService-Info.plist",
 			);
 			target = EC5CB97A2F36AF4900904A9F /* heard */;
 		};
